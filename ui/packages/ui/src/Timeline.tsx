@@ -338,7 +338,7 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined, pro
     // The profile at a stretch of the code's own time, where the profile says when its samples were taken: the
     // Profile tab's own stretch, not a range of the call tree's.
     openProfile: (range: TimeRange | undefined) => {
-      if (range && timed(profile)) profileAt(range);
+      if (range && timed(profile)) profileAt([range]);
       onSelect?.({ tab: "profile" });
     },
     onRange: (range: TimeRange | null) => pick({ ...slice, range }, range !== null),

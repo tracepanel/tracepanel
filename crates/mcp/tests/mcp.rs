@@ -982,25 +982,28 @@ async fn a_cpu_profile_by_function_and_path() {
         (
             "01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms
 CPU profile: 200 ms profiled of the trace's 200 ms · 190 samples, one every 1.0 ms
+time by share (as the time strip says it): Your code 147 ms (74%) · GC 3.0 ms (2%) · Waiting 50.0 ms (25%)
 waiting (a sleep, a socket, a lock, the event loop: not computing): 50.0 ms (25%), most in asyncio.sleep in sales at reports/views.py:24
 not sampled: 10.0 ms (other traces ran on the same thread), filled in from the samples around it
 GC: 2 collections, 3.0 ms paused
 note: a sample every 1.0 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
 functions by self time (your code: library calls counted to the function of yours that made them):
-  120 ms  60%  build_cards (yours) — reports/cards.py:40 · total 120 ms
+  119 ms  60%  build_cards (yours) — reports/cards.py:40 · total 120 ms
   50.0 ms  25%  waiting · sleep · total 50.0 ms
-  30.0 ms  15%  sales (yours) — reports/views.py:24 · total 200 ms
+  28.0 ms  14%  sales (yours) — reports/views.py:24 · total 200 ms
 
 functions by total time:
-  200 ms  100%  sales (yours) — reports/views.py:24 · self 30.0 ms
-  120 ms  60%  build_cards (yours) — reports/cards.py:40 · self 120 ms
+  200 ms  100%  sales (yours) — reports/views.py:24 · self 28.0 ms
+  120 ms  60%  build_cards (yours) — reports/cards.py:40 · self 119 ms
   50.0 ms  25%  waiting · sleep · self 50.0 ms
 
 hottest paths (outermost first):
-  120 ms  60%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)
+  119 ms  60%  sales (reports/views.py:24) → build_cards (reports/cards.py:40)
   50.0 ms  25%  sales (reports/views.py:24) → waiting · sleep
-  30.0 ms  15%  sales (reports/views.py:24)"
+  28.0 ms  14%  sales (reports/views.py:24)
+  2.0 ms  1%  sales (reports/views.py:24) → GC
+  1.0 ms  0%  sales (reports/views.py:24) → build_cards (reports/cards.py:40) → GC"
                 .to_owned(),
             false
         )
@@ -1163,9 +1166,10 @@ SQL: 0 → 0 queries, 0.0 ms → 0.0 ms
 issues: 0 → 0 (0 fixed, 0 new, 0 still there)
 profile: 200 ms → 20.0 ms profiled, of which waiting 50.0 ms → 0.0 ms
 functions whose self time changed most:
-  build_cards (reports/cards.py:40): 120 ms → 8.0 ms
+  build_cards (reports/cards.py:40): 119 ms → 8.0 ms
   waiting · sleep: 50.0 ms → 0.0 ms
-  sales (reports/views.py:18): 30.0 ms → 12.0 ms
+  sales (reports/views.py:18): 28.0 ms → 12.0 ms
+  GC: 3.0 ms → 0.0 ms
 memory: peak 48 MB → 6.0 MB, net +1.2 MB → +10 KB
 allocation sites that changed most:
   build_cards (yours) — reports/cards.py:44 · allocated in dumps — json/__init__.py:231: 30 MB → 0 B

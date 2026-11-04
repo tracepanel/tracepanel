@@ -7,7 +7,8 @@
 
 use crate::compact::{int, ms, text};
 use crate::off_cpu;
-use crate::waits::{self, Waiting};
+use crate::shares;
+use crate::waits;
 use serde_json::Value;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -68,6 +69,9 @@ struct Frame<'a> {
     at_line: Option<i64>,
     in_app: bool,
     waiting: bool,
+    /// A share of the trace's time no function's (shares): a call's (`SQL postgresql`, the database's), the
+    /// collector's, the framework's; its share's name. The time under it is that share's.
+    share: Option<&'static str>,
 }
 
 impl Frame<'_> {
@@ -87,7 +91,11 @@ impl Frame<'_> {
     /// A function in a list, whose it is and where: `build_cards (yours)`, then its file and line.
     fn named(&self) -> String {
         let mut out = self.function.to_string();
-        if self.named_wait() {
+        if let Some(share) = self.share {
+            if share != self.function {
+                out.push_str(&format!(" ({share})"));
+            }
+        } else if self.named_wait() {
         } else if self.waiting {
             out.push_str(" (waiting)");
         } else if self.in_app {
@@ -130,7 +138,16 @@ impl Frame<'_> {
 }
 
 /// A frame by all it says, its name owned: how an app's traces' frames are told apart as they merge.
-type FrameKey<'a> = (String, &'a str, &'a str, i64, Option<i64>, bool, bool);
+type FrameKey<'a> = (
+    String,
+    &'a str,
+    &'a str,
+    i64,
+    Option<i64>,
+    bool,
+    bool,
+    Option<&'static str>,
+);
 
 /// A stack seen: its frames, outermost first, as indexes; its samples, and the time they stand for.
 #[derive(Clone)]
@@ -160,10 +177,22 @@ struct Profile<'a> {
     /// Each frame's index as its function's first: a Python coroutine's frame with the line it awaits at is the
     /// same function as its frame running, one row and one step.
     same: Vec<usize>,
+    /// A timed profile's trace by share (shares: Database, Your code, GC, Waiting), as said, with their names.
+    shares: Vec<(&'static str, f64)>,
 }
 
-/// A function as the console tells functions apart: its name, where it is defined, whether it waits.
-fn function_key<'f>(frame: &'f Frame) -> (&'f str, &'f str, &'f str, i64, bool, bool) {
+/// A function as the console tells functions apart: its name, where it is defined, whether it waits, its share.
+type FunctionKey<'f> = (
+    &'f str,
+    &'f str,
+    &'f str,
+    i64,
+    bool,
+    bool,
+    Option<&'static str>,
+);
+
+fn function_key<'f>(frame: &'f Frame) -> FunctionKey<'f> {
     (
         &frame.function,
         frame.module,
@@ -171,12 +200,13 @@ fn function_key<'f>(frame: &'f Frame) -> (&'f str, &'f str, &'f str, i64, bool, 
         frame.line,
         frame.in_app,
         frame.waiting,
+        frame.share,
     )
 }
 
 /// Each frame's index as its function's first; the frame without an await's line stands for the function.
 fn same_functions(frames: &[Frame]) -> Vec<usize> {
-    let mut first: HashMap<(&str, &str, &str, i64, bool, bool), usize> = HashMap::new();
+    let mut first: HashMap<FunctionKey, usize> = HashMap::new();
     for (index, frame) in frames.iter().enumerate() {
         let found = first.entry(function_key(frame)).or_insert(index);
         if frames[*found].at_line.is_some() && frame.at_line.is_none() {
@@ -199,7 +229,29 @@ fn wait_frame<'a>(name: String) -> Frame<'a> {
         at_line: None,
         in_app: false,
         waiting: true,
+        share: None,
     }
+}
+
+/// The index of a share's frame (`SQL postgresql` of the database's), added to `frames` the first time.
+fn share_at(frames: &mut Vec<Frame>, function: String, share: &'static str) -> usize {
+    if let Some(at) = frames
+        .iter()
+        .position(|frame| frame.share == Some(share) && frame.function == function)
+    {
+        return at;
+    }
+    frames.push(Frame {
+        function: Cow::Owned(function),
+        module: "",
+        file: "",
+        line: 0,
+        at_line: None,
+        in_app: false,
+        waiting: false,
+        share: Some(share),
+    });
+    frames.len() - 1
 }
 
 /// The index of the wait frame named `name`, added to `frames` the first time.
@@ -253,80 +305,82 @@ fn off_cpu_stacks(doc: &Value, frames: &mut Vec<Frame>, stacks: &mut Vec<Stack>,
     }
 }
 
-/// A timed profile's stacks with each wait named by the calls in flight in the buckets it was seen in (waits): a
-/// stack whose innermost frame waited split by what it waited for, under the same frames. None where no stack
-/// waited.
-fn named_waits<'a>(
+/// A timed profile's stacks as the trace's time splits (shares, the console's rule): each segment's stacks for its
+/// time, a call's, the collector's or the framework's under a frame of that share; `named` (the project's code's
+/// view), a wait's frame named by the frame that waited (`waiting · waiter.acquire`). Each share's time rounded as it
+/// is said, its stacks to add up to it, so every sum said of them adds up as said.
+fn split_stacks<'a>(
     doc: &Value,
-    raw: &Value,
+    segments: &[shares::Segment],
     frames: &mut Vec<Frame<'a>>,
-    stacks: &[Stack],
-) -> Option<Vec<Stack>> {
-    let width = int(raw, "bucket_us");
-    let calls = waits::calls_of(doc);
-    let seen = seen_in(raw);
-    let mut named = Vec::with_capacity(stacks.len());
-    let mut any = false;
-    for (index, stack) in stacks.iter().enumerate() {
-        let leaf = stack.frames.last().and_then(|&at| frames.get(at));
-        let seen = seen.get(index).map_or(&[][..], Vec::as_slice);
-        let Some(leaf) = leaf.filter(|leaf| leaf.waiting && !leaf.in_app && !seen.is_empty())
-        else {
-            named.push(stack.clone());
+    base: &[Vec<usize>],
+    named: bool,
+) -> Vec<Stack> {
+    let kind = text(doc, "kind");
+    let interval = doc
+        .pointer("/profile/interval_us")
+        .and_then(Value::as_i64)
+        .unwrap_or(1)
+        .max(1) as f64;
+    let mut order: Vec<(Vec<usize>, &'static str)> = Vec::new();
+    let mut times: HashMap<Vec<usize>, f64> = HashMap::new();
+    for segment in segments {
+        let Some(stacks) = &segment.stacks else {
             continue;
         };
-        any = true;
-        let names: Vec<&str> = stack
-            .frames
-            .iter()
-            .map(|&at| frames.get(at).map_or("", |frame| &*frame.function))
-            .collect();
-        let waiting = Waiting {
-            names: &names,
-            leaf: &leaf.function,
-            seen,
-            us: stack.us,
-        };
-        let parts = waits::parts(&waiting, &calls, width);
-        let outer = &stack.frames[..stack.frames.len() - 1];
-        let parts: Vec<(String, f64)> = parts
-            .into_iter()
-            .map(|(label, us)| (waits::wait_name(label.as_deref()), us))
-            .collect();
-        for (name, us) in parts {
-            let mut path = outer.to_vec();
-            path.push(wait_at(frames, name));
-            named.push(Stack {
-                frames: path,
-                count: stack.count,
-                us,
-            });
+        let share = shares::share_frame(segment, kind)
+            .map(|(function, share)| share_at(frames, function, share));
+        for &(at, us) in stacks {
+            let Some(path) = base.get(at) else { continue };
+            let mut path = path.clone();
+            let leaf = path
+                .last()
+                .and_then(|&leaf| frames.get(leaf))
+                .map(|leaf| (leaf.waiting, leaf.function.to_string()));
+            if let Some(share) = share {
+                path.push(share);
+            } else if let (true, Some((true, function))) =
+                (named && segment.share == shares::WAITING, leaf)
+            {
+                let label = (function != shares::WAITING).then_some(function);
+                path.pop();
+                path.push(wait_at(frames, waits::wait_name(label.as_deref())));
+            }
+            if !times.contains_key(&path) {
+                order.push((path.clone(), segment.share));
+            }
+            *times.entry(path).or_default() += us;
         }
     }
-    any.then_some(named)
-}
-
-/// When each of a profile's stacks was seen: its `[bucket, count]` pairs.
-fn seen_in(raw: &Value) -> Vec<Vec<(i64, i64)>> {
-    raw.get("stacks")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|stack| {
-            stack
-                .get("at")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .map(|pair| {
-                    (
-                        pair[0].as_i64().unwrap_or(-1),
-                        pair[1].as_i64().unwrap_or(0),
-                    )
-                })
-                .collect()
-        })
-        .collect()
+    let mut by_share: Vec<(&'static str, f64)> = Vec::new();
+    for (path, share) in &order {
+        match by_share.iter_mut().find(|(each, _)| each == share) {
+            Some(found) => found.1 += times[path],
+            None => by_share.push((share, times[path])),
+        }
+    }
+    let said = shares::rounded(&by_share);
+    let step = shares::display_step(said.iter().map(|(_, us)| us).sum());
+    let mut out = Vec::new();
+    for (share, total) in said {
+        let paths: Vec<&Vec<usize>> = order
+            .iter()
+            .filter(|(_, each)| *each == share)
+            .map(|(path, _)| path)
+            .collect();
+        let values: Vec<f64> = paths.iter().map(|path| times[*path]).collect();
+        let parts = shares::apportion(&values, step, (total / step).round() as i64);
+        for (path, us) in paths.into_iter().zip(parts) {
+            if us > 0.0 {
+                out.push(Stack {
+                    frames: path.clone(),
+                    count: (us / interval).round() as i64,
+                    us,
+                });
+            }
+        }
+    }
+    out
 }
 
 fn frames_of(value: &Value) -> Vec<usize> {
@@ -355,6 +409,7 @@ impl<'a> Profile<'a> {
                 at_line: frame.get("at_line").and_then(Value::as_i64),
                 in_app: frame.get("in_app").and_then(Value::as_bool) == Some(true),
                 waiting: frame.get("waiting").and_then(Value::as_bool) == Some(true),
+                share: None,
             })
             .collect();
         let outside = frames.len();
@@ -366,6 +421,7 @@ impl<'a> Profile<'a> {
             at_line: None,
             in_app: false,
             waiting: false,
+            share: None,
         });
         let interval = int(raw, "interval_us").max(1);
         let mut stacks: Vec<Stack> = raw
@@ -379,9 +435,31 @@ impl<'a> Profile<'a> {
                 us: (int(stack, "count") * interval) as f64,
             })
             .collect();
-        let timed = wall_clock(raw, int(doc, "duration"), &mut stacks);
+        let timed = timed(raw);
+        let mut split = Vec::new();
         let named = if timed {
-            named_waits(doc, raw, &mut frames, &stacks)
+            let base: Vec<Vec<usize>> = stacks.iter().map(|stack| stack.frames.clone()).collect();
+            let kinds: Vec<shares::StackKind> = base
+                .iter()
+                .map(|path| {
+                    let leaf = path.last().and_then(|&leaf| frames.get(leaf));
+                    shares::StackKind {
+                        waits: leaf.is_some_and(|leaf| leaf.waiting),
+                        yours: path
+                            .iter()
+                            .any(|&at| frames.get(at).is_some_and(|frame| frame.in_app))
+                            && !leaf.is_some_and(Frame::tracing),
+                    }
+                })
+                .collect();
+            let segments = shares::segments(doc, &kinds);
+            let kind = text(doc, "kind");
+            split = shares::share_times(&segments)
+                .into_iter()
+                .map(|(share, us)| (shares::label(share, kind), us))
+                .collect();
+            stacks = split_stacks(doc, &segments, &mut frames, &base, false);
+            Some(split_stacks(doc, &segments, &mut frames, &base, true))
         } else {
             None
         };
@@ -411,6 +489,7 @@ impl<'a> Profile<'a> {
             on_cpu,
             named,
             same,
+            shares: split,
         })
     }
 
@@ -428,6 +507,7 @@ impl<'a> Profile<'a> {
                 frame.at_line,
                 frame.in_app,
                 frame.waiting,
+                frame.share,
             );
             *index.entry(key).or_insert_with(|| {
                 frames.push(frame.clone());
@@ -436,7 +516,14 @@ impl<'a> Profile<'a> {
         };
         let (mut stacks, mut named) = (Vec::new(), Vec::new());
         let any_named = parts.iter().any(|part| part.named.is_some());
+        let mut split: Vec<(&'static str, f64)> = Vec::new();
         for part in &parts {
+            for &(share, us) in &part.shares {
+                match split.iter_mut().find(|(each, _)| *each == share) {
+                    Some(found) => found.1 += us,
+                    None => split.push((share, us)),
+                }
+            }
             let at: Vec<usize> = part.frames.iter().map(&mut intern).collect();
             let remapped = |stack: &Stack| Stack {
                 frames: stack
@@ -461,6 +548,7 @@ impl<'a> Profile<'a> {
         self.stacks = stacks;
         self.named = any_named.then_some(named);
         self.same = same_functions(&self.frames);
+        self.shares = shares::rounded(&split);
     }
 
     fn frame(&self, index: usize) -> Option<&Frame<'a>> {
@@ -507,6 +595,9 @@ impl<'a> Profile<'a> {
         let leaf = frames.last().copied();
         let inner = leaf.and_then(|leaf| self.frame(leaf));
         match (leaf, inner) {
+            // A share's time (a call's, the collector's, the framework's) is that share's, under the frames of the
+            // project's that led to it.
+            (Some(leaf), Some(frame)) if frame.share.is_some() => kept.push(leaf),
             (Some(leaf), Some(frame)) if frame.waiting && !frame.in_app => kept.push(leaf),
             (_, frame) if kept.is_empty() || frame.is_some_and(Frame::tracing) => {
                 kept = vec![self.outside];
@@ -623,41 +714,20 @@ impl<'a> Profile<'a> {
     }
 }
 
-/// A timed profile's stacks in the trace's own time: each 'bucket' of it shared among the stacks seen in it, a
-/// bucket with none (its thread ran other traces then) as the bucket before it. Whether the profile is timed.
-fn wall_clock(raw: &Value, duration: i64, stacks: &mut [Stack]) -> bool {
-    let width = int(raw, "bucket_us");
-    let seen_in = seen_in(raw);
-    if width <= 0 || duration <= 0 || seen_in.iter().all(Vec::is_empty) {
-        return false;
-    }
-    let mut buckets: HashMap<i64, Vec<(usize, i64)>> = HashMap::new();
-    for (index, pairs) in seen_in.iter().enumerate() {
-        for &(bucket, count) in pairs {
-            if bucket >= 0 && count > 0 {
-                buckets.entry(bucket).or_default().push((index, count));
-            }
-        }
-    }
-    let mut time = vec![0.0; stacks.len()];
-    let mut before: Option<&Vec<(usize, i64)>> = None;
-    let mut bucket = 0;
-    while bucket * width < duration {
-        before = buckets.get(&bucket).or(before);
-        if let Some(seen) = before {
-            let from = bucket * width;
-            let length = ((from + width).min(duration) - from) as f64;
-            let all: i64 = seen.iter().map(|(_, count)| count).sum();
-            for &(index, count) in seen {
-                time[index] += length * count as f64 / all as f64;
-            }
-        }
-        bucket += 1;
-    }
-    for (stack, us) in stacks.iter_mut().zip(time) {
-        stack.us = us;
-    }
-    true
+/// Whether a profile says when its stacks were seen: its buckets' width, and buckets on its stacks.
+fn timed(raw: &Value) -> bool {
+    int(raw, "bucket_us") > 0
+        && raw
+            .get("stacks")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|stack| {
+                stack
+                    .get("at")
+                    .and_then(Value::as_array)
+                    .is_some_and(|at| !at.is_empty())
+            })
 }
 
 /// `32%`, `<1%`.
@@ -996,6 +1066,24 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
             ""
         }
     )];
+    if !profile.shares.is_empty() {
+        let mut said = profile.shares.clone();
+        // Most first, waiting last: as the console's legend has them.
+        said.sort_by(|a, b| {
+            (a.0 == "Waiting")
+                .cmp(&(b.0 == "Waiting"))
+                .then(b.1.total_cmp(&a.1))
+        });
+        let parts: Vec<String> = said
+            .iter()
+            .filter(|(_, us)| *us > 0.0)
+            .map(|(name, time)| format!("{name} {} ({})", us(*time), share(*time, total)))
+            .collect();
+        out.push(format!(
+            "time by share (as the time strip says it): {}",
+            parts.join(" · ")
+        ));
+    }
     let waited: f64 = profile
         .stacks
         .iter()
@@ -1581,8 +1669,9 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         );
     }
 
-    /// The cases the console's Profile tab checks its waits against (`schema/waits.json`): each wait Your code
-    /// reads, by its name, with its own time in µs, most first.
+    /// The cases the console's Profile tab checks itself against (`schema/waits.json`): each row Your code reads
+    /// that is no function (a wait, a call's share), by its name, with its own time in µs, most first; and the
+    /// trace's time by share, as the time strip says it.
     #[test]
     fn the_shared_waits() {
         let cases: Vec<Value> =
@@ -1594,17 +1683,24 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 .into_iter()
                 .filter_map(|(index, own, _)| {
                     let frame = &profile.frames[index];
-                    (frame.waiting && own > 0.0)
+                    ((frame.waiting || frame.share.is_some()) && own > 0.0)
                         .then(|| (frame.function.to_string(), own.round() as i64))
                 })
                 .collect();
             waits.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+            let mut split: Vec<(&str, i64)> = profile
+                .shares
+                .iter()
+                .map(|(share, us)| (*share, us.round() as i64))
+                .collect();
+            split.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
 
             assert_eq!(json!(waits), case["waits"], "{}", case["name"]);
+            assert_eq!(json!(split), case["shares"], "{}", case["name"]);
         }
     }
 
-    /// An app's traces in a chain, merged: each one's waits named by its own calls, added up by name.
+    /// An app's traces in a chain, merged: each one's calls and waits as it reads them, added up by name.
     #[test]
     fn an_apps_merged_profile_names_its_waits_as_each_trace_does() {
         let cases: Vec<Value> =
@@ -1625,8 +1721,8 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
         assert_eq!(
             rows(&timed),
             [
-                "  300 ms  60%  waiting · HTTP GET analytics.example.com · total 300 ms",
-                "  120 ms  24%  waiting · SQL postgresql · total 120 ms",
+                "  300 ms  60%  HTTP GET analytics.example.com (External calls) · total 300 ms",
+                "  120 ms  24%  SQL postgresql (Database) · total 120 ms",
                 "  80.0 ms  16%  waiting · sleep · total 80.0 ms",
             ]
         );

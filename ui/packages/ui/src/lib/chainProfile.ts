@@ -2,15 +2,15 @@
 // what each adds up to. The Profile tab of a chain of calls draws them one under another on the chain's clock.
 
 import { type Memory, type Site, sitePlaces } from "./memory";
-import { type Frame, functions, type Profile, type Stack } from "./profile";
+import { type Frame, functions, type Profile, type Stack, shareFrame } from "./profile";
 import { type Member, type SpanScope, scopedParts } from "./scope";
-import type { TimeRange } from "./slice";
+import type { Windows } from "./slice";
 
-/** A profiled trace of a scope, and the stretch of it the scope takes (none: all of it), from the trace's start. */
+/** A profiled trace of a scope, and the stretches of it the scope takes (none: all of it), from the trace's start. */
 export interface ScopedProfile {
   member: Member;
   profile: Profile;
-  range: TimeRange | null;
+  windows: Windows | null;
 }
 
 /** An app's profiles in a scope: one trace's as it is (its stretch picked), several merged. */
@@ -21,19 +21,28 @@ export interface AppProfile {
   start: number;
 }
 
-/** The profiled traces a scope takes, each with the stretch of it under the rows asked for. */
+/** The profiled traces a scope takes, each with the stretches of it under the rows asked for. */
 export function scopedProfiles(members: readonly Member[], scope: SpanScope | null): ScopedProfile[] {
   return scopedParts(members, scope).flatMap(({ member, windows }) => {
     const profile = member.trace.profile;
     if (!profile) return [];
-    const range: TimeRange | null = windows
-      ? [
-          Math.min(...windows.map((w) => w[0])) - member.trace.start,
-          Math.max(...windows.map((w) => w[1])) - member.trace.start,
-        ]
-      : null;
-    return [{ member, profile, range }];
+    const start = member.trace.start;
+    return [
+      { member, profile, windows: windows ? apart(windows.map(([from, to]) => [from - start, to - start])) : null },
+    ];
   });
+}
+
+/** Stretches in order, those that overlap or touch as one: each moment counted once. */
+function apart(windows: readonly (readonly [number, number])[]): Windows {
+  const sorted = [...windows].sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [from, to] of sorted) {
+    const last = merged.at(-1);
+    if (last && from <= last[1]) last[1] = Math.max(last[1], to);
+    else merged.push([from, to]);
+  }
+  return merged;
 }
 
 /** The scope's profiles by app, in the order the apps start. */
@@ -173,7 +182,8 @@ export function profileSums(profile: Profile): { time: number; waiting: number; 
   const waiting = profile.stacks
     .filter((stack) => profile.frames[stack.frames[stack.frames.length - 1] ?? -1]?.waiting)
     .reduce((sum, stack) => sum + stack.count, 0);
-  const top = functions(profile).find((row) => !row.frame.waiting)?.frame.function;
+  // A function's: a wait, a call's or the collector's time (a share's frame) is none.
+  const top = functions(profile).find((row) => !(row.frame.waiting || shareFrame(row.frame)))?.frame.function;
   return { time: profile.samples * profile.interval_us, waiting: waiting * profile.interval_us, top };
 }
 

@@ -19,6 +19,7 @@ import {
   stretchText,
   type TimeRange,
   WHOLE,
+  type Windows,
 } from "./lib/slice";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 
@@ -89,7 +90,7 @@ export function RangeBand({ range, total }: { range: TimeRange; total: number })
   return <div className="dt-range" style={bandPlace(range, total)} aria-hidden="true" />;
 }
 
-const writeStretch = (range: TimeRange | null): string | undefined => (range ? stretchText(range) : undefined);
+const writeStretch = (windows: Windows | null): string | undefined => (windows ? stretchText(windows) : undefined);
 
 /** Esc, not taken by anything open before (a menu, a dialog) nor typed into a field. */
 function isFreeEscape(event: KeyboardEvent): boolean {
@@ -105,7 +106,7 @@ function isFreeEscape(event: KeyboardEvent): boolean {
 function useSlice(initial: Slice | undefined, onChange: ((slice: Slice) => void) | undefined) {
   const [slice, setSlice] = useState(initial ?? WHOLE);
   // Remembered by the view: Back to a profile opened at a stretch opens it there again, and a link carries it.
-  const [stretch, profileAt] = useRemembered<TimeRange | null>(VIEW_KEYS.stretch, null, parseStretch, writeStretch);
+  const [stretch, profileAt] = useRemembered<Windows | null>(VIEW_KEYS.stretch, null, parseStretch, writeStretch);
   // Another link to the same trace (Back, a link with another part picked): the slice it says.
   const asked = useRef(initial ?? WHOLE);
   asked.current = initial ?? WHOLE;
@@ -134,8 +135,8 @@ function useSlice(initial: Slice | undefined, onChange: ((slice: Slice) => void)
 /** Esc: the Profile tab's stretch goes first, else what is picked; nothing to let go, the key is the page's. */
 function letGo(
   event: KeyboardEvent,
-  { slice, change, stretch }: { slice: Slice; change: (slice: Slice) => void; stretch: TimeRange | null },
-  profileAt: (range: TimeRange | null) => void,
+  { slice, change, stretch }: { slice: Slice; change: (slice: Slice) => void; stretch: Windows | null },
+  profileAt: (windows: Windows | null) => void,
 ): void {
   if (stretch) profileAt(null);
   else if (!isWhole(slice)) change(cleared(slice));
@@ -147,8 +148,8 @@ function letGo(
 interface Held {
   slice: Slice;
   change: (slice: Slice) => void;
-  stretch: TimeRange | null;
-  profileAt: (range: TimeRange | null) => void;
+  stretch: Windows | null;
+  profileAt: (windows: Windows | null) => void;
 }
 
 const SliceContext = createContext<Held | null>(null);
@@ -170,6 +171,6 @@ export function SliceScope({
 export function useHeldSlice(): Held {
   const held = useContext(SliceContext);
   const [slice, change] = useState(WHOLE);
-  const [stretch, profileAt] = useState<TimeRange | null>(null);
+  const [stretch, profileAt] = useState<Windows | null>(null);
   return held ?? { slice, change, stretch, profileAt };
 }

@@ -1,7 +1,7 @@
 // A handler's own code before its transaction and after the commit, and the code between the transaction's queries:
 // two rows, each named by the samples of its own time. The profile's buckets (10 ms) hold both rows' code at their
 // edges; a bucket's samples are the row's whose code takes most of it, so the handler's row isn't named after the
-// transaction's loop.
+// transaction's loop. Each named by the time its function took there, as the profile the row opens says it.
 import type { Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
 import { expect, test } from "../fixtures.ts";
@@ -162,7 +162,11 @@ test("the handler's code row and its transaction's are named by their own time's
   await seed();
   await page.goto(`/#/t/${ID}?tab=tree`);
 
-  await expect(codeRows(page).locator(".dt-map-text")).toHaveText(["book_out in list_books", "get_db in list_books"]);
+  // The handler's: serialize's 9.5 ms after the commit, more than get_db's 3.5 ms before the transaction.
+  await expect(codeRows(page).locator(".dt-map-text")).toHaveText([
+    "book_out in list_books",
+    "serialize in list_books",
+  ]);
 });
 
 test("a code row names the function of yours that ran most by its real caller, as the flame graph draws it", async ({

@@ -14,8 +14,22 @@ const CONTEXT = 3;
 
 export const YOUR_CODE = "your code";
 
+/**
+ * A frame for a share of the trace's time that no function's frame says (lib/timeShares): a call's (Database, its
+ * label "SQL postgresql"), the collector's (GC), the framework's. The time under it is that share's, as the time strip
+ * and the call tree count it; `share` is the share's name there, `category` its colour's.
+ */
+export type ShareFrame = Frame & { share: string; category: string; calls?: readonly string[] };
+
+/** The frame as a share's, when it is one. */
+export function shareFrame(frame: Frame | undefined): ShareFrame | null {
+  return frame && typeof (frame as Partial<ShareFrame>).share === "string" ? (frame as ShareFrame) : null;
+}
+
 /** What a frame belongs to: your code, or a library's package (django.db, django.template, requests, threading). */
 export function packageOf(frame: Frame): string {
+  const share = shareFrame(frame);
+  if (share) return share.share;
   if (frame === OUTSIDE) return FRAMEWORK;
   if (frame.waiting) return WAITING;
   return frame.in_app ? YOUR_CODE : libraryOf(frame);
@@ -74,7 +88,10 @@ export function packageTimes(profile: Profile): { name: string; samples: number 
 
 /** A function as the console tells functions apart: its name, where it is defined, whether it waits. */
 function functionKey(frame: Frame): string {
-  return [frame.function, frame.module ?? "", frame.file, frame.line, frame.in_app, frame.waiting === true].join("|");
+  const share = shareFrame(frame)?.share ?? "";
+  return [frame.function, frame.module ?? "", frame.file, frame.line, frame.in_app, frame.waiting === true, share].join(
+    "|",
+  );
 }
 
 /**
@@ -119,6 +136,12 @@ function tracing(frame: Frame | undefined): boolean {
   return frame !== undefined && !frame.in_app && TRACING.test(frame.module || frame.file);
 }
 
+/** Whether a stack ran your code: a frame of yours on it, and not tracing's own code at its tip. */
+export function runsYours(profile: Profile, stack: Stack): boolean {
+  const leaf = profile.frames[stack.frames.at(-1) ?? -1];
+  return stack.frames.some((index) => profile.frames[index]?.in_app === true) && !tracing(leaf);
+}
+
 /** Whether a frame is a wait the console named by what was in flight ("waiting · SQL snowflake"). */
 function named(frame: Frame): boolean {
   return frame.file === "" && frame.function.startsWith(`${WAITING} `);
@@ -141,6 +164,8 @@ function ownFrames(profile: Profile, frames: readonly number[], kept: Kept): num
   const yours = frames.filter((index) => profile.frames[index]?.in_app === true);
   const leaf = frames.at(-1);
   const inner = leaf === undefined ? undefined : profile.frames[leaf];
+  // A share's time (a call's, the collector's, the framework's) is that share's, under your frames that led to it.
+  if (shareFrame(inner) && leaf !== undefined) return [...yours, leaf];
   // A wait named by what was in flight (lib/waitCalls) keeps its name; any other is Your code's one waiting frame.
   if (inner?.waiting === true && !inner.in_app)
     return [...yours, named(inner) && leaf !== undefined ? leaf : kept.waited];
@@ -251,7 +276,9 @@ export function functions(profile: Profile): { frame: Frame; self: number; total
  * ran none of it), or waiting (Your code's waits, a CPU profile's time off the CPU). Null for a function's frame,
  * however it is named. By its fields, as a chain's merged profiles copy their frames.
  */
-export function summaryOf(frame: Frame): typeof FRAMEWORK | typeof WAITING | null {
+export function summaryOf(frame: Frame): string | null {
+  const share = shareFrame(frame);
+  if (share) return share.share;
   if (frame.file !== "" || frame.in_app || frame.module) return null;
   if (frame.function === FRAMEWORK && !frame.waiting) return FRAMEWORK;
   return frame.function.startsWith(WAITING) && frame.waiting === true ? WAITING : null;

@@ -568,7 +568,8 @@ function onItsWayText(count: number): string {
  */
 function linkedProfiles(links: TraceLinks | undefined): TraceProfileOpener | undefined {
   if (!opensTraces(links)) return undefined;
-  return (id, range) => openTraceAt(links, id, { tab: "profile", stretch: range ? stretchText(range) : undefined });
+  return (id, windows) =>
+    openTraceAt(links, id, { tab: "profile", stretch: windows ? stretchText(windows) : undefined });
 }
 
 /** Explore: the ways out of this trace the page itself doesn't show. */

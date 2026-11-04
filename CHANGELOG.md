@@ -4,6 +4,43 @@
 
 ### Fixed
 
+- A trace's time is split one way everywhere: the time strip and its
+  legend, the call tree's code rows and the Profile tab's bar, flame and
+  list read the same split, so for the same stretch they say the same
+  shares. Spans say what ran when: a query's time is the database's, a
+  collector's pause is GC's. In a span's own code a timed profile splits
+  each 10 ms stretch by the stacks seen in it: those that waited are
+  Waiting, those running your code are Your code, those running only the
+  framework's (a view's serializer) are the framework's. A stretch
+  without samples goes as the one before it. A FastAPI endpoint's trace
+  that read "Your code 3 ms · Waiting 65 ms" on its strip and "your code
+  28 ms · waiting 80 ms" on its Profile tab now reads "Database 33 ms ·
+  Your code 14 ms · GC 7 ms · Waiting 55 ms" on both, the Profile tab's
+  list with "SQL postgresql 33 ms" and "GC 7 ms" rows under the
+  functions. A profile of part of the trace counts only the time it
+  covers: a call tree row of 7 ms opens a profile of 7 ms, not of the
+  whole 10 ms stretch it touched. A code row whose code ran in pieces
+  between calls opens the profile of those pieces, kept in the link,
+  saying "10 ms profiled of these stretches' 10 ms". A wait row that
+  holds several waits says so ("waiter.acquire and 3 more waits in
+  get_author"). The Profile tab's legend names its shares as the strip
+  does ("Your code", "Waiting"). Times are said rounded so the parts add
+  up to the whole: each share, and each function's own time within it,
+  rounded by largest remainder to the step the total is said in, so a 10
+  ms row's profile lists 7 ms and 3 ms, not 7 ms and 4 ms. The MCP
+  server's get_profile splits a timed profile the same way and says its
+  time by share, a query's time as the database's.
+- The Profile tab's All frames list says which of its functions waited,
+  as Your code's list does ("waiting ·
+  AsyncIOBackend.run_sync_in_worker_thread", muted): their time is the
+  bar's waiting, not a package's. A FastAPI sync endpoint's event loop
+  waiting for its worker thread read as a library function beside the
+  bar's packages and waiting, in neither share at a glance.
+- Hovering a box of the Profile tab's flame graph shows its whole tip
+  wherever the box is: a box in the bottom rows showed only the top of
+  it, or none, cut by the flame's scrolling card. The tip is over the
+  page now, below the pointer, or above it where it wouldn't fit, inside
+  the window.
 - The files on PyPI carry their PEP 740 attestations, as the release
   says: they were signed but not uploaded, so PyPI showed no provenance
   for tracepanel-agent.

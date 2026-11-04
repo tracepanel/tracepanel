@@ -1,4 +1,5 @@
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { bytes, duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import {
@@ -31,17 +32,19 @@ import {
   packageOf,
   packageTimes,
   profileReason,
+  shareFrame,
   summaryOf,
   tree,
   WAITING,
   YOUR_CODE,
 } from "./lib/profile";
 import { serviceRuntime, traceRuntime } from "./lib/runtime";
-import { rangeLabel, type TimeRange } from "./lib/slice";
+import { type Windows, windowsLabel, windowsTime } from "./lib/slice";
+import { type Shared, windowProfile } from "./lib/timeShares";
 import { cn } from "./lib/utils";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
-import { namedWaits, type WaitFrame } from "./lib/waitCalls";
-import { timed, wallClock } from "./lib/waiting";
+import type { WaitFrame } from "./lib/waitCalls";
+import { type Timed, timed } from "./lib/waiting";
 import { litKey, litScope } from "./lit";
 import { AppChip } from "./primitives";
 import { ScopeHeader } from "./ScopeBar";
@@ -84,6 +87,78 @@ const REST: Tone = {
   lit: "[--dt-lit:var(--color-muted-foreground)]",
 };
 
+/**
+ * A share of the trace's time that no package is (a call's, the collector's, the framework's: lib/timeShares), in
+ * its category's colour, as the time strip and the call tree draw it.
+ */
+const SHARE_TONES: Readonly<Record<string, Tone>> = {
+  sql: {
+    fill: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-sql)]",
+  },
+  cache: {
+    fill: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-cache)]",
+  },
+  redis: {
+    fill: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-redis)]",
+  },
+  http: {
+    fill: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-http)]",
+  },
+  datastore: {
+    fill: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-datastore)]",
+  },
+  messaging: {
+    fill: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-messaging)]",
+  },
+  storage: {
+    fill: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-storage)]",
+  },
+  llm: {
+    fill: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-llm)]",
+  },
+  mail: {
+    fill: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-mail)]",
+  },
+  template: {
+    fill: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-template)]",
+  },
+  signal: {
+    fill: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-signal)]",
+  },
+  django: {
+    fill: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-django)]",
+  },
+  gc: {
+    fill: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
+    dot: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)",
+    lit: "[--dt-lit:var(--dt-k-gc)]",
+  },
+};
+
 type Palette = Map<string, Tone>;
 type Share = { name: string; samples: number };
 
@@ -94,14 +169,25 @@ const KINDS_OF_TIME = new Set([YOUR_CODE, FRAMEWORK, WAITING]);
  * Your code, then the packages that took most, one color each; the rest share one gray as "other". The framework
  * and the runtime around your code (Your code's one share for them) are that gray too, by their own name.
  */
-function colors(names: readonly string[]): Palette {
-  const others = names.filter((name) => !KINDS_OF_TIME.has(name)).slice(0, PALETTE.length);
+function colors(names: readonly string[], shares: ReadonlyMap<string, string> = new Map()): Palette {
+  const others = names.filter((name) => !(KINDS_OF_TIME.has(name) || shares.has(name))).slice(0, PALETTE.length);
   return new Map([
     [YOUR_CODE, YOURS],
     [FRAMEWORK, REST],
     [WAITING, WAITS],
+    ...[...shares].map(([name, category]): [string, Tone] => [name, SHARE_TONES[category] ?? REST]),
     ...others.map((name, at): [string, Tone] => [name, PALETTE[at] ?? REST]),
   ]);
+}
+
+/** The shares of the trace's time a profile's frames stand for (ShareFrame), by name, with their category. */
+function sharesIn(profile: Profile): Map<string, string> {
+  const shares = new Map<string, string>();
+  for (const frame of profile.frames) {
+    const share = shareFrame(frame);
+    if (share) shares.set(share.share, share.category);
+  }
+  return shares;
 }
 
 function toneOf(palette: Palette, name: string): Tone {
@@ -191,12 +277,8 @@ function ProfilePane({
 }) {
   const range = useProfileRange(open);
   const [kind, setKind] = useKind();
-  // Kept while the profile and the range are: the flame graph's zoom belongs to the profile it was made in.
-  const { profile, start, duration: total, spans, attrs } = trace;
-  const scope = useMemo(
-    () => (profile ? scopeOf(profile, range, { start, duration: total, spans, attrs }) : null),
-    [profile, range, start, total, spans, attrs],
-  );
+  // Kept while the trace and the range are: the flame graph's zoom belongs to the profile it was made in.
+  const scope = useMemo(() => (trace.profile ? scopeOf(trace, trace.profile, range) : null), [trace, range]);
   if (!(open && trace.profile && scope)) return null;
   return (
     <ProfileOf trace={trace} profile={trace.profile} scope={scope} kind={kind} onKind={setKind} onShowRow={onShowRow} />
@@ -377,13 +459,13 @@ function MemoryNotes({ memory, what }: { memory: Memory; what: MemoryWhat }) {
   );
 }
 
-/** The stretch the tab was opened at (its own, gone once it closes), else the call tree's range. */
-function useProfileRange(open: boolean): TimeRange | null {
+/** The stretches the tab was opened at (its own, gone once it closes), else the call tree's range. */
+function useProfileRange(open: boolean): Windows | null {
   const { slice, stretch, profileAt } = useHeldSlice();
   useEffect(() => {
     if (!open) profileAt(null);
   }, [open, profileAt]);
-  return stretch ?? slice.range;
+  return useMemo(() => stretch ?? (slice.range ? [slice.range] : null), [stretch, slice.range]);
 }
 
 /** What the tab profiles: a stretch picked (when the profile says when its stacks were seen), else the whole trace. */
@@ -392,6 +474,8 @@ interface Scope {
   /** What Your code reads: its waits named by what was in flight (lib/waitCalls); All frames keeps the frames. */
   own: Profile;
   title: string;
+  /** The stretches it is of (a code row's, a range picked), where the profile says when; none: the whole trace. */
+  windows: Windows | null;
   /** Why a stretch picked isn't what it shows: the profile doesn't say when. */
   note: string | null;
   /** In the trace's own time (the profile says when its samples were taken), not in samples. */
@@ -401,21 +485,30 @@ interface Scope {
 }
 
 /** A trace as its profile's scope reads it: its clock, its calls (who waited), its SDK's language. */
-type Profiled = Pick<Trace, "start" | "duration" | "spans" | "attrs">;
+type Profiled = Pick<Trace, "start" | "duration" | "spans" | "attrs"> & { kind?: string; profile?: Profile };
 
-function scopeOf(profile: Profile, range: TimeRange | null, trace: Profiled): Scope {
-  // Timed, it reads in the trace's own time, as the time strip does; a range narrows it.
+function scopeOf(trace: Profiled, profile: Profile, range: Windows | null): Scope {
+  // Timed, it reads in the trace's own time and shares, as the time strip and the call tree do (lib/timeShares):
+  // stretches narrow it to their time.
   if (timed(profile)) {
-    const title = range ? `Profile of ${rangeLabel(range)}` : "Profile of the whole trace";
-    const shown = wallClock(profile, trace.duration, range);
-    return { profile: shown, own: namedWaits(shown, trace), title, note: null, timed: true, cpu: false };
+    const title = range ? `Profile of ${windowsLabel(range)}` : "Profile of the whole trace";
+    const shared = trace.profile === profile ? trace : { ...trace, profile };
+    return {
+      profile: windowProfile(shared as Shared & { profile: Timed }, range),
+      own: windowProfile(shared as Shared & { profile: Timed }, range, true),
+      title,
+      windows: range,
+      note: null,
+      timed: true,
+      cpu: false,
+    };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
   // On the trace's clock: the time off the CPU waited, under the function of yours that made each call waited for.
   const cpu = onCpuOnly(trace);
   // Its waits named so already (lib/offCpu): Your code and All frames read the same.
   const shown = cpu ? withOffCpu(profile, trace) : profile;
-  return { profile: shown, own: shown, title: "Profile of the whole trace", note, timed: false, cpu };
+  return { profile: shown, own: shown, title: "Profile of the whole trace", windows: null, note, timed: false, cpu };
 }
 
 /**
@@ -439,6 +532,15 @@ function about(profile: Profile): string {
 function profiledWord(scope: Scope): string {
   if (scope.cpu) return "on the CPU";
   return scope.timed ? "profiled" : "sampled";
+}
+
+/**
+ * What the big number is a part of: the stretches' time (a code row's, which the row says too), else the trace's.
+ */
+function ofWhat(scope: Scope, trace: Trace): string {
+  if (!scope.windows) return `the trace's ${duration(trace.duration)}`;
+  const time = duration(windowsTime(scope.windows));
+  return scope.windows.length > 1 ? `these stretches' ${time}` : `the stretch's ${time}`;
 }
 
 /** A line of the head in small print, when there is something to say. */
@@ -476,7 +578,7 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
         {about(whole)}
         {time(scope.cpu ? whole.samples : shown.samples)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
-          {profiledWord(scope)} of the trace's {duration(trace.duration)}
+          {profiledWord(scope)} of {ofWhat(scope, trace)}
         </span>
       </span>
       <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole, scope.cpu)}</span>
@@ -521,7 +623,14 @@ function ProfileView({
   const view = useMemo(() => (own ? ownCode(ownProfile ?? profile) : allFrames(profile)), [profile, ownProfile, own]);
   // Your code's shares are its own and the framework's around it; every frame's, each package's.
   const packages = useMemo(() => packageTimes(view), [view]);
-  const palette = useMemo(() => colors(packages.map((item) => item.name)), [packages]);
+  const palette = useMemo(
+    () =>
+      colors(
+        packages.map((item) => item.name),
+        sharesIn(view),
+      ),
+    [packages, view],
+  );
   return (
     <div className="@container grid gap-6 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -564,9 +673,16 @@ function summed(packages: readonly Share[], palette: Palette): Share[] {
   return other ? [...named, { name: "other", samples: other }] : named;
 }
 
+/**
+ * A share's name in the bar's legend, as the time strip's legend says its shares: "Your code", "Waiting".
+ */
+function shareName(name: string): string {
+  return KINDS_OF_TIME.has(name) ? `${name.charAt(0).toUpperCase()}${name.slice(1)}` : name;
+}
+
 /** Waiting after every package, the framework and the runtime before it, and the rest folded together before them. */
 function rankOf(share: Share): number {
-  if (share.name === WAITING) return 3;
+  if (share.name === WAITING) return 4;
   if (share.name === FRAMEWORK) return 2;
   return share.name === "other" ? 1 : 0;
 }
@@ -596,7 +712,7 @@ function Packages({
     key: name,
     size: samples,
     className: cn(toneOf(palette, name).dot, toneOf(palette, name).lit),
-    title: `${name}: ${time(samples)}`,
+    title: `${shareName(name)}: ${time(samples)}`,
     faded: faded(lit, name),
   }));
   return (
@@ -615,7 +731,7 @@ function Packages({
             >
               <ShareFace
                 swatch={<span className={cn("dt-dot", toneOf(palette, name).dot)} />}
-                name={name}
+                name={shareName(name)}
                 value={time(samples)}
                 share={percent(samples, total)}
               />
@@ -632,6 +748,7 @@ function Packages({
   );
 }
 
+/** The box under the pointer, and where the pointer is in the window (clientX, clientY). */
 interface Hovered {
   node: Node;
   x: number;
@@ -654,15 +771,8 @@ function Flame({
   const [focus, setFocus] = useState<Node>(root);
   const boxes = useMemo(() => layout(focus), [focus]);
   const depth = Math.max(0, ...boxes.map((box) => box.depth)) + 1;
-  const card = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<Hovered | null>(null);
-  const track = (event: MouseEvent, node: Node) => {
-    const at = card.current;
-    if (!at) return;
-    // In the card's scrolled content, where the tip is placed.
-    const area = at.getBoundingClientRect();
-    setHover({ node, x: event.clientX - area.left, y: event.clientY - area.top + at.scrollTop });
-  };
+  const track = (event: MouseEvent, node: Node) => setHover({ node, x: event.clientX, y: event.clientY });
   return (
     <section className="grid gap-2" aria-label="Flame graph">
       <div className="flex h-5 items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -673,7 +783,7 @@ function Flame({
           </button>
         ) : null}
       </div>
-      <div ref={card} className="relative max-h-[30rem] overflow-y-auto rounded-lg border bg-card p-1.5">
+      <div className="relative max-h-[30rem] overflow-y-auto rounded-lg border bg-card p-1.5">
         <div className="relative w-full" style={{ height: depth * (ROW + 2) }} role="img" aria-label="Flame graph">
           {boxes.map((box) => (
             <FlameBox
@@ -687,28 +797,56 @@ function Flame({
             />
           ))}
         </div>
-        {hover ? <Tip hovered={hover} total={root.total} time={time} /> : null}
+        {hover ? <Tip key={hover.node.key} hovered={hover} total={root.total} time={time} /> : null}
       </div>
     </section>
   );
 }
 
-/** What the box under the pointer is: its function, where it is, whole, and its time. */
+/** Room kept between the tip and the pointer, and between the tip and the window's edges. */
+const TIP_GAP = 18;
+const TIP_EDGE = 8;
+
+/**
+ * Where the tip goes: below the pointer, else above it where it doesn't fit below (a box in the bottom rows), and
+ * always inside the window.
+ */
+function tipPlace(x: number, y: number, size: { width: number; height: number }): { left: number; top: number } {
+  const [width, height] = [window.innerWidth, window.innerHeight];
+  const left = Math.min(Math.max(TIP_EDGE, x - 120), width - size.width - TIP_EDGE);
+  const below = y + TIP_GAP;
+  const top = below + size.height + TIP_EDGE <= height ? below : y - TIP_GAP - size.height;
+  return { left: Math.max(TIP_EDGE, left), top: Math.min(Math.max(TIP_EDGE, top), height - size.height - TIP_EDGE) };
+}
+
+/**
+ * What the box under the pointer is: its function, where it is, whole, and its time. Over the page, fixed where the
+ * pointer is: the flame's card scrolls and clips what is inside it, so a tip of its bottom rows would be cut.
+ */
 function Tip({ hovered: { node, x, y }, total, time }: { hovered: Hovered; total: number; time: Measure }) {
+  const tip = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ left: number; top: number } | null>(null);
+  // Measured where the pointer moves: another box's tip is another Tip (keyed by its box), measured anew.
+  useLayoutEffect(() => {
+    const at = tip.current;
+    if (at) setPlace(tipPlace(x, y, { width: at.offsetWidth, height: at.offsetHeight }));
+  }, [x, y]);
   const frame = node.frame;
   if (!frame) return null;
-  return (
+  return createPortal(
     <div
+      ref={tip}
       role="tooltip"
-      className="pointer-events-none absolute z-10 grid w-max max-w-md gap-1 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
-      style={{ left: Math.max(8, x - 120), top: y + 18 }}
+      className="pointer-events-none fixed z-50 grid w-max max-w-md gap-1 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
+      style={place ?? { left: x, top: y + TIP_GAP, visibility: "hidden" }}
     >
       <span className="font-mono font-medium [overflow-wrap:anywhere]">{frame.function}</span>
       <span className="font-mono text-muted-foreground [overflow-wrap:anywhere]">{where(frame)}</span>
       <span className="tabular-nums">
         {time(node.total)} · {percent(node.total, total)} · {time(node.self)} in itself
       </span>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -804,8 +942,9 @@ function Functions({
       <ol className="m-0 list-none p-0">
         {named.map(({ frame, self, total }) => (
           <ListLine
-            key={`${frame.file}:${frame.line}:${frame.function}`}
+            key={`${frame.file}:${frame.line}:${frame.function}:${frame.waiting === true}`}
             name={frame.function}
+            waited={packageOf(frame) === WAITING}
             place={where(frame)}
             tone={toneOf(palette, packageOf(frame))}
             amount={self}
@@ -933,8 +1072,11 @@ function ListLine({
   value,
   other,
   title,
+  waited = false,
 }: {
   name: string;
+  /** A frame that waited (All frames lists them): said as waiting's share says it, as Your code's waits are. */
+  waited?: boolean;
   place: string;
   tone: Tone;
   amount: number;
@@ -948,7 +1090,9 @@ function ListLine({
       <div className="flex min-w-0 items-start gap-2">
         <span className={cn("mt-1 size-2 shrink-0 rounded-sm", tone.dot)} />
         <div className="grid min-w-0 gap-0.5">
-          <span className="font-mono text-xs [overflow-wrap:anywhere]">{name}</span>
+          <span className={cn("font-mono text-xs [overflow-wrap:anywhere]", waited && "text-muted-foreground italic")}>
+            {waited ? `${WAITING} · ${name}` : name}
+          </span>
           <span className="font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{place}</span>
         </div>
       </div>
@@ -1090,7 +1234,7 @@ export function ProfileTab({
   onShowRow?: ((row: string) => void) | undefined;
 }) {
   const profiles = useMemo(() => scopedProfiles(chain.members, chain.scope), [chain.members, chain.scope]);
-  const own = profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].range === null;
+  const own = profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].windows === null;
   if (own || (profiles.length === 0 && !chain.scope))
     return <ProfilePane trace={trace} open={open} onShowRow={onShowRow} />;
   if (!open) return null;
@@ -1188,7 +1332,7 @@ function appMemory(app: AppProfile): AppMemory | undefined {
   const merged = mergeMemories(measured.map((each) => each.profile));
   if (!merged) return undefined;
   const title = measured.length > 1 ? `Memory of ${measured.length} traces` : "Memory of the whole trace";
-  const narrowed = measured.some((each) => each.range !== null);
+  const narrowed = measured.some((each) => each.windows !== null);
   const note = narrowed ? "Its memory isn't timed: the stretch picked can't narrow it." : null;
   return { ...merged, app: app.app, traces: measured.length, title, note };
 }
@@ -1203,13 +1347,14 @@ function appRuntime(app: AppProfile): string | undefined {
  * was in flight in each trace, as a trace's own Profile tab names them.
  */
 function appView(app: AppProfile): Scope {
-  const scopes = app.traces.map((each) => scopeOf(each.profile, each.range, each.member.trace));
+  const scopes = app.traces.map((each) => scopeOf(each.member.trace, each.profile, each.windows));
   const [one] = scopes;
   if (scopes.length === 1 && one) return one;
   return {
     profile: mergeProfiles(scopes.map((each) => each.profile)),
     own: mergeProfiles(scopes.map((each) => each.own)),
     title: `Profile of ${app.traces.length} traces`,
+    windows: null,
     note: null,
     timed: false,
     cpu: false,

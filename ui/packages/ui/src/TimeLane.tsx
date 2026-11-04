@@ -1,11 +1,11 @@
 import { type CSSProperties, type PointerEvent, useMemo, useState } from "react";
 import { partOfCategory } from "./CallMap";
 import { duration } from "./format";
-import { type Stretch, stretches } from "./lib/breakdown";
-import { cutByPauses, GC, gcPauses } from "./lib/memory";
+import type { Category, Stretch } from "./lib/breakdown";
+import { GC } from "./lib/memory";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
-import { quietPieces } from "./lib/waiting";
+import { type Segment, segmentsOf } from "./lib/timeShares";
 import { WAITED_SHARE } from "./lib/waitingShare";
 import { litKey } from "./lit";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
@@ -88,35 +88,47 @@ interface Lane {
   totals: Map<string, number>;
 }
 
-/** A quiet stretch in its pieces: waited in, computed in (one, computed, where the profile can't say). */
-function piecesOfStretch(trace: Trace, stretch: Stretch): Drawn[] {
-  return quietPieces(trace.profile, stretch.from, stretch.to).map((piece) => ({
-    stretch: { ...stretch, from: piece.from, to: piece.to },
-    quiet: true,
-    waiting: piece.waiting,
-    gc: false,
-  }));
+/**
+ * The lane's pieces: the trace's segments (lib/timeShares), those that meet with the same share and span as one. A
+ * wait is drawn in its span's colour, hatched; the framework's time in a view's own code in the framework's.
+ */
+function drawnOf(trace: Trace): Drawn[] {
+  const quiet = quietSpans(trace);
+  const drawn: Drawn[] = [];
+  for (const segment of segmentsOf(trace)) {
+    const next = pieceOf(segment, quiet);
+    const last = drawn.at(-1);
+    if (last && meets(last, next)) last.stretch.to = next.stretch.to;
+    else drawn.push(next);
+  }
+  return drawn;
 }
 
-/** A piece of the lane with the collector's pauses cut out of it: those its own pieces, the GC share's. */
-function cutOut(each: Drawn, pauses: readonly TimeRange[]): Drawn[] {
-  return cutByPauses(each.stretch.from, each.stretch.to, pauses).map(({ range: [from, to], gc }) =>
-    gc
-      ? { stretch: { ...each.stretch, from, to }, quiet: false, waiting: false, gc }
-      : { ...each, stretch: { ...each.stretch, from, to } },
-  );
+/** A segment as the lane draws it: a wait in its span's colour, hatched; a pause in GC's. */
+function pieceOf(segment: Segment, quiet: ReadonlyMap<string, unknown>): Drawn {
+  const gc = segment.share === GC;
+  const waiting = segment.share === WAITED_SHARE;
+  const category = gc || waiting ? segment.category : (segment.share as Category);
+  return {
+    stretch: { from: segment.from, to: segment.to, category, quiet: segment.quiet, span: segment.span },
+    quiet: !gc && segment.quiet && quiet.has(segment.span),
+    waiting,
+    gc,
+  };
+}
+
+/** What a piece is, whatever its stretch: its span, its colour, whether it waited, GC's, quiet. */
+function kindOf(each: Drawn): string {
+  return [each.stretch.span, each.stretch.category, each.waiting, each.gc, each.quiet].join("|");
+}
+
+/** Whether a piece goes on from the one before: where it ends, of the same kind. */
+function meets(last: Drawn, next: Drawn): boolean {
+  return Math.abs(last.stretch.to - next.stretch.from) < 0.5 && kindOf(last) === kindOf(next);
 }
 
 function laneOf(trace: Trace): Lane {
-  const quiet = quietSpans(trace);
-  const pauses = gcPauses(trace.profile, trace.duration);
-  const drawn = stretches(trace)
-    .flatMap((stretch): Drawn[] =>
-      stretch.quiet && quiet.has(stretch.span)
-        ? piecesOfStretch(trace, stretch)
-        : [{ stretch, quiet: false, waiting: false, gc: false }],
-    )
-    .flatMap((each) => cutOut(each, pauses));
+  const drawn = drawnOf(trace);
   const totals = new Map<string, number>();
   for (const { stretch, waiting } of drawn.filter((each) => each.quiet)) {
     const key = `${stretch.span}:${waiting}`;

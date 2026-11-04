@@ -36,29 +36,30 @@ import { cutNote, isCut } from "./lib/live";
 import { pageParts } from "./lib/page";
 import { widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
-import { hottestOwn, type Profile } from "./lib/profile";
+import { hottestOwn, type Profile, WAITING } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import { traceRuntime } from "./lib/runtime";
 import { type SpanScope, shifted } from "./lib/scope";
 import { isReceiver, raised } from "./lib/signals";
-import { isShown, overlaps, type Slice, type TimeRange } from "./lib/slice";
+import { isShown, overlaps, type Slice, type TimeRange, type Windows, windowsTime } from "./lib/slice";
 import { CALL_KINDS, DATASTORES, MESSAGING, RPC } from "./lib/systems";
+import { spanSegments, splitByProfile, windowProfile } from "./lib/timeShares";
 import { attrsWhere } from "./lib/values";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 import {
   bucketOwners,
-  ownProfile,
+  ownedWindows,
   type Piece,
-  quietPieces,
   type Timed,
   timed,
   waitName,
   waitPlace,
+  windowsOf,
 } from "./lib/waiting";
 import { type TraceLinks, traceLinkProps } from "./links";
 import { MigrationNotes } from "./Migrations";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
-import { profileOver, RowFlame } from "./ProfileHint";
+import { RowFlame } from "./ProfileHint";
 import { PropTable } from "./PropTable";
 import {
   AliasChip,
@@ -630,8 +631,8 @@ interface RowContext {
 
 type Within = readonly [number, number];
 
-/** Opens a trace's profile by its id, at a stretch of it (µs since it started) where given. */
-export type TraceProfileOpener = (traceId: string, range?: TimeRange) => void;
+/** Opens a trace's profile by its id, at stretches of it (µs since it started) where given. */
+export type TraceProfileOpener = (traceId: string, windows?: Windows) => void;
 
 /**
  * The trace whose own code the code rows under a row are: this one's, or a call's trace from another app opened under
@@ -641,14 +642,14 @@ export type TraceProfileOpener = (traceId: string, range?: TimeRange) => void;
 interface CodeOwner {
   trace: Trace;
   quiet: ReadonlyMap<string, Quiet>;
-  onProfile: ((range: TimeRange) => void) | undefined;
+  onProfile: ((windows: Windows) => void) | undefined;
   /** Its app profiles a request when asked: untraced code then says how to see what ran. */
   profiles: boolean;
 }
 
 /** A call's trace as the owner of the code rows under it: its own quiet spans, its own profile. */
 function ownerFor(whole: Trace, open: TraceProfileOpener | undefined, profilesIn: ProfilesIn | undefined): CodeOwner {
-  const onProfile = open && whole.profile ? (range: TimeRange) => open(whole.id, range) : undefined;
+  const onProfile = open && whole.profile ? (windows: Windows) => open(whole.id, windows) : undefined;
   return { trace: whole, quiet: quietSpans(whole), onProfile, profiles: profilesIn?.(whole) === true };
 }
 
@@ -1643,22 +1644,42 @@ function codeShown(quiet: Quiet, category: Category, ctx: RowContext): boolean {
   return range === null || quiet.gaps.some(([from, to]) => overlaps(range, from - ctx.trace.start, to - from));
 }
 
-/** A code row's pieces of time: where it waited, or where it computed (µs since the trace started). */
+/**
+ * A code row's pieces of time: where it waited, or where its code ran (µs since the trace started; the trace's
+ * segments, lib/timeShares), and their time: the time of the profile they open.
+ */
 interface CodePart {
   waiting: boolean;
   pieces: Piece[];
   total: number;
 }
 
+/** The time of a code row's pieces: the stretches the profile it opens is of (its head says how much is profiled). */
+function piecesTime(pieces: readonly Piece[]): number {
+  return windowsTime(windowsOf(pieces));
+}
+
+/** A span's own time in pieces: its segments, those that meet with the same part (waited or ran) as one. */
+function ownPieces(trace: Trace, span: string): Piece[] {
+  const pieces: Piece[] = [];
+  for (const segment of spanSegments(trace, span)) {
+    const waiting = segment.share === WAITING;
+    const last = pieces.at(-1);
+    if (last && last.waiting === waiting && Math.abs(last.to - segment.from) < 0.5) last.to = segment.to;
+    else pieces.push({ from: segment.from, to: segment.to, waiting });
+  }
+  return pieces;
+}
+
 /** A span's own code in its parts: what it waited in and what it computed in, each when there is any. */
-function codeParts(quiet: Quiet, trace: Trace): CodePart[] {
-  const pieces = quiet.gaps.flatMap(([from, to]) => quietPieces(trace.profile, from - trace.start, to - trace.start));
+function codeParts(span: string, quiet: Quiet, trace: Trace): CodePart[] {
+  const pieces = ownPieces(trace, span);
   const parts = [true, false].flatMap((waiting): CodePart[] => {
     const own = pieces.filter((piece) => piece.waiting === waiting);
-    const total = own.reduce((sum, piece) => sum + piece.to - piece.from, 0);
+    const total = piecesTime(own);
     return total > 0 ? [{ waiting, pieces: own, total }] : [];
   });
-  return parts.every((part) => partShows(part, quiet, trace)) ? parts : [oneOf(parts, pieces, quiet)];
+  return parts.every((part) => partShows(part, quiet, trace)) ? parts : [oneOf(parts, pieces)];
 }
 
 /** A wait or a stretch of code on a row of its own: as long as the code's own time is said at all, of the time. */
@@ -1676,16 +1697,9 @@ function partShows(part: CodePart, quiet: Quiet, trace: Trace): boolean {
 }
 
 /** The parts as one row: what most of it was (waited or computed), all of its time, every piece on its bar. */
-function oneOf(parts: readonly CodePart[], pieces: Piece[], quiet: Quiet): CodePart {
+function oneOf(parts: readonly CodePart[], pieces: Piece[]): CodePart {
   const most = [...parts].sort((a, b) => b.total - a.total)[0];
-  return { waiting: most?.waiting ?? false, pieces, total: quiet.total };
-}
-
-/** The stretch a part spans, from its first piece to its last. */
-function partRange(part: CodePart): TimeRange {
-  const first = part.pieces[0] as Piece;
-  const last = part.pieces.at(-1) as Piece;
-  return [first.from, last.to];
+  return { waiting: most?.waiting ?? false, pieces, total: piecesTime(pieces) };
 }
 
 /** Where its code ran with nothing recorded inside, hatched in its share's colour; pieces too thin to see left out. */
@@ -1753,9 +1767,9 @@ function ownersOf(code: CodeOwner, profile: Timed): Map<number, string> {
  * than another row's. The whole trace's where the profile doesn't say when.
  */
 function partProfile(part: CodePart, code: CodeOwner, span: string): Profile | undefined {
-  const profile = code.trace.profile;
-  if (!timed(profile)) return profileOver(code.trace, partRange(part));
-  return ownProfile(profile, part.pieces, ownersOf(code, profile), span);
+  const trace = code.trace;
+  if (!splitByProfile(trace)) return trace.profile;
+  return windowProfile(trace, ownedWindows(trace.profile, part.pieces, ownersOf(code, trace.profile), span));
 }
 
 /** Where a wait row waited, said quietly after its name: "handlers.py:108", where the profile says. */
@@ -1837,7 +1851,7 @@ function UntracedHint({ name, code, children }: { name: string; code: CodeOwner;
  */
 function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; depth: number }) {
   if (!hasCodeRow(span, ctx)) return null;
-  const parts = codeParts(ctx.code.quiet.get(span.id) as Quiet, ctx.code.trace);
+  const parts = codeParts(span.id, ctx.code.quiet.get(span.id) as Quiet, ctx.code.trace);
   return (
     <>
       {parts.map((part) => (
@@ -1863,7 +1877,7 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
           ? "Open the profile at this stretch"
           : "Open the profile of the trace that served this call, at this stretch"
       }
-      onClick={() => open(partRange(part))}
+      onClick={() => open(windowsOf(part.pieces))}
     >
       {inside}
     </button>
@@ -2830,16 +2844,16 @@ function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () =
   );
 }
 
-/** The profile opened at a stretch of the trace (the range picked), where it says when its samples were taken. */
+/** The profile opened at stretches of the trace (a code row's), where it says when its samples were taken. */
 function profileOpener(
   open: (() => void) | undefined,
   trace: Trace,
-  profileAt: (range: TimeRange | null) => void,
-): ((range: TimeRange) => void) | undefined {
+  profileAt: (windows: Windows | null) => void,
+): ((windows: Windows) => void) | undefined {
   if (!open) return undefined;
-  return (range) => {
+  return (windows) => {
     // The Profile tab's own stretch: the call tree's range is a drag's only.
-    if (timed(trace.profile)) profileAt(range);
+    if (timed(trace.profile)) profileAt(windows);
     open();
   };
 }

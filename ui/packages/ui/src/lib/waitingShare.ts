@@ -3,11 +3,12 @@
 // tab has it. One rule for every bar of the trace's time (the time strip's legend, the page's card). Plain data, no
 // React.
 import type { Trace } from "../types";
-import { type Category, spanCategories } from "./breakdown";
+import type { Category } from "./breakdown";
+import { GC } from "./memory";
 import { offCpu } from "./offCpu";
 import { onCpuOnly, type Profile, WAITING } from "./profile";
-import { type Quiet, quietSpans } from "./quiet";
-import { timed, waitedIn, waits } from "./waiting";
+import { rounded, type Segment, segmentsOf } from "./timeShares";
+import { timed, waits } from "./waiting";
 
 /** The waiting share: neutral and hatched, as the strip draws the code's waits. */
 export const WAITED_SHARE = WAITING;
@@ -27,22 +28,14 @@ function sumOf(parts: readonly (readonly [unknown, number])[]): number {
 }
 
 /**
- * How long each of the code's shares waited (µs). A profile that says when its stacks were seen: the waits in the
- * spans' own time with no calls running, as the strip hatches them. One that doesn't: the profile's waiting less the
- * calls' time (a query's wait is the database's share), shared among the code's shares by their time.
+ * How long each of the code's shares waited (µs), for a profile that doesn't say when its stacks were seen: the
+ * profile's waiting less the calls' time (a query's wait is the database's share), shared among the code's shares by
+ * their time. A timed one's shares are lib/timeShares'.
  */
 function waitedBy(trace: Trace, parts: readonly (readonly [string, number])[]): Map<string, number> {
   const profile = trace.profile;
   const waited = new Map<string, number>();
   if (!profile) return waited;
-  if (timed(profile)) {
-    const categories = spanCategories(trace);
-    for (const [span, quiet] of quietSpans(trace)) {
-      const category = categories.get(span);
-      if (category) waited.set(category, (waited.get(category) ?? 0) + waitsOf(trace, quiet));
-    }
-    return waited;
-  }
   const own = parts.filter(([category]) => OWN_CODE.has(category));
   const ownTime = sumOf(own);
   const calls = sumOf(parts.filter(([category]) => !OWN_CODE.has(category) && category !== "gc"));
@@ -52,8 +45,31 @@ function waitedBy(trace: Trace, parts: readonly (readonly [string, number])[]): 
   return waited;
 }
 
-function waitsOf(trace: Trace, quiet: Quiet): number {
-  return waitedIn(trace.profile, quiet.gaps, trace.start);
+/** A segment's share where the collector's pauses aren't one: the share of what they stopped. */
+function shareWithoutGc(segment: Segment): string {
+  return segment.share === GC ? segment.category : segment.share;
+}
+
+/**
+ * A timed profile's trace by share (lib/timeShares): the shares the strip draws, its waits and the framework's time
+ * split out of the code's own. The collector's pauses are their own share where `parts` has one (the legend's), else
+ * the time of the share they stopped.
+ */
+function timedShares<K extends string>(
+  trace: Trace,
+  parts: readonly (readonly [K, number])[],
+): [K | typeof WAITED_SHARE, number][] {
+  const gc = parts.some(([category]) => category === GC);
+  const times = new Map<string, number>();
+  for (const segment of segmentsOf(trace)) {
+    const share = gc ? segment.share : shareWithoutGc(segment);
+    times.set(share, (times.get(share) ?? 0) + segment.to - segment.from);
+  }
+  const said = rounded(times);
+  const waiting = said.get(WAITED_SHARE) ?? 0;
+  said.delete(WAITED_SHARE);
+  const split = [...said].filter(([, value]) => value > 0) as [K, number][];
+  return waiting >= 1 ? [...split, [WAITED_SHARE, waiting]] : split;
 }
 
 /**
@@ -64,6 +80,7 @@ export function withWaiting<K extends string>(
   trace: Trace,
   parts: readonly (readonly [K, number])[],
 ): [K | typeof WAITED_SHARE, number][] {
+  if (timed(trace.profile)) return timedShares(trace, parts);
   const waited = waitedBy(trace, parts);
   const split = parts.flatMap(([category, value]): [K, number][] => {
     const left = value - Math.min(waited.get(category) ?? 0, value);

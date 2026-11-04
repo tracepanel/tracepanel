@@ -28,8 +28,8 @@ test("the Profile tab says how much it sampled, what it couldn't, and waiting as
     page.getByText("500 ms not sampled: other traces ran on the same thread, filled in from the samples around it"),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^your code\s*100 ms\s*6%$/,
-    /^waiting\s*1\.5 s\s*94%$/,
+    /^Your code\s*100 ms\s*6%$/,
+    /^Waiting\s*1\.5 s\s*94%$/,
   ]);
 });
 
@@ -59,7 +59,7 @@ test("the strip and its share's numbers split the code's own time; a click on th
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^waiting\s*[\d.]+ m?s\s*100%$/,
+    /^Waiting\s*[\d.]+ m?s\s*100%$/,
   ]);
   // The stretch is the Profile tab's own: the call tree keeps the whole time, a range there is a drag's only.
   await expect(page).not.toHaveURL(/[?&]range=/);
@@ -154,4 +154,19 @@ test("a few ms of code beside a long wait is part of the wait: one row, all of t
 
   await expect(page.locator('.dt-map-row[data-kind="code"]')).toHaveCount(1);
   await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText(/^1\.\d+ s$/);
+});
+
+test("All frames says which of its functions waited, as Your code does: their time is waiting's share", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${await traceId(DIGEST)}?tab=profile`);
+  await page.getByRole("tab", { name: "All frames" }).click();
+  const functions = page.getByRole("region", { name: "Functions" });
+
+  await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
+    /^Your code\s*100 ms\s*6%$/,
+    /^Waiting\s*1\.5 s\s*94%$/,
+  ]);
+  await expect(functions.getByText(/^waiting · sleep$/)).toBeVisible();
+  await expect(functions.getByText(/^render_digest$/)).toBeVisible();
 });

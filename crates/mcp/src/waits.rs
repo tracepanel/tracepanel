@@ -1,10 +1,8 @@
-//! What a profile's waits were for, by the calls in flight: a function of the app's that waited 3.9 s waited on a
-//! query to Snowflake, an HTTP call, a sleep. Its waits are named so (`waiting · SQL snowflake`), the console's
-//! Profile tab's rule (`ui/packages/ui/src/lib/waitCalls.ts`), its cases in `schema/waits.json`: a timed profile's
-//! (Python's, a JVM's) by the calls its function made in the buckets it waited in, a CPU profile's (Go's, Node's) by
-//! the calls its time off the CPU went to (off_cpu).
+//! What a profile's waits and calls are named: a call by what it is (`SQL snowflake`, `HTTP GET
+//! analytics.example.com`), a wait by what it waited for (`waiting · SQL snowflake`, `waiting · sleep`), as the
+//! console's Profile tab names them (`ui/packages/ui/src/lib/waitCalls.ts`): a timed profile's calls are shares of
+//! their own (shares), a CPU profile's (Go's, Node's) time off the CPU waits, named by the call it went to (off_cpu).
 
-use crate::compact::int;
 use serde_json::Value;
 
 /// The kinds of a call out of the app, as the console's call tree groups them: every system's, and the generic
@@ -108,108 +106,6 @@ pub(crate) fn call_label(span: &Value) -> String {
             _ => kind.to_owned(),
         },
     }
-}
-
-/// A call of the trace with its stretch (µs since the trace started).
-pub(crate) struct Call<'a> {
-    span: &'a Value,
-    from: i64,
-    to: i64,
-}
-
-/// The trace's calls out (queries, HTTP calls, cache and queue calls), on its clock.
-pub(crate) fn calls_of(doc: &Value) -> Vec<Call<'_>> {
-    let start = int(doc, "start");
-    doc.get("spans")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|span| {
-            span.get("parent_id")
-                .is_some_and(|parent| !parent.is_null())
-                && CALLS.contains(&span.get("kind").and_then(Value::as_str).unwrap_or(""))
-        })
-        .map(|span| Call {
-            span,
-            from: int(span, "start") - start,
-            to: int(span, "start") + int(span, "duration") - start,
-        })
-        .filter(|call| call.to > call.from)
-        .collect()
-}
-
-/// The function a call's origin names (`api.py:56 in report`: `report`), as every SDK writes code.origin.
-fn made_in(span: &Value) -> Option<&str> {
-    attr(span, "code.origin")?.split(" in ").last()
-}
-
-/// The same function, however each names it: `report`, `Reports.report`, `(*App).report`.
-fn same_name(a: &str, b: &str) -> bool {
-    a == b || a.rsplit('.').next() == b.rsplit('.').next()
-}
-
-/// The calls in flight in a bucket (µs since the trace started): those a function of the stack made (their
-/// code.origin), where any did; else all of them (an origin a stack doesn't name: the driver's, a callback's).
-fn in_flight<'c, 'a>(
-    calls: &'c [Call<'a>],
-    from: i64,
-    to: i64,
-    names: &[&str],
-) -> Vec<&'c Call<'a>> {
-    let open: Vec<&Call> = calls
-        .iter()
-        .filter(|call| call.from < to && call.to > from)
-        .collect();
-    let own: Vec<&Call> = open
-        .iter()
-        .copied()
-        .filter(|call| {
-            made_in(call.span).is_some_and(|made| names.iter().any(|name| same_name(name, made)))
-        })
-        .collect();
-    if own.is_empty() { open } else { own }
-}
-
-/// A waiting stack of a timed profile: its frames' functions (outermost first), the function that waited (its
-/// innermost), the buckets it was seen in (`[bucket, count]`), and its time (µs).
-pub(crate) struct Waiting<'s> {
-    pub(crate) names: &'s [&'s str],
-    pub(crate) leaf: &'s str,
-    pub(crate) seen: &'s [(i64, i64)],
-    pub(crate) us: f64,
-}
-
-/// A waiting stack's time by what was in flight in each bucket it was seen in, in the order first met: each wait's
-/// label (none: no call, and the frame that waited is `waiting` itself) and its µs, the last taking what the shares'
-/// rounding left, so that together they are the stack's time.
-pub(crate) fn parts(stack: &Waiting, calls: &[Call], width: i64) -> Vec<(Option<String>, f64)> {
-    let seen: i64 = stack.seen.iter().map(|(_, count)| count).sum();
-    let mut parts: Vec<(Option<String>, f64)> = Vec::new();
-    if seen <= 0 {
-        return parts;
-    }
-    for &(bucket, count) in stack.seen {
-        let open = in_flight(calls, bucket * width, (bucket + 1) * width, stack.names);
-        let labels: Vec<Option<String>> = if open.is_empty() {
-            vec![(stack.leaf != WAITING).then(|| stack.leaf.to_owned())]
-        } else {
-            open.iter()
-                .map(|call| Some(call_label(call.span)))
-                .collect()
-        };
-        let share = stack.us * count as f64 / seen as f64 / labels.len() as f64;
-        for label in labels {
-            match parts.iter_mut().find(|(known, _)| *known == label) {
-                Some((_, us)) => *us += share,
-                None => parts.push((label, share)),
-            }
-        }
-    }
-    let before: f64 = parts.iter().rev().skip(1).map(|(_, us)| us).sum();
-    if let Some((_, last)) = parts.last_mut() {
-        *last = stack.us - before;
-    }
-    parts
 }
 
 #[cfg(test)]

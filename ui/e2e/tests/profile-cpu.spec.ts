@@ -259,9 +259,9 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
   await expect(page.getByText("on the CPU of the trace's 99 ms")).toBeVisible();
   await expect(page.getByText("30 samples, one every 1 ms of CPU time; waiting isn't sampled")).toBeVisible();
   await expect(shares(page)).toHaveText([
-    /^your code\s*28 ms\s*28%/,
-    /^framework & runtime\s*2 ms\s*2%/,
-    /^waiting\s*69 ms\s*70%/,
+    /^Your code\s*28 ms\s*28%/,
+    /^Framework & runtime\s*2 ms\s*2%/,
+    /^Waiting\s*69 ms\s*70%/,
   ]);
   // Waiting, as a Python or a JVM profile has its waits, hatched, named by what was in flight: the queries' and the
   // Redis command's under the functions that made them; the 30 ms in none of them on its own, no call's.
@@ -319,7 +319,7 @@ test("a Go profile is its time on the CPU; the rest of the request's time waited
 test("a Node request's queries waited in card under GET, as a Python profile has its waits", async ({ page }) => {
   await page.goto(`/#/t/${NODE}?tab=profile`);
 
-  await expect(shares(page)).toHaveText([/^your code\s*8 ms/, /^framework & runtime\s*2 ms/, /^waiting\s*40 ms/]);
+  await expect(shares(page)).toHaveText([/^Your code\s*8 ms/, /^Framework & runtime\s*2 ms/, /^Waiting\s*40 ms/]);
   // card is under GET, where its stack before the await had it, though most of its samples start at it.
   await box(page, "GET").click();
   await expect
@@ -345,7 +345,7 @@ test("the call tree's legend splits a CPU profile's time off the CPU out of the 
   await page.getByRole("tab", { name: /^Profile/ }).click();
 
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button").last()).toHaveText(
-    /^waiting\s*123 ms/,
+    /^Waiting\s*123 ms/,
   );
 });
 
