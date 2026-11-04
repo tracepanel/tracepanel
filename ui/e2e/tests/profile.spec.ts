@@ -66,3 +66,34 @@ test("the functions show where they are, whole", async ({ page }) => {
   await expect(functions).toContainText("django/db/models/sql/compiler.py:1574");
   await expect(functions).toContainText("reports/queries.py:42");
 });
+
+test("a box in the flame graph's bottom row tells it whole: its tip is in the window, no scrolling box cuts it", async ({
+  page,
+}) => {
+  await page.getByRole("tab", { name: "All frames" }).click();
+  const flame = page.getByRole("region", { name: "Flame graph" });
+  // The bottom row's boxes: those placed lowest.
+  const bottom = await flame.getByRole("button").evaluateAll((boxes) => {
+    const lowest = Math.max(...boxes.map((box) => box.getBoundingClientRect().top));
+    return boxes.findIndex((box) => box.getBoundingClientRect().top === lowest);
+  });
+
+  await flame.getByRole("button").nth(bottom).hover();
+
+  const tip = page.getByRole("tooltip");
+  await expect(tip).toBeVisible();
+  const cut = await tip.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const inside = (outer: DOMRect) =>
+      box.left >= outer.left && box.right <= outer.right && box.top >= outer.top && box.bottom <= outer.bottom;
+    const window_ = new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+    const cutBy: string[] = inside(window_) ? [] : ["the window"];
+    for (let at = element.parentElement; at && at !== document.body; at = at.parentElement) {
+      const style = getComputedStyle(at);
+      const clips = [style.overflowX, style.overflowY].some((value) => value !== "visible");
+      if (clips && !inside(at.getBoundingClientRect())) cutBy.push(at.className);
+    }
+    return cutBy;
+  });
+  expect(cut).toEqual([]);
+});

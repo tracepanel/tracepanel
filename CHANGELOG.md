@@ -25,6 +25,11 @@
   bar's waiting, not a package's. A FastAPI sync endpoint's event loop
   waiting for its worker thread read as a library function of 13 ms
   beside "psycopg 28 ms · waiting 80 ms", in neither share at a glance.
+- Hovering a box of the Profile tab's flame graph shows its whole tip
+  wherever the box is: a box in the bottom rows showed only the top of
+  it, or none, cut by the flame's scrolling card. The tip is over the
+  page now, below the pointer, or above it where it wouldn't fit, inside
+  the window.
 
 ## 0.13.1 (2026-11-03)
 

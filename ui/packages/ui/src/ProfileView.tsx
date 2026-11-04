@@ -1,4 +1,5 @@
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { bytes, duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import {
@@ -652,6 +653,7 @@ function Packages({
   );
 }
 
+/** The box under the pointer, and where the pointer is in the window (clientX, clientY). */
 interface Hovered {
   node: Node;
   x: number;
@@ -674,15 +676,8 @@ function Flame({
   const [focus, setFocus] = useState<Node>(root);
   const boxes = useMemo(() => layout(focus), [focus]);
   const depth = Math.max(0, ...boxes.map((box) => box.depth)) + 1;
-  const card = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<Hovered | null>(null);
-  const track = (event: MouseEvent, node: Node) => {
-    const at = card.current;
-    if (!at) return;
-    // In the card's scrolled content, where the tip is placed.
-    const area = at.getBoundingClientRect();
-    setHover({ node, x: event.clientX - area.left, y: event.clientY - area.top + at.scrollTop });
-  };
+  const track = (event: MouseEvent, node: Node) => setHover({ node, x: event.clientX, y: event.clientY });
   return (
     <section className="grid gap-2" aria-label="Flame graph">
       <div className="flex h-5 items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -693,7 +688,7 @@ function Flame({
           </button>
         ) : null}
       </div>
-      <div ref={card} className="relative max-h-[30rem] overflow-y-auto rounded-lg border bg-card p-1.5">
+      <div className="relative max-h-[30rem] overflow-y-auto rounded-lg border bg-card p-1.5">
         <div className="relative w-full" style={{ height: depth * (ROW + 2) }} role="img" aria-label="Flame graph">
           {boxes.map((box) => (
             <FlameBox
@@ -707,28 +702,56 @@ function Flame({
             />
           ))}
         </div>
-        {hover ? <Tip hovered={hover} total={root.total} time={time} /> : null}
+        {hover ? <Tip key={hover.node.key} hovered={hover} total={root.total} time={time} /> : null}
       </div>
     </section>
   );
 }
 
-/** What the box under the pointer is: its function, where it is, whole, and its time. */
+/** Room kept between the tip and the pointer, and between the tip and the window's edges. */
+const TIP_GAP = 18;
+const TIP_EDGE = 8;
+
+/**
+ * Where the tip goes: below the pointer, else above it where it doesn't fit below (a box in the bottom rows), and
+ * always inside the window.
+ */
+function tipPlace(x: number, y: number, size: { width: number; height: number }): { left: number; top: number } {
+  const [width, height] = [window.innerWidth, window.innerHeight];
+  const left = Math.min(Math.max(TIP_EDGE, x - 120), width - size.width - TIP_EDGE);
+  const below = y + TIP_GAP;
+  const top = below + size.height + TIP_EDGE <= height ? below : y - TIP_GAP - size.height;
+  return { left: Math.max(TIP_EDGE, left), top: Math.min(Math.max(TIP_EDGE, top), height - size.height - TIP_EDGE) };
+}
+
+/**
+ * What the box under the pointer is: its function, where it is, whole, and its time. Over the page, fixed where the
+ * pointer is: the flame's card scrolls and clips what is inside it, so a tip of its bottom rows would be cut.
+ */
 function Tip({ hovered: { node, x, y }, total, time }: { hovered: Hovered; total: number; time: Measure }) {
+  const tip = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ left: number; top: number } | null>(null);
+  // Measured where the pointer moves: another box's tip is another Tip (keyed by its box), measured anew.
+  useLayoutEffect(() => {
+    const at = tip.current;
+    if (at) setPlace(tipPlace(x, y, { width: at.offsetWidth, height: at.offsetHeight }));
+  }, [x, y]);
   const frame = node.frame;
   if (!frame) return null;
-  return (
+  return createPortal(
     <div
+      ref={tip}
       role="tooltip"
-      className="pointer-events-none absolute z-10 grid w-max max-w-md gap-1 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
-      style={{ left: Math.max(8, x - 120), top: y + 18 }}
+      className="pointer-events-none fixed z-50 grid w-max max-w-md gap-1 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg"
+      style={place ?? { left: x, top: y + TIP_GAP, visibility: "hidden" }}
     >
       <span className="font-mono font-medium [overflow-wrap:anywhere]">{frame.function}</span>
       <span className="font-mono text-muted-foreground [overflow-wrap:anywhere]">{where(frame)}</span>
       <span className="tabular-nums">
         {time(node.total)} · {percent(node.total, total)} · {time(node.self)} in itself
       </span>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
