@@ -319,6 +319,7 @@ function ProfileOf({
       noun="Time"
       kinds={kinds}
       head={<ProfileHead whole={profile} shown={scope.profile} trace={trace} scope={scope} />}
+      of={sharesOf(scope, trace)}
       list={({ view, palette, measure }) => (
         <Functions rows={functions(view)} limit={30} palette={palette} time={measure} onShowRow={onShowRow} />
       )}
@@ -536,10 +537,22 @@ function profiledWord(scope: Scope): string {
 /**
  * What the big number is a part of: the stretches' time (a code row's, which the row says too), else the trace's.
  */
-function ofWhat(scope: Scope, trace: Trace): string {
+function ofWhat(scope: Scope, trace: Pick<Trace, "duration">): string {
   if (!scope.windows) return `the trace's ${duration(trace.duration)}`;
   const time = duration(windowsTime(scope.windows));
   return scope.windows.length > 1 ? `these stretches' ${time}` : `the stretch's ${time}`;
+}
+
+/**
+ * What the shares' percentages are of, in samples: a timed profile's, the trace's time (or the stretches'), so a
+ * profile of part of it says its shares as the time strip does (3 ms · 9% of 35 ms), not of what it covered; else
+ * what it sampled.
+ */
+function sharesOf(scope: Scope, trace: Pick<Trace, "duration">): number {
+  const { profile } = scope;
+  if (!scope.timed) return profile.samples;
+  const time = scope.windows ? windowsTime(scope.windows) : trace.duration;
+  return Math.max(time / profile.interval_us, profile.samples);
 }
 
 /** A line of the head in small print, when there is something to say. */
@@ -606,10 +619,13 @@ function ProfileView({
   noun,
   kinds,
   list,
+  of,
 }: {
   profile: Profile;
   /** What Your code reads, where it reads the profile otherwise (its waits named by what was in flight). */
   own?: Profile | undefined;
+  /** What the bar's percentages are of, in samples (sharesOf): what it sampled unless said. */
+  of?: number | undefined;
   frames: Frames;
   head: ReactNode;
   measure: Measure;
@@ -651,7 +667,7 @@ function ProfileView({
         noun={noun}
         shares={summed(packages, palette)}
         palette={palette}
-        total={profile.samples}
+        total={of ?? profile.samples}
         time={measure}
         lit={lit}
         onLight={(name) => setLit(toggled(lit, name))}
@@ -1411,6 +1427,9 @@ function ProfileSumRow({ app, profile }: { app: AppProfile; profile: Profile | u
 /** One app's flame and functions, under its name: an app's own, never mixed with another's. */
 function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
   const frames = useFrames(view.profile);
+  // One trace's: of its time, or its stretches', as a trace's own Profile tab says it.
+  const [one] = app.traces;
+  const trace = app.traces.length === 1 && one ? one.member.trace : null;
   return (
     <section className="dt-app-profile" aria-label={`Profile of ${app.app}`}>
       <ProfileView
@@ -1421,6 +1440,7 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
         measure={(samples) => duration(samples * view.profile.interval_us)}
         noun="Time"
         kinds={null}
+        of={trace ? sharesOf(view, trace) : undefined}
         head={
           <div className="grid gap-0.5">
             <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1429,7 +1449,9 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
             </span>
             <span className="text-2xl font-semibold tracking-tight tabular-nums">
               {duration(view.profile.samples * view.profile.interval_us)}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">profiled</span>
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                profiled{trace ? ` of ${ofWhat(view, trace)}` : ""}
+              </span>
             </span>
             {view.note ? <span className="text-xs text-muted-foreground">{view.note}</span> : null}
           </div>

@@ -1008,6 +1008,13 @@ fn gc_line(raw: &Value) -> Option<String> {
 
 fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
     let total = profile.total();
+    // Timed, its shares are the trace's time as the strip says it: their percentages are of the trace's, so a
+    // profile of part of it (a BFF's last 5 ms of 35) says 80% for 28 ms, not 560%.
+    let of = if profile.timed {
+        total.max(duration as f64)
+    } else {
+        total
+    };
     let mut out = vec![format!(
         "CPU profile: {} {} of the {} {} · {} samples, one every {}",
         us(total),
@@ -1033,7 +1040,7 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
         let parts: Vec<String> = said
             .iter()
             .filter(|(_, us)| *us > 0.0)
-            .map(|(name, time)| format!("{name} {} ({})", us(*time), share(*time, total)))
+            .map(|(name, time)| format!("{name} {} ({})", us(*time), share(*time, of)))
             .collect();
         out.push(format!(
             "time by share (as the time strip says it): {}",
@@ -1052,7 +1059,7 @@ fn cpu(profile: &Profile, duration: i64, top: usize, merged: bool) -> String {
         } else {
             " (a sleep, a socket, a lock, the event loop: not computing)"
         };
-        let mut line = format!("waiting{what}: {} ({})", us(waited), share(waited, total));
+        let mut line = format!("waiting{what}: {} ({})", us(waited), share(waited, of));
         if let Some(name) = profile.wait_name().filter(|_| profile.on_cpu.is_none()) {
             line.push_str(&format!(", most in {name}"));
         }
@@ -1598,6 +1605,25 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
                 "spread: its 30 samples are CPU time, placed by the agent evenly over the project's code's time (its profiler keeps no sample's time); the rest of that time is waiting off the CPU, not sampled",
                 "time by share (as the time strip says it): Your code 28.0 ms (28%) · Database 20.0 ms (20%) · External calls 10.0 ms (10%) · Waiting 41.0 ms (41%)",
                 "waiting, off the CPU (a lock, a channel, a timer, a call; not sampled): 41.0 ms (41%)",
+            ]
+        );
+    }
+
+    /// A profile of only the trace's last 5 ms (`schema/waits.json`): what it profiled of the trace's time, the trace's time by share as the strip says it, each of the trace's time (28 ms of 35 is 81%).
+    #[test]
+    fn a_profile_of_part_of_a_trace_says_its_shares_of_the_trace() {
+        let cases: Vec<Value> =
+            serde_json::from_str(include_str!("../../../schema/waits.json")).unwrap();
+        let doc = &cases[7]["trace"];
+
+        let read = profile(doc, Kind::Cpu, 3).unwrap();
+        let lines: Vec<&str> = read.lines().take(2).collect();
+
+        assert_eq!(
+            lines,
+            [
+                "CPU profile: 5.0 ms profiled of the trace's 34.7 ms · 1 samples, one every 1.0 ms",
+                "time by share (as the time strip says it): External calls 28.0 ms (81%) · Your code 3.0 ms (9%) · Framework & middleware 3.0 ms (9%) · GC 1.0 ms (3%)",
             ]
         );
     }

@@ -182,8 +182,9 @@ test("the flame on a call's trace opens that trace at its Profile tab, the way b
   await expect(page).toHaveURL(new RegExp(`#/t/${bff}\\?.*tab=profile`));
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Profile of the whole trace")).toBeVisible();
+  // Its profile starts 12 ms into the trace's 30: its share of the trace's time, as the strip says it.
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
-    /^Your code\s*1\d ms\s*100%$/,
+    /^Your code\s*1\d ms\s*60%$/,
   ]);
 });
 

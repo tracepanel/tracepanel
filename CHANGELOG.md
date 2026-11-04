@@ -86,6 +86,13 @@
   with the decimals its step needs: a 3 ms trace's axis read "0, 0.8 ms,
   2 ms, 2 ms, 3 ms", now "0, 0.5 ms, 1.0 ms, 1.5 ms, 2.0 ms, 2.5 ms". A
   137 ms one reads "0, 25 ms, 50 ms … 125 ms".
+- A profile of only part of a trace says its shares of the trace's time,
+  as the strip does. A Node BFF's request profiled only in its last 5 ms
+  showed "Framework & middleware 3 ms 60%" on its Profile tab and
+  "External calls 28.0 ms (560%)" in get_profile. The Profile tab's bar
+  now reads "3 ms 9%", get_profile "28.0 ms (81%)", and an app's profile
+  over a chain says "5 ms profiled of the trace's 35 ms" as the trace's
+  own Profile tab does.
 
 ## 0.13.1 (2026-11-03)
 

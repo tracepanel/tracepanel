@@ -1495,5 +1495,174 @@
         2000
       ]
     ]
+  },
+  {
+    "name": "Node: a profile of only the trace's last 5 ms (one sample, after its call): the trace's time by share is the strip's, the profile's the time it covers",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 34731,
+      "attrs": {
+        "telemetry.sdk.language": "nodejs"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GraphQL query TenantRoles",
+          "start": 1790000000000000,
+          "duration": 34731,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "g",
+          "parent_id": "r",
+          "kind": "graphql",
+          "name": "query TenantRoles",
+          "start": 1790000000001000,
+          "duration": 31223,
+          "status": "ok",
+          "attrs": {
+            "graphql.operation.type": "query",
+            "graphql.operation.name": "TenantRoles"
+          }
+        },
+        {
+          "id": "p",
+          "parent_id": "g",
+          "kind": "graphql",
+          "name": "parse",
+          "start": 1790000000002000,
+          "duration": 317,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "v",
+          "parent_id": "g",
+          "kind": "graphql",
+          "name": "validate",
+          "start": 1790000000002000,
+          "duration": 624,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "f",
+          "parent_id": "g",
+          "kind": "function",
+          "name": "Query.authors",
+          "start": 1790000000003000,
+          "duration": 29895,
+          "status": "ok",
+          "attrs": {
+            "code.function": "Query.authors"
+          }
+        },
+        {
+          "id": "h",
+          "parent_id": "f",
+          "kind": "http.client",
+          "name": "GET 127.0.0.1/authors",
+          "start": 1790000000003000,
+          "duration": 28823,
+          "status": "ok",
+          "attrs": {
+            "http.request.method": "GET",
+            "url.full": "http://127.0.0.1:8052/authors",
+            "server.address": "127.0.0.1",
+            "server.port": 8052,
+            "http.response.status_code": 200
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 1,
+        "dropped": 0,
+        "bucket_us": 10000,
+        "frames": [
+          {
+            "function": "processTicksAndRejections",
+            "module": null,
+            "file": "node:internal/process/task_queues",
+            "line": 72,
+            "in_app": false
+          },
+          {
+            "function": "finalizeAndReportTiming",
+            "module": null,
+            "file": "node:internal/deps/undici/undici",
+            "line": 14144,
+            "in_app": false
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              1
+            ],
+            "count": 1,
+            "at": [
+              [
+                3,
+                1
+              ]
+            ]
+          }
+        ],
+        "gc": {
+          "collections": 3,
+          "pause_us": 1192,
+          "pauses": [
+            [
+              5461,
+              376,
+              0
+            ],
+            [
+              12704,
+              457,
+              0
+            ],
+            [
+              20792,
+              359,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    "waits": [
+      [
+        "Framework & middleware",
+        3000
+      ],
+      [
+        "HTTP GET 127.0.0.1",
+        2000
+      ]
+    ],
+    "shares": [
+      [
+        "External calls",
+        28000
+      ],
+      [
+        "Framework & middleware",
+        3000
+      ],
+      [
+        "Your code",
+        3000
+      ],
+      [
+        "GC",
+        1000
+      ]
+    ]
   }
 ]
