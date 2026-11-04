@@ -14,7 +14,6 @@ import {
   scopedProfiles,
 } from "./lib/chainProfile";
 import { type Memory, memoryProfile, type SitePlace, sitePlaces } from "./lib/memory";
-import { withOffCpu } from "./lib/offCpu";
 import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
 import {
@@ -26,7 +25,6 @@ import {
   layout,
   mostlyYours,
   type Node,
-  onCpuOnly,
   ownCode,
   type Profile,
   packageOf,
@@ -480,8 +478,6 @@ interface Scope {
   note: string | null;
   /** In the trace's own time (the profile says when its samples were taken), not in samples. */
   timed: boolean;
-  /** Its samples are the CPU's alone (Go's, Node's): the rest of the trace's time is waiting, off the CPU. */
-  cpu: boolean;
 }
 
 /** A trace as its profile's scope reads it: its clock, its calls (who waited), its SDK's language. */
@@ -500,27 +496,31 @@ function scopeOf(trace: Profiled, profile: Profile, range: Windows | null): Scop
       windows: range,
       note: null,
       timed: true,
-      cpu: false,
     };
   }
   const note = range ? "Its samples aren't timed: the range picked can't narrow it." : null;
-  // On the trace's clock: the time off the CPU waited, under the function of yours that made each call waited for.
-  const cpu = onCpuOnly(trace);
-  // Its waits named so already (lib/offCpu): Your code and All frames read the same.
-  const shown = cpu ? withOffCpu(profile, trace) : profile;
-  return { profile: shown, own: shown, title: "Profile of the whole trace", windows: null, note, timed: false, cpu };
+  return { profile, own: profile, title: "Profile of the whole trace", windows: null, note, timed: false };
 }
 
+/** What a CPU profile placed on the trace's clock (`spread`, Go's) says of its waits: they weren't sampled. */
+const SPREAD = "spread evenly over your code's time, the rest of it waiting off the CPU (not sampled)";
+
 /**
- * "110 samples, one every 10 ms": what the profile took; a CPU profile's, "of CPU time". One whose CPU time is an
- * estimate (Go on macOS, whose kernel hands the profiler's samples out unevenly) says from how many samples.
+ * "110 samples, one every 10 ms": what the profile took. A CPU profile the agent placed on the trace's clock (Go's)
+ * says its samples are the CPU's, spread; one whose CPU time is an estimate too (Go on macOS, whose kernel hands the
+ * profiler's samples out unevenly) says from how many samples.
  */
-function samplesLine(profile: Profile, cpu: boolean): string {
+function samplesLine(profile: Profile): string {
   if (profile.estimated_from !== undefined) {
-    return `CPU time estimated from ${plural(profile.estimated_from, "sample", "samples")}: macOS hands the profiler's samples out unevenly, so each is weighed; waiting isn't sampled`;
+    const estimated = `CPU time estimated from ${plural(profile.estimated_from, "sample", "samples")} (macOS hands the profiler's samples out unevenly, so each is weighed)`;
+    return profile.spread ? `${estimated}, ${SPREAD}` : estimated;
   }
-  const line = `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
-  return cpu ? `${line} of CPU time; waiting isn't sampled` : line;
+  if (profile.spread) {
+    const waited = profile.stacks.filter((stack) => profile.frames[stack.frames.at(-1) ?? -1]?.waiting);
+    const cpu = profile.samples - waited.reduce((sum, stack) => sum + stack.count, 0);
+    return `${plural(cpu, "sample", "samples")} of CPU time, one every ${duration(profile.interval_us)}, ${SPREAD}`;
+  }
+  return `${profile.samples.toLocaleString()} samples, one every ${duration(profile.interval_us)}`;
 }
 
 /** "≈ " before a time the profile estimates rather than counts. */
@@ -528,9 +528,8 @@ function about(profile: Profile): string {
   return profile.estimated_from === undefined ? "" : "≈ ";
 }
 
-/** What the big number is of the trace's time: profiled (timed), sampled, or on the CPU (a CPU profile). */
+/** What the big number is of the trace's time: profiled (timed), or sampled. */
 function profiledWord(scope: Scope): string {
-  if (scope.cpu) return "on the CPU";
   return scope.timed ? "profiled" : "sampled";
 }
 
@@ -574,14 +573,13 @@ function ProfileHead({ whole, shown, trace, scope }: { whole: Profile; shown: Pr
     <div className="grid gap-0.5">
       <span className="text-xs text-muted-foreground">{scope.title}</span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">
-        {/* A CPU profile's own samples: the time off the CPU added to it is the trace's, not sampled. */}
         {about(whole)}
-        {time(scope.cpu ? whole.samples : shown.samples)}
+        {time(shown.samples)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           {profiledWord(scope)} of {ofWhat(scope, trace)}
         </span>
       </span>
-      <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole, scope.cpu)}</span>
+      <span className="text-xs text-muted-foreground">{scope.note ?? samplesLine(whole)}</span>
       <Reason trace={trace} />
       <Dropped whole={whole} timed={scope.timed} />
     </div>
@@ -1357,7 +1355,6 @@ function appView(app: AppProfile): Scope {
     windows: null,
     note: null,
     timed: false,
-    cpu: false,
   };
 }
 

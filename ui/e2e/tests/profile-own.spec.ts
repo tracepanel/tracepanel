@@ -321,15 +321,16 @@ test("a Node task's code is its own frames: the runtime's and OpenTelemetry's ar
   await page.goto(`/#/t/${NODE}?tab=profile`);
 
   await expect(page.getByRole("tab", { name: "Your code", selected: true })).toBeVisible();
-  await expect.poll(() => boxes(page)).toEqual(["editDistance", "framework & runtime", "rankProducts"]);
-  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^Framework & runtime\s*4 ms/]);
+  await expect.poll(() => boxes(page)).toEqual(["Framework & middleware", "editDistance", "rankProducts"]);
+  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^Framework & middleware\s*4 ms/]);
   // The framework & runtime is no function: under the functions, apart, though it took more than rankProducts.
-  await expect.poll(() => functionNames(page)).toEqual(["editDistance", "rankProducts", "[framework & runtime]"]);
+  await expect.poll(() => functionNames(page)).toEqual(["editDistance", "rankProducts", "[Framework & middleware]"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
   await expect.poll(() => boxes(page)).toContain("processTicksAndRejections");
-  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^@opentelemetry\/otlp-transformer\s*4 ms/]);
+  // Read on the trace's clock (a Node profile is): the runtime's time in the task is the framework's share.
+  await expect(shares(page)).toHaveText([/^Your code\s*6 ms/, /^Framework & middleware\s*4 ms/]);
 });
 
 test("a Next.js route's code is its handler's: pg's time is its helper's, OpenTelemetry's span never yours", async ({
@@ -338,18 +339,13 @@ test("a Next.js route's code is its handler's: pg's time is its helper's, OpenTe
   await page.goto(`/#/t/${NEXT}?tab=profile`);
 
   await expect(page.getByRole("tab", { name: "Your code", selected: true })).toBeVisible();
-  await expect.poll(() => boxes(page)).toEqual(["GET", "card", "framework & runtime"]);
-  await expect(shares(page)).toHaveText([/^Your code\s*5 ms/, /^Framework & runtime\s*5 ms/]);
+  await expect.poll(() => boxes(page)).toEqual(["Framework & middleware", "Framework & middleware", "GET", "card"]);
+  await expect(shares(page)).toHaveText([/^Your code\s*5 ms/, /^Framework & middleware\s*5 ms/]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
 
   await expect.poll(() => boxes(page)).toContain("onStart");
-  await expect(shares(page)).toHaveText([
-    /^@opentelemetry\/sdk-trace\s*4 ms/,
-    /^next\s*3 ms/,
-    /^pg-pool\s*2 ms/,
-    /^node:fs\s*1 ms/,
-  ]);
+  await expect(shares(page)).toHaveText([/^Framework & middleware\s*5 ms/, /^next\s*3 ms/, /^pg-pool\s*2 ms/]);
 });
 
 test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's proxies are not yours, a park waits", async ({

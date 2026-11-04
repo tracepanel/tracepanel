@@ -438,7 +438,7 @@ export function mountCard(
     // The code's waits split out of its own time, as the console's legend has them.
     const parts = withWaiting(trace, breakdown(trace));
     const labelOf = (category: (typeof parts)[number][0]) =>
-      category === WAITED_SHARE ? "Waiting" : categoryLabel(category, trace);
+      category === WAITED_SHARE ? "Waiting" : categoryLabel(category);
     const total = Math.max(
       parts.reduce((sum, [, value]) => sum + value, 0),
       1,

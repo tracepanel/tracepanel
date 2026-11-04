@@ -2188,6 +2188,8 @@ export interface components {
             estimated_from?: number;
             /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
             bucket_us?: number;
+            /** @description Set by the agent, not an SDK: a CPU profile that didn't say when it saw its stacks (Go's: runtime/pprof keeps no sample's time) placed on the trace's clock. Its samples are spread evenly over the trace's own code (the spans' time that is no call's), the rest of each bucket one waiting stack ('off CPU'), so it is read as every timed profile is. When a stack ran within the code's own time is an estimate. */
+            spread?: boolean;
             /** @description The functions the stacks name, each once. */
             frames: {
                 function: string;
@@ -2287,6 +2289,8 @@ export interface components {
                     estimated_from?: number;
                     /** @description How wide a time bucket of stacks[].at is, in microseconds, counted from the trace's start. */
                     bucket_us?: number;
+                    /** @description Set by the agent, not an SDK: a CPU profile that didn't say when it saw its stacks (Go's: runtime/pprof keeps no sample's time) placed on the trace's clock. Its samples are spread evenly over the trace's own code (the spans' time that is no call's), the rest of each bucket one waiting stack ('off CPU'), so it is read as every timed profile is. When a stack ran within the code's own time is an estimate. */
+                    spread?: boolean;
                     /** @description The functions the stacks name, each once. */
                     frames: {
                         function: string;

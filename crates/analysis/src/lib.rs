@@ -22,6 +22,7 @@ pub mod otel;
 pub mod profiles;
 pub mod sql;
 pub mod storage;
+pub mod stretches;
 pub mod transport;
 mod waits;
 
@@ -1055,8 +1056,8 @@ pub fn apply(received: &mut tracepanel_protocol::Received, thresholds: &Threshol
     storage::normalize(received);
     migrations::normalize(received);
     llm::normalize(received);
-    profiles::normalize(received);
     transport::normalize(received);
+    profiles::normalize(received);
     logs::normalize(received);
     let issues = analyze(&received.trace, thresholds);
     if issues.is_empty() {

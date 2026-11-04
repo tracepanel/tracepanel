@@ -1,32 +1,9 @@
 //! What a profile's waits and calls are named: a call by what it is (`SQL snowflake`, `HTTP GET
 //! analytics.example.com`), a wait by what it waited for (`waiting · SQL snowflake`, `waiting · sleep`), as the
-//! console's Profile tab names them (`ui/packages/ui/src/lib/waitCalls.ts`): a timed profile's calls are shares of
-//! their own (shares), a CPU profile's (Go's, Node's) time off the CPU waits, named by the call it went to (off_cpu).
+//! console's Profile tab names them (`ui/packages/ui/src/lib/waitCalls.ts`): a profile's calls are shares of their own
+//! (shares).
 
 use serde_json::Value;
-
-/// The kinds of a call out of the app, as the console's call tree groups them: every system's, and the generic
-/// families' (`db`, `messaging`, `rpc`).
-pub(crate) const CALLS: [&str; 18] = [
-    "sql",
-    "redis",
-    "cache",
-    "mongodb",
-    "elasticsearch",
-    "cassandra",
-    "dynamodb",
-    "memcached",
-    "kafka",
-    "rabbitmq",
-    "sqs",
-    "grpc",
-    "http.client",
-    "storage",
-    "llm",
-    "db",
-    "messaging",
-    "rpc",
-];
 
 /// What every wait is, and how a named one starts: `waiting · SQL postgresql`.
 const WAITING: &str = "waiting";

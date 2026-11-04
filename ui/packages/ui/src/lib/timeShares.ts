@@ -41,11 +41,15 @@ function scaled(stacks: readonly (readonly [number, number])[], length: number):
   return new Map(stacks.map(([index, count]) => [index, (length * count) / total]));
 }
 
+/** The categories a stack's own time is split by what it ran: your code's, or the framework's. */
+const BY_STACK: ReadonlySet<string> = new Set<Category>(["code", "django"]);
+
 /**
- * A span's own code in a bucket (`stacks`, by how often each was seen) in its parts: what ran your code (its
- * category's), what ran only the framework (a view's: the framework's share), what waited. Each part as long as its
- * samples' share of the bucket; in turn one way in even buckets and the other in odd ones, so the parts of
- * neighbouring buckets meet.
+ * A span's own code in a bucket (`stacks`, by how often each was seen) in its parts: what waited; in a handler's or a
+ * framework's span (a request's root, a middleware), what ran your code (Your code) and what ran only the
+ * framework's (the framework's share), whichever span it ran under; in a signal's or a template's, its category's.
+ * Each part as long as its samples' share of the bucket; in turn one way in even buckets and the other in odd ones,
+ * so the parts of neighbouring buckets meet.
  */
 function ownParts(
   profile: Profile,
@@ -56,14 +60,12 @@ function ownParts(
   const groups = new Map<Share, [number, number][]>();
   for (const [index, count] of stacks) {
     const stack = profile.stacks[index] as Stack;
-    const share: Share = waits(profile, stack)
-      ? WAITING
-      : category === "code" && !runsYours(profile, stack)
-        ? "django"
-        : category;
+    const ran: Share = !BY_STACK.has(category) ? category : runsYours(profile, stack) ? "code" : "django";
+    const share: Share = waits(profile, stack) ? WAITING : ran;
     groups.set(share, [...(groups.get(share) ?? []), [index, count]]);
   }
-  const order: Share[] = [category, "django", WAITING];
+  // Once each: a handler's span starts with Your code, a framework's with the framework's.
+  const order: Share[] = [...new Set<Share>([category, "code", "django", WAITING])];
   const parts = order.flatMap((share): [Share, [number, number][]][] => {
     const group = groups.get(share);
     return group ? [[share, group]] : [];
@@ -215,16 +217,16 @@ export function windowsOfSegments(segments: readonly Segment[]): Windows {
 }
 
 /** A share's name, as the strip's legend says it: "Database", "GC", "Framework & middleware". */
-export function shareLabel(share: Share, trace: Pick<Trace, "attrs"> & { kind?: string }): string {
+export function shareLabel(share: Share): string {
   if (share === GC) return "GC";
   if (share === WAITING) return "Waiting";
-  return categoryLabel(share, trace);
+  return categoryLabel(share);
 }
 
 /** The frame a segment's time goes under in a profile, where its share isn't the code's own or a wait. */
-function frameOf(segment: Segment, trace: Shared, byId: ReadonlyMap<string, Span>): ShareFrame | null {
+function frameOf(segment: Segment, byId: ReadonlyMap<string, Span>): ShareFrame | null {
   if (segment.share === "code" || segment.share === WAITING) return null;
-  const share = shareLabel(segment.share, trace);
+  const share = shareLabel(segment.share);
   const span = byId.get(segment.span);
   const call = segment.share !== GC && !OWN_CODE.has(segment.share) && span ? span : null;
   return {
@@ -334,7 +336,7 @@ export function windowProfile(trace: Shared & { profile: Timed }, windows: Windo
   for (const segment of segmentsOf(trace)) {
     const time = taken(segment, windows);
     if (time <= 0 || !segment.stacks) continue;
-    const frame = frameOf(segment, trace, byId);
+    const frame = frameOf(segment, byId);
     const share = frame ? frameAt(frame) : null;
     const bucket = Math.floor(segment.from / profile.bucket_us);
     const part = time / (segment.to - segment.from);

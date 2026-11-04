@@ -4,51 +4,23 @@
 //! of it waited, ran the project's code, or ran only the framework's. get_profile reads a timed profile by it, so its
 //! numbers are the console's: the time strip's legend, the call tree's code rows, the Profile tab.
 
-use crate::compact::{int, text};
+use crate::compact::int;
 use crate::waits;
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
+use tracepanel_analysis::stretches::{OWN_CODE, Stretch, spans_of, stretches};
 
 /// The collector's pauses: a share of their own.
 pub(crate) const GC: &str = "gc";
 /// The code's waits: a share of their own.
 pub(crate) const WAITING: &str = "waiting";
 
-/// The categories whose time is the code's own: a profile splits it into its waits and what ran.
-const OWN_CODE: [&str; 4] = ["code", "django", "signal", "template"];
-
-/// A span kind's category, where it has one of its own (the console's `BY_KIND`).
-fn by_kind(kind: &str) -> Option<&'static str> {
-    Some(match kind {
-        "sql" | "sql.connect" => "sql",
-        "redis" => "redis",
-        "cache" => "cache",
-        "http.client" | "grpc" | "rpc" => "http",
-        "mongodb" | "elasticsearch" | "cassandra" | "dynamodb" | "memcached" | "db" => "datastore",
-        "kafka" | "rabbitmq" | "sqs" | "messaging" => "messaging",
-        "storage" => "storage",
-        "llm" => "llm",
-        "mail" => "mail",
-        "template" => "template",
-        "signal" => "signal",
-        "view"
-        | "function"
-        | "task"
-        | "task.run"
-        | "command"
-        | "migration"
-        | "migration.operation" => "code",
-        _ => return None,
-    })
-}
-
 /// A share's name, as the console's legend says it: "Database", "GC", "Framework & middleware".
-pub(crate) fn label(share: &str, trace_kind: &str) -> &'static str {
+pub(crate) fn label(share: &str) -> &'static str {
     match share {
         GC => "GC",
         WAITING => "Waiting",
-        "django" if trace_kind == "http" || trace_kind.is_empty() => "Framework & middleware",
-        "django" => "Framework",
+        "django" => "Framework & middleware",
         "code" => "Your code",
         "signal" => "Signals",
         "template" => "Templates",
@@ -63,175 +35,6 @@ pub(crate) fn label(share: &str, trace_kind: &str) -> &'static str {
         "mail" => "Email",
         _ => "Other",
     }
-}
-
-struct Span<'a> {
-    id: &'a str,
-    parent: Option<&'a str>,
-    kind: &'a str,
-    start: i64,
-    end: i64,
-    raw: &'a Value,
-}
-
-/// The trace's spans, by id.
-fn spans_of(doc: &Value) -> Vec<Span<'_>> {
-    doc.get("spans")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|span| Span {
-            id: text(span, "id"),
-            parent: span.get("parent_id").and_then(Value::as_str),
-            kind: text(span, "kind"),
-            start: int(span, "start"),
-            end: int(span, "start") + int(span, "duration"),
-            raw: span,
-        })
-        .collect()
-}
-
-/// The spans' categories, as the console counts each span's time (`spanCategories`): its own, or its owner's.
-struct Owners<'a> {
-    by_id: HashMap<&'a str, &'a Span<'a>>,
-    handled: bool,
-}
-
-impl<'a> Owners<'a> {
-    fn new(spans: &'a [Span<'a>]) -> Self {
-        Self {
-            by_id: spans.iter().map(|span| (span.id, span)).collect(),
-            handled: spans.iter().any(|span| span.kind == "view"),
-        }
-    }
-
-    fn parent(&self, span: &Span<'a>) -> Option<&'a Span<'a>> {
-        span.parent.and_then(|id| self.by_id.get(id).copied())
-    }
-
-    /// A cache's Redis commands are the cache's time, an LLM call's HTTP requests the model's, a query's the
-    /// database's: what the app asked for, on whatever serves it.
-    fn served_for(&self, span: &'a Span<'a>) -> &'a Span<'a> {
-        let owners: &[&str] = match span.kind {
-            "redis" => &["cache"],
-            "http.client" => &["llm", "sql", "sql.connect"],
-            _ => return span,
-        };
-        match self.parent(span) {
-            Some(parent) if owners.contains(&parent.kind) => parent,
-            _ => span,
-        }
-    }
-
-    fn own_category(&self, span: &Span<'a>) -> Option<&'static str> {
-        if span.kind == "transaction" {
-            return None;
-        }
-        if span.kind == "function"
-            && self
-                .parent(span)
-                .is_some_and(|parent| parent.kind == "signal")
-        {
-            return Some("signal");
-        }
-        by_kind(span.kind).or(match span.parent {
-            None if self.handled => Some("django"),
-            None => Some("code"),
-            Some(_) if matches!(span.kind, "middleware" | "framework") => Some("django"),
-            Some(_) => None,
-        })
-    }
-
-    fn category(&self, span: &'a Span<'a>) -> Option<&'static str> {
-        let mut current = Some(self.served_for(span));
-        while let Some(at) = current {
-            if let Some(category) = self.own_category(at) {
-                return Some(category);
-            }
-            current = self.parent(at);
-        }
-        None
-    }
-
-    fn depth(&self, span: &Span<'a>, depths: &mut HashMap<&'a str, usize>) -> usize {
-        let mut chain = Vec::new();
-        let mut at = self.by_id.get(span.id).copied();
-        let mut base = 0;
-        while let Some(current) = at {
-            if let Some(&known) = depths.get(current.id) {
-                base = known + 1;
-                break;
-            }
-            chain.push(current.id);
-            at = self.parent(current);
-        }
-        for (index, id) in chain.iter().rev().enumerate() {
-            depths.insert(id, base + index);
-        }
-        depths.get(span.id).copied().unwrap_or(0)
-    }
-}
-
-/// A stretch of the trace's time (µs since it started): the deepest span running then, its category, and whether
-/// that was its own code with calls of its own around (`quiet`).
-struct Stretch<'a> {
-    from: f64,
-    to: f64,
-    category: &'static str,
-    quiet: bool,
-    span: &'a str,
-}
-
-/// Where the trace's time went, moment by moment, for the deepest span running then (the console's `stretches`).
-fn stretches<'a>(doc: &Value, spans: &'a [Span<'a>]) -> Vec<Stretch<'a>> {
-    let start = int(doc, "start");
-    let owners = Owners::new(spans);
-    let callers: HashSet<&str> = spans.iter().filter_map(|span| span.parent).collect();
-    let timed: Vec<&Span> = spans.iter().filter(|span| span.end > span.start).collect();
-    let mut edges: Vec<i64> = timed
-        .iter()
-        .flat_map(|span| [span.start, span.end])
-        .collect();
-    edges.sort_unstable();
-    edges.dedup();
-    let mut depths = HashMap::new();
-    let mut list: Vec<Stretch> = Vec::new();
-    for pair in edges.windows(2) {
-        let (from, to) = (pair[0], pair[1]);
-        let mut innermost: Option<(&Span, usize)> = None;
-        for &span in &timed {
-            if !(span.start <= from && span.end >= to) {
-                continue;
-            }
-            let depth = owners.depth(span, &mut depths);
-            let deeper = innermost.is_none_or(|(best, best_depth)| {
-                depth > best_depth || (depth == best_depth && span.start > best.start)
-            });
-            if deeper {
-                innermost = Some((span, depth));
-            }
-        }
-        let Some((span, _)) = innermost else { continue };
-        let Some(category) = owners.category(span) else {
-            continue;
-        };
-        let next = Stretch {
-            from: (from - start) as f64,
-            to: (to - start) as f64,
-            category,
-            quiet: callers.contains(span.id),
-            span: span.id,
-        };
-        match list.last_mut() {
-            Some(last)
-                if last.to == next.from && last.span == next.span && last.quiet == next.quiet =>
-            {
-                last.to = next.to;
-            }
-            _ => list.push(next),
-        }
-    }
-    list
 }
 
 /// The collector's pauses on the trace's clock, within it and in order.
@@ -339,24 +142,36 @@ fn scaled(stacks: &[(usize, f64)], length: f64) -> Vec<(usize, f64)> {
         .collect()
 }
 
-/// A span's own code in a bucket in its parts: what ran the project's code (its category's), what ran only the
-/// framework's (a view's: the framework's share), what waited; in turn one way in even buckets and the other in odd.
+/// The categories a stack's own time is split by what it ran: the project's code's, or the framework's.
+const BY_STACK: [&str; 2] = ["code", "django"];
+
+/// A span's own code in a bucket in its parts: what waited; in a handler's or a framework's span (a request's root,
+/// a middleware), what ran the project's code (Your code) and what ran only the framework's, whichever span it ran
+/// under; in a signal's or a template's, its category's. In turn one way in even buckets and the other in odd.
 fn own_parts(
     kinds: &[StackKind],
     category: &'static str,
     stacks: &[(usize, f64)],
     bucket: i64,
 ) -> Vec<(&'static str, Vec<(usize, f64)>)> {
+    let mut order: Vec<&'static str> = Vec::new();
+    for share in [category, "code", "django", WAITING] {
+        if !order.contains(&share) {
+            order.push(share);
+        }
+    }
     let mut groups: Vec<(&'static str, Vec<(usize, f64)>)> =
-        vec![(category, vec![]), ("django", vec![]), (WAITING, vec![])];
+        order.into_iter().map(|share| (share, vec![])).collect();
     for &(index, count) in stacks {
         let kind = kinds.get(index);
         let share = if kind.is_some_and(|kind| kind.waits) {
             WAITING
-        } else if category == "code" && !kind.is_some_and(|kind| kind.yours) {
-            "django"
-        } else {
+        } else if !BY_STACK.contains(&category) {
             category
+        } else if kind.is_some_and(|kind| kind.yours) {
+            "code"
+        } else {
+            "django"
         };
         if let Some(group) = groups.iter_mut().find(|(each, _)| *each == share) {
             group.1.push((index, count));
@@ -482,11 +297,11 @@ fn bucket_segments<'a>(
 
 /// The frame a segment's time goes under, where its share isn't the code's own or a wait: a call's (named by it:
 /// `SQL postgresql`), the collector's, the framework's; with its share's name.
-pub(crate) fn share_frame(segment: &Segment, trace_kind: &str) -> Option<(String, &'static str)> {
+pub(crate) fn share_frame(segment: &Segment) -> Option<(String, &'static str)> {
     if segment.share == "code" || segment.share == WAITING {
         return None;
     }
-    let share = label(segment.share, trace_kind);
+    let share = label(segment.share);
     let call = segment.share != GC && !OWN_CODE.contains(&segment.share);
     let function = if call {
         waits::call_label(segment.span)

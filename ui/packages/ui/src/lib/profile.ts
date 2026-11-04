@@ -50,8 +50,8 @@ export const WAITING = "waiting";
 
 /**
  * The frame waiting is drawn as where no frame of the runtime's should name it: Your code's waits (a JVM's
- * VirtualThread.park, Python's sleep), and a CPU profile's time off the CPU (Go's, Node's). One name and one look in
- * every language; All frames keeps the frame that waited, where the profile has one.
+ * VirtualThread.park, Python's sleep, Node's idle event loop, a Go CPU profile's time off the CPU). One name and one
+ * look in every language; All frames keeps the frame that waited, where the profile has one.
  */
 // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
 export const WAITED: Frame = { function: WAITING, module: null, file: "", line: 0, in_app: false, waiting: true };
@@ -273,7 +273,7 @@ export function functions(profile: Profile): { frame: Frame; self: number; total
 
 /**
  * What a frame of the console's own stands for, no function's: the framework & runtime (Your code's samples that
- * ran none of it), or waiting (Your code's waits, a CPU profile's time off the CPU). Null for a function's frame,
+ * ran none of it), or waiting (Your code's waits). Null for a function's frame,
  * however it is named. By its fields, as a chain's merged profiles copy their frames.
  */
 export function summaryOf(frame: Frame): string | null {
@@ -365,17 +365,4 @@ export function profileReason(trace: Pick<Trace, "attrs" | "spans">): string | n
   const value = root?.attrs["profile.reason"] ?? trace.attrs["profile.reason"];
   if (typeof value !== "string" || value === "") return null;
   return `Profiled: ${REASONS[value] ?? value}`;
-}
-
-/**
- * The SDKs that sample the CPU alone, by their language: Go's (runtime/pprof samples the goroutines running) and
- * Node's (V8's profiler, its idle samples left out). Python's and the JVM's sample each thread's stack on the clock,
- * waiting or not.
- */
-const CPU_ONLY = new Set(["go", "nodejs"]);
-
-/** Whether a trace's profile is its time on the CPU only, not its time on the clock. */
-export function onCpuOnly(trace: Pick<Trace, "attrs">): boolean {
-  const language = trace.attrs["telemetry.sdk.language"];
-  return typeof language === "string" && CPU_ONLY.has(language);
 }
