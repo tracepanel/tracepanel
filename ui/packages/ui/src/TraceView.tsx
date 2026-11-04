@@ -722,7 +722,7 @@ function ViewScopes({
 function useOnPageClock(trace: Trace, anchor: number | undefined): WaterfallHost | null {
   const host = useWaterfall();
   return useMemo(() => {
-    if (!host?.axis || anchor === undefined || host.zoom?.key) return host;
+    if (!host?.axis || anchor === undefined) return host;
     const shift = anchor - trace.start;
     if (shift === 0) return host;
     return { ...host, axis: { start: host.axis.start - shift, duration: host.axis.duration } };

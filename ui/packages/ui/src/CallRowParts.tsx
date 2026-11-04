@@ -102,10 +102,13 @@ export function Bar({
   point,
   cut,
   within,
+  title,
 }: {
   trace: Trace;
   start: number;
   length: number;
+  /** What a hover over the bar says: the call, its kind, its time and share. */
+  title?: string | undefined;
   point?: boolean;
   /** A call cut short (see cutLength): it fades out where it was cut, as one that runs past the end does. */
   cut?: boolean;
@@ -116,7 +119,7 @@ export function Bar({
   const place = point ? pointPlace(axis, from) : barPlace(axis, from, long);
   const past = place.past ?? (cut ? "" : undefined);
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span className="dt-map-track" aria-hidden="true" title={title}>
       <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={past} style={place.style} />
     </span>
   );
@@ -239,11 +242,24 @@ export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
   return <RowTime time={span.duration} slow={slow} title={timeTitle(span, ctx.trace)} />;
 }
 
+/** A bar's hover: what it is, its kind, its time, its share of the trace. */
+export function barTitle(name: string, kind: string, time: number, total: number): string {
+  const share = total > 0 ? Math.round((time / total) * 100) : 0;
+  return `${name}\n${kind} · ${duration(time)} · ${share < 1 ? "<1" : share}% of the trace`;
+}
+
 /** A span's bar; a call cut short runs to where it was cut, fading out there, never a 0-width mark. */
 export function OwnBar({ span, ctx }: { span: Span; ctx: RowContext }) {
   const cut = cutLength(span, ctx.trace);
   return (
-    <Bar trace={ctx.trace} start={span.start} length={cut ?? span.duration} cut={cut !== null} within={ctx.within} />
+    <Bar
+      trace={ctx.trace}
+      start={span.start}
+      length={cut ?? span.duration}
+      cut={cut !== null}
+      within={ctx.within}
+      title={barTitle(span.name, span.kind, span.duration, ctx.trace.duration)}
+    />
   );
 }
 

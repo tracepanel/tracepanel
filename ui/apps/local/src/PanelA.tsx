@@ -1,39 +1,28 @@
-// The panel, redesign A (a prototype): one toolbar (the page and the zoom as breadcrumbs, the facets with their
-// totals, a filter, Follow), a thin overview of the page's time with the window, and one waterfall whose rows open
-// into the call tree: the page, its requests, their calls. The selected row's details are in one pane: right of the
-// rows docked at the bottom, a sheet under them docked right.
+// The panel, redesign A (a prototype): a toolbar (the page; Profile, Share, Console, theme, dock, close), one sticky
+// head over the rows (the filter by text and kind, the issues' stepper, Follow and Clear; the axis), and one
+// waterfall whose rows open into the call tree: the page, its requests, their calls, their records. A drag across
+// the bars picks a stretch of time. The selected row's, or the stretch's, details are in one pane: right of the rows
+// docked at the bottom, a sheet under them docked right.
 import {
   type Axis,
   CloseIcon,
   duration,
   ExternalIcon,
-  type Facet,
   Hint,
   Logo,
+  RangeBand,
+  type RowKind,
+  type Stretch,
   TraceBadge,
   type TraceRow,
+  useRangeDrag,
   WaterfallContext,
   type WaterfallFacts,
   type WaterfallHost,
-  type Zoom,
 } from "@tracepanel/ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@tracepanel/ui/components/ui/dropdown-menu";
 import { isTyping } from "@tracepanel/ui/lib/keys";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import {
-  ArrowUpRightIcon,
-  DatabaseIcon,
-  EllipsisIcon,
-  ListEndIcon,
-  ScrollTextIcon,
-  SearchIcon,
-  TriangleAlertIcon,
-} from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, ListEndIcon, SearchIcon, TriangleAlertIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -117,140 +106,18 @@ function ticks(axis: Axis): { at: number; label: string }[] {
   return out;
 }
 
-/** The facets' totals, over every trace in the waterfall. */
-function totals(facts: ReadonlyMap<string, WaterfallFacts>) {
-  const all = [...facts.values()];
-  const sum = (pick: (each: WaterfallFacts) => number) => all.reduce((total, each) => total + pick(each), 0);
-  const calls = (pick: (each: WaterfallFacts) => WaterfallFacts["db"]) => {
-    const count = sum((each) => pick(each).count);
-    const us = sum((each) => pick(each).us);
-    const one = all.filter((each) => pick(each).count > 0);
-    const time = one.length === 1 && one[0] ? pick(one[0]).time : us > 0 ? duration(us) : "";
-    return { count, time };
-  };
-  return {
-    issues: sum((each) => each.issues),
-    db: calls((each) => each.db),
-    http: calls((each) => each.http),
-    logs: sum((each) => each.logs),
-  };
-}
-
-const FACETS: { id: Facet; label: string; icon: ReactNode; hint: string }[] = [
-  { id: "issues", label: "Issues", icon: <TriangleAlertIcon />, hint: "Brighten the rows with issues" },
-  { id: "db", label: "DB", icon: <DatabaseIcon />, hint: "Brighten the queries" },
-  { id: "http", label: "HTTP", icon: <ArrowUpRightIcon />, hint: "Brighten the HTTP calls" },
-  { id: "logs", label: "Logs", icon: <ScrollTextIcon />, hint: "Brighten the log records" },
-];
-
-function Facets({
-  facts,
-  facet,
-  onFacet,
-}: {
-  facts: ReturnType<typeof totals>;
-  facet: Facet | null;
-  onFacet: (facet: Facet | null) => void;
-}) {
-  const of = (id: Facet) =>
-    id === "issues" ? { count: facts.issues, time: "" } : id === "logs" ? { count: facts.logs, time: "" } : facts[id];
-  return (
-    <div className="wf-facets" role="toolbar" aria-label="Facets">
-      {FACETS.map((each) => {
-        const { count, time } = of(each.id);
-        if (count === 0) return null;
-        return (
-          <Hint key={each.id} title={each.hint}>
-            <button
-              type="button"
-              className="wf-facet"
-              aria-label={`${each.label} ${count}${time ? `, ${time}` : ""}`}
-              data-facet={each.id}
-              aria-pressed={facet === each.id}
-              onClick={() => onFacet(facet === each.id ? null : each.id)}
-            >
-              {each.icon}
-              <span className="wf-facet-label">{each.label}</span>
-              <b>{count}</b>
-              {time ? <span className="wf-facet-time">{time}</span> : null}
-            </button>
-          </Hint>
-        );
-      })}
-    </div>
-  );
-}
-
-/** The page's crumb, then the row zoomed to: the page's crumb zooms out. */
-function Crumbs({ head, zoom, onOut }: { head: TraceRow | undefined; zoom: Zoom | null; onOut: () => void }) {
+/** The page: what the waterfall's root is. */
+function Crumbs({ head }: { head: TraceRow | undefined }) {
   if (!head) return <span className="wf-crumbs" />;
   const word = head.trace.kind === "page" ? "VIEW" : (head.trace.method ?? head.trace.kind.toUpperCase());
   const name = head.trace.kind === "page" ? head.trace.name : (head.trace.path ?? head.trace.name);
   return (
     <nav className="wf-crumbs" aria-label="Breadcrumbs">
-      <button type="button" className="wf-crumb" onClick={onOut} aria-current={zoom ? undefined : "page"}>
+      <span className="wf-crumb" title={head.trace.name}>
         <TraceBadge word={word} />
         <span className="wf-crumb-name">{name}</span>
-      </button>
-      {zoom ? (
-        <>
-          <span className="wf-crumb-sep" aria-hidden="true">
-            ›
-          </span>
-          <span className="wf-crumb" aria-current="page">
-            <TraceBadge word={zoom.badge} />
-            <span className="wf-crumb-name">{zoom.label}</span>
-          </span>
-        </>
-      ) : null}
+      </span>
     </nav>
-  );
-}
-
-/** The page's time in one thin line: its traces' bars, the window the waterfall shows over them. */
-function Overview({
-  page,
-  axis,
-  zoom,
-  onZoom,
-}: {
-  page: readonly TraceRow[];
-  axis: Axis;
-  zoom: Zoom | null;
-  onZoom: (row: TraceRow | null) => void;
-}) {
-  const place = (start: number, length: number) => ({
-    left: `${Math.max(((start - axis.start) / axis.duration) * 100, 0)}%`,
-    width: `${Math.max((length / axis.duration) * 100, 0.4)}%`,
-  });
-  const requests = page.filter((row) => row.depth).length;
-  return (
-    <div className="wf-overview wf-grid">
-      <span className="wf-overview-label">
-        <b>This page</b>
-        {requests ? ` · ${requests} ${requests === 1 ? "request" : "requests"}` : ""}
-        {zoom ? ` · window: ${zoom.label}` : ""}
-      </span>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: a click beside the window zooms out; the bars are buttons. */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: Backspace zooms out from the keyboard. */}
-      <span className="wf-overview-track" onClick={(event) => event.target === event.currentTarget && onZoom(null)}>
-        {page.map((row) => (
-          <button
-            type="button"
-            key={row.key ?? row.trace.id}
-            className="wf-overview-bar"
-            tabIndex={-1}
-            data-kind={row.trace.kind}
-            data-depth={row.depth ?? 0}
-            title={`${row.trace.name} · ${duration(row.trace.duration)}`}
-            style={place(row.trace.start, row.trace.duration)}
-            onClick={() => onZoom(row.depth ? row : null)}
-          />
-        ))}
-        {zoom ? <span className="wf-overview-window" style={place(zoom.axis.start, zoom.axis.duration)} /> : null}
-      </span>
-      <span className="wf-overview-total">{duration(axis.duration)}</span>
-    </div>
   );
 }
 
@@ -283,6 +150,7 @@ function useTimeColumn(panel: RefObject<HTMLDivElement | null>, ticks: RefObject
       const column = ticks.current?.getBoundingClientRect();
       if (!column) return;
       const x = `${Math.round(column.left - root.getBoundingClientRect().left)}px`;
+      root.style.setProperty("--wf-time-w", `${Math.round(column.width)}px`);
       // The divider follows the column always; the toolbar only with the details closed, so a row picked (which
       // opens them) never moves the toolbar.
       root.style.setProperty("--wf-split-x", x);
@@ -310,7 +178,7 @@ function AxisHead({
   return (
     <div className="wf-head wf-grid">
       {filter}
-      <span className="wf-ticks" aria-hidden="true" ref={ticksRef}>
+      <span className="wf-ticks" aria-hidden="true" ref={ticksRef} title="Drag to pick a stretch of time">
         {ticks(axis).map((tick) => (
           <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
             {tick.label}
@@ -322,37 +190,95 @@ function AxisHead({
   );
 }
 
-function MoreMenu({ traceId }: { traceId: string | null }) {
+const KINDS: { id: RowKind; label: string }[] = [
+  { id: "sql", label: "SQL" },
+  { id: "http", label: "HTTP" },
+  { id: "logs", label: "Logs" },
+  { id: "issues", label: "Issues" },
+];
+
+/** The kinds of rows the filter keeps, inside its field: All, or one kind. No totals here: the root row has them. */
+function KindChips({ kind, onKind }: { kind: RowKind | null; onKind: (kind: RowKind | null) => void }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className="icon-button" aria-label="More">
-          <EllipsisIcon />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <div className="wf-menu-row">
-          <span>Profile requests</span>
-          <ProfileToggle source={source} />
-        </div>
-        <div className="wf-menu-row">
-          <span>Share · theme · user</span>
-          <span className="flex items-center gap-1">
-            <ShareAction traceId={traceId} source={source} compact={true} />
-            <ThemeToggle compact={true} />
-            <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
-          </span>
-        </div>
-        <DropdownMenuItem
-          onSelect={() => {
-            writeItem(PANEL_A_KEY, "off");
-            window.location.reload();
-          }}
+    <span className="wf-kinds" role="radiogroup" aria-label="Kind of rows">
+      {[{ id: null, label: "All" } as const, ...KINDS].map((each) => (
+        // biome-ignore lint/a11y/useSemanticElements: chips in a field, not a form's radio buttons.
+        <button
+          key={each.label}
+          type="button"
+          role="radio"
+          aria-checked={kind === each.id}
+          className="wf-kind"
+          onClick={() => onKind(each.id)}
         >
-          Show the old panel
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {each.label}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/** The rows with an issue, in the order shown: the next or the previous one is selected and opened. */
+function stepIssue(scroll: HTMLElement | null, by: 1 | -1): void {
+  const rows = [...(scroll?.querySelectorAll<HTMLElement>(".wf-rows .dt-map-row[data-issue]") ?? [])];
+  if (rows.length === 0) return;
+  const at = rows.findIndex((row) => row.getAttribute("aria-current") === "true");
+  const next = rows[at === -1 ? (by === 1 ? 0 : rows.length - 1) : (at + by + rows.length) % rows.length];
+  next?.click();
+  next?.scrollIntoView({ block: "nearest" });
+}
+
+/** ⚠ 12 ‹ ›: the page's issues, and the way from one to the next ([ and ]). */
+function IssueStepper({ count, onStep }: { count: number; onStep: (by: 1 | -1) => void }) {
+  if (count === 0) return null;
+  return (
+    <span className="wf-issues">
+      <TriangleAlertIcon aria-hidden="true" />
+      <b>{count}</b>
+      <span className="sr-only">issues</span>
+      <Hint title="Previous issue" keys="[">
+        <button type="button" className="icon-button" aria-label="Previous issue" onClick={() => onStep(-1)}>
+          <ChevronLeftIcon />
+        </button>
+      </Hint>
+      <Hint title="Next issue" keys="]">
+        <button type="button" className="icon-button" aria-label="Next issue" onClick={() => onStep(1)}>
+          <ChevronRightIcon />
+        </button>
+      </Hint>
+    </span>
+  );
+}
+
+const SHORTCUTS: readonly [string, string][] = [
+  ["Filter the calls", "/"],
+  ["Next issue, previous issue", "] ["],
+  ["Pick a stretch of time", "drag across the bars"],
+  ["Let the stretch, the row, the panel go", "Esc"],
+  ["Search", "⌘K"],
+  ["This list", "?"],
+];
+
+/** ? : the keys, in a small sheet over the panel. */
+function Shortcuts({ onClose }: { onClose: () => void }) {
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a click beside the sheet closes it; Esc does too.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Esc closes it.
+    <div className="wf-shortcuts-backdrop" onClick={onClose}>
+      <div className="wf-shortcuts" role="dialog" aria-label="Keyboard shortcuts">
+        <h3>Keyboard shortcuts</h3>
+        <dl>
+          {SHORTCUTS.map(([what, key]) => (
+            <div key={what}>
+              <dt>{what}</dt>
+              <dd>
+                <kbd>{key}</kbd>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
   );
 }
 
@@ -526,12 +452,12 @@ function DetailsSplitter({
   );
 }
 
-/** The waterfall's state: the selection, the zoom, the facet, the filter, and what each trace reports. */
+/** The waterfall's state: the selection, the filter and its kind, the stretch, and what each trace reports. */
 function useHost(axis: Axis | null, details: HTMLElement | null) {
   const [selected, setSelected] = useState<{ trace: string; key: string } | null>(null);
-  const [zoom, setZoom] = useState<Zoom | null>(null);
-  const [facet, setFacet] = useState<Facet | null>(null);
+  const [kind, setKind] = useState<RowKind | null>(null);
   const [filter, setFilter] = useState("");
+  const [range, setRange] = useState<Stretch | null>(null);
   const [facts, setFacts] = useState<ReadonlyMap<string, WaterfallFacts>>(() => new Map());
   const report = useCallback((trace: string, each: WaterfallFacts | null) => {
     setFacts((current) => {
@@ -543,51 +469,49 @@ function useHost(axis: Axis | null, details: HTMLElement | null) {
   }, []);
   const select = useCallback((trace: string, key: string | null) => setSelected(key ? { trace, key } : null), []);
   const host: WaterfallHost = useMemo(
-    () => ({
-      axis: zoom?.axis ?? axis,
-      selected,
-      select,
-      details,
-      filter,
-      facet,
-      zoom,
-      setZoom,
-      report,
-    }),
-    [axis, zoom, selected, select, details, filter, facet, report],
+    () => ({ axis, selected, select, details, filter, kind, range, facts, report }),
+    [axis, selected, select, details, filter, kind, range, facts, report],
   );
-  return { host, facts, setFacet, setFilter, setZoom, setSelected };
+  return { host, setKind, setFilter, setRange, setSelected };
 }
 
-/** Backspace zooms out; Esc zooms out, then lets the row go, then closes the panel; / goes to the filter. */
+/**
+ * / goes to the filter, [ and ] step through the issues, ? lists the keys; Esc lets the stretch go, then the row,
+ * then closes the panel.
+ */
 function usePanelKeys(
-  state: { zoom: Zoom | null; selected: unknown },
-  out: () => void,
-  deselect: () => void,
+  state: { range: Stretch | null; selected: unknown; shortcuts: boolean },
+  act: { clearRange: () => void; deselect: () => void; step: (by: 1 | -1) => void; shortcuts: (open: boolean) => void },
   filter: React.RefObject<HTMLInputElement | null>,
 ) {
-  const latest = useRef(state);
-  latest.current = state;
+  const latest = useRef({ state, act });
+  latest.current = { state, act };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "/" && !isTyping(event)) {
-        event.preventDefault();
-        filter.current?.focus();
-        return;
-      }
-      if (event.key === "Backspace" && !isTyping(event) && latest.current.zoom) {
-        event.preventDefault();
-        out();
-        return;
+      const { state: now, act: does } = latest.current;
+      if (!isTyping(event)) {
+        const keys: Record<string, () => void> = {
+          "/": () => filter.current?.focus(),
+          "]": () => does.step(1),
+          "[": () => does.step(-1),
+          "?": () => does.shortcuts(!now.shortcuts),
+        };
+        const run = keys[event.key];
+        if (run) {
+          event.preventDefault();
+          run();
+          return;
+        }
       }
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (latest.current.zoom) out();
-      else if (latest.current.selected) deselect();
+      if (now.shortcuts) does.shortcuts(false);
+      else if (now.range) does.clearRange();
+      else if (now.selected) does.deselect();
       else tellWidget("tracepanel:close");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [out, deselect, filter]);
+  }, [filter]);
 }
 
 export function PanelA({ route }: { route: Route }) {
@@ -615,16 +539,23 @@ export function PanelA({ route }: { route: Route }) {
   const axisKey = page.map((row) => `${row.trace.id}:${row.trace.start}:${row.trace.duration}`).join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `axisKey` says when the page's time changed.
   const axis = useMemo(() => pageAxis(page), [axisKey]);
-  const { host, facts, setFacet, setFilter, setZoom, setSelected } = useHost(axis, details);
-  const zoomOut = useCallback(() => setZoom(null), [setZoom]);
-  const deselect = useCallback(() => setSelected(null), [setSelected]);
-  usePanelKeys({ zoom: host.zoom, selected: host.selected }, zoomOut, deselect, filterRef);
-  // A new page on screen: no zoom or selection of the last one.
+  const { host, setKind, setFilter, setRange, setSelected } = useHost(axis, details);
+  const [shortcuts, setShortcuts] = useState(false);
+  const step = (by: 1 | -1) => stepIssue(scrollRef.current, by);
+  usePanelKeys(
+    { range: host.range, selected: host.selected, shortcuts },
+    { clearRange: () => setRange(null), deselect: () => setSelected(null), step, shortcuts: setShortcuts },
+    filterRef,
+  );
+  // A new page on screen: no stretch or selection of the last one.
   // biome-ignore lint/correctness/useExhaustiveDependencies: on a new page only.
   useEffect(() => {
-    setZoom(null);
+    setRange(null);
     setSelected(null);
   }, [top[0]?.trace.id]);
+  const drag = useRangeDrag(axis?.duration ?? 1, (picked) => setRange({ from: picked[0], to: picked[1] }));
+  const shownRange = drag.draft ? { from: drag.draft[0], to: drag.draft[1] } : host.range;
+  const issues = [...host.facts.values()].reduce((all, each) => all + each.issues, 0);
 
   const latest = followTarget(inOrder(true, rows));
   useFollowNew(follow, latest, history !== null);
@@ -632,19 +563,7 @@ export function PanelA({ route }: { route: Route }) {
     setFollow(value);
     writeFollow(value);
   };
-  const sums = totals(facts);
   const consoleAt = () => `${base}${selectedId ? href({ name: "trace", id: selectedId }) : "#/"}`;
-  const zoomToRow = (row: TraceRow | null) => {
-    if (!row) return setZoom(null);
-    // A request of the page: the waterfall shows it alone, on its own time.
-    setZoom({
-      trace: row.trace.id,
-      key: "",
-      badge: row.trace.kind === "page" ? "VIEW" : (row.trace.method ?? "REQ"),
-      label: row.trace.name,
-      axis: { start: row.trace.start, duration: Math.max(row.trace.duration, 1) },
-    });
-  };
 
   return (
     <WaterfallContext.Provider value={host}>
@@ -662,12 +581,13 @@ export function PanelA({ route }: { route: Route }) {
         <header className="wf-bar">
           <div className="wf-zone wf-zone-identity">
             <Logo className="shrink-0 gap-1.5 text-md [&>span]:hidden [&_svg]:size-5" />
-            <Crumbs head={top[0]} zoom={host.zoom} onOut={zoomOut} />
+            <Crumbs head={top[0]} />
           </div>
-          <div className="wf-zone wf-zone-tools">
-            <Facets facts={sums} facet={host.facet} onFacet={setFacet} />
-          </div>
+          <div className="wf-zone wf-zone-tools" />
           <div className="wf-zone wf-zone-actions">
+            <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />
+            <ProfileToggle source={source} labeled={true} />
+            <ShareAction traceId={selectedId} source={source} labeled={true} />
             <Hint title="Open in the console" detail="This request in the full console, in a new tab.">
               <a
                 className="wf-console inline-flex h-7.5 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary-hover [&_svg]:size-3.5"
@@ -679,7 +599,7 @@ export function PanelA({ route }: { route: Route }) {
                 <ExternalIcon />
               </a>
             </Hint>
-            <MoreMenu traceId={selectedId} />
+            <ThemeToggle compact={true} />
             <DockButton dock={dock} />
             <Hint title="Close" keys="Esc">
               <button
@@ -693,11 +613,25 @@ export function PanelA({ route }: { route: Route }) {
             </Hint>
           </div>
         </header>
-        <div className="wf-main" data-details={host.selected ? "" : undefined} ref={mainRef}>
-          <div className="wf-waterfall">
-            <div className="wf-scroll" ref={scrollRef}>
+        <div className="wf-main" data-details={host.selected || host.range ? "" : undefined} ref={mainRef}>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: a drag across the bars picks a stretch; the rows are buttons. */}
+          <div
+            className="wf-waterfall"
+            onPointerDown={(event) => {
+              const target = event.target as Element;
+              if (ticksRef.current && target.closest(".dt-map-track, .wf-ticks")) drag.start(event, ticksRef.current);
+            }}
+          >
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: Esc lets the stretch go from the keyboard. */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: a click beside the rows lets the stretch go. */}
+            <div
+              className="wf-scroll"
+              ref={scrollRef}
+              onClick={(event) => {
+                if (!(event.target as Element).closest(".dt-map-row, .wf-head, .wf-details")) setRange(null);
+              }}
+            >
               <div className="wf-sticky">
-                {axis ? <Overview page={page} axis={axis} zoom={host.zoom} onZoom={zoomToRow} /> : null}
                 {host.axis ? (
                   <AxisHead
                     axis={host.axis}
@@ -721,8 +655,10 @@ export function PanelA({ route }: { route: Route }) {
                               }
                             }}
                           />
+                          <KindChips kind={host.kind} onKind={setKind} />
                           <kbd>/</kbd>
                         </label>
+                        <IssueStepper count={issues} onStep={step} />
                         <FollowButton follow={follow} onFollow={onFollow} />
                         <ClearButton onClear={() => setClearing(true)} label="Clear the list" />
                       </span>
@@ -730,40 +666,44 @@ export function PanelA({ route }: { route: Route }) {
                   />
                 ) : null}
               </div>
-              <div className="wf-rows" data-facet={host.facet ?? undefined} data-filter={host.filter ? "" : undefined}>
+              <div className="wf-rows" data-filter={host.filter || host.kind ? "" : undefined}>
                 {selectedId && top.length === 0 ? (
                   <WaterfallTrace id={selectedId} rows={rows} stored={stored} depth={0} fold={false} />
                 ) : null}
-                {top.map((row, at) =>
-                  host.zoom && host.zoom.key === "" && host.zoom.trace !== row.trace.id ? null : (
-                    <WaterfallTrace
-                      key={row.key ?? row.trace.id}
-                      id={row.trace.id}
-                      rows={rows}
-                      stored={stored}
-                      anchor={row.trace.start}
-                      depth={at === 0 || host.zoom ? 0 : 1}
-                      fold={top.length > 1 && !host.zoom}
-                    />
-                  ),
-                )}
+                {top.map((row, at) => (
+                  <WaterfallTrace
+                    key={row.key ?? row.trace.id}
+                    id={row.trace.id}
+                    rows={rows}
+                    stored={stored}
+                    anchor={row.trace.start}
+                    depth={at === 0 ? 0 : 1}
+                    fold={top.length > 1}
+                  />
+                ))}
                 {history && !selectedId ? (
                   <p className="wf-hint">No requests yet: requests from this browser tab appear here.</p>
                 ) : null}
                 {selectedId ? (
                   <p className="wf-hint">
-                    z zooms the axis to the selected row · Backspace zooms out · new requests append here
+                    Drag across the bars to pick a stretch of time · [ ] steps through the issues · ? lists the keys
                   </p>
                 ) : null}
               </div>
             </div>
+            {shownRange && axis ? (
+              <div className="wf-range-layer">
+                <RangeBand range={[shownRange.from, shownRange.to]} total={axis.duration} />
+              </div>
+            ) : null}
             <NamesSplitter value={names} onSize={setNames} scroll={scrollRef} />
           </div>
-          <aside className="wf-details" aria-label="Details" hidden={!host.selected}>
+          <aside className="wf-details" aria-label="Details" hidden={!(host.selected || host.range)}>
             <DetailsSplitter dock={dock} value={detailsSize} onSize={setDetailsSize} main={mainRef} />
             <div className="wf-details-body" ref={setDetails} />
           </aside>
         </div>
+        {shortcuts ? <Shortcuts onClose={() => setShortcuts(false)} /> : null}
         <ClearDialog
           mode="panel"
           open={clearing}

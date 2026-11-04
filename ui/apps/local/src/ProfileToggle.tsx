@@ -87,19 +87,28 @@ const ELSEWHERE: Record<Exclude<Mode, "off">, string> = {
  * each request. Shown when a connected app profiles on request (memory too only when it can), or while the cookie
  * asks for it anyway (see ELSEWHERE). Lit with no cookie when the app's settings profile every request.
  */
-export function ProfileToggle({ source }: { source: DataSource }) {
+export function ProfileToggle({ source, labeled = false }: { source: DataSource; labeled?: boolean }) {
   const capabilities = useCapabilities(source);
   const [stored, choose] = useProfiling();
   if (!capabilities?.profile) {
     if (stored === "off") return null;
     return (
-      <ProfileButton choice={{ modes: ["off", stored], floor: "off" }} stored={stored} choose={choose} elsewhere />
+      <ProfileButton
+        choice={{ modes: ["off", stored], floor: "off" }}
+        stored={stored}
+        choose={choose}
+        elsewhere
+        labeled={labeled}
+      />
     );
   }
   const { profile_memory: memory, profile_all: all, profile_memory_all: memoryAll } = capabilities;
   const choice = withStored(choiceOf(memory, all, memoryAll), stored);
-  return <ProfileButton choice={choice} stored={stored} choose={choose} />;
+  return <ProfileButton choice={choice} stored={stored} choose={choose} labeled={labeled} />;
 }
+
+/** What a labelled toggle says beside "Profile" while it is on. */
+const STATES: Record<Mode, string> = { off: "", time: "on", memory: "+ memory" };
 
 /** The mode this browser profiles in, kept with the cookie wherever it is changed. */
 function useProfiling(): [Mode, (mode: Mode) => void] {
@@ -122,10 +131,13 @@ function ProfileButton({
   stored,
   choose,
   elsewhere = false,
+  labeled = false,
 }: {
   choice: Choice;
   stored: Mode;
   choose: (mode: Mode) => void;
+  /** A labelled toggle ("Profile"), as the panel's toolbar shows it; else an icon among icons. */
+  labeled?: boolean;
   /** No app here profiles on request: the cookie asks the apps the browser calls (ELSEWHERE). */
   elsewhere?: boolean;
 }) {
@@ -139,11 +151,12 @@ function ProfileButton({
         <button
           type="button"
           className={cn(
-            "icon-button relative",
+            labeled ? "wf-action relative" : "icon-button relative",
             mode !== "off" && "text-orange-500 hover:text-orange-500",
             fixed && "cursor-default",
           )}
           aria-label={NAMES[mode]}
+          aria-pressed={labeled ? mode !== "off" : undefined}
           aria-disabled={fixed || undefined}
           onClick={(event) => {
             if (fixed) return;
@@ -154,6 +167,12 @@ function ProfileButton({
           }}
         >
           <Flame mode={mode} />
+          {labeled ? (
+            <>
+              Profile
+              {STATES[mode] ? <span className="wf-action-state">{STATES[mode]}</span> : null}
+            </>
+          ) : null}
         </button>
       </Hint>
       <span className="sr-only" aria-live="polite">

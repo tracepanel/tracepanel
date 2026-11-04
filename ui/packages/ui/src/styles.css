@@ -3773,3 +3773,21 @@ div.dt-map-row[data-kind="code"] {
 .dt-wf-section .dt-issue-icon {
   display: none;
 }
+.dt-wf-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.375rem 1rem;
+  font-size: var(--dt-size-sm);
+}
+.dt-wf-totals dt {
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+}
+.dt-wf-totals dd {
+  font-variant-numeric: tabular-nums;
+}
+/* A bar under the pointer stands out, as a lane's mark did. */
+.dt-map[data-waterfall] .dt-map-track:hover .dt-map-bar {
+  filter: brightness(1.35);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dt-text) 35%, transparent);
+}

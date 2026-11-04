@@ -10,6 +10,7 @@ import {
   type Chain,
   callSpans,
   callTraces,
+  childrenOf,
   findNode,
   hiddenLogsOf,
   type Mark,
@@ -25,7 +26,6 @@ import {
 import { type CatchUp, useChain } from "./hooks/useChain";
 import { CloseIcon } from "./icons";
 import { type Category, spanCategories } from "./lib/breakdown";
-import { isTyping } from "./lib/keys";
 import { quietSpans } from "./lib/quiet";
 import type { SpanScope } from "./lib/scope";
 import type { Slice, TimeRange, Windows } from "./lib/slice";
@@ -35,8 +35,8 @@ import type { TraceLinks } from "./links";
 import { SideResize, useSideWidth } from "./SideResize";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { IssueKind, Related, Span, Trace } from "./types";
-import { crumbOf, filterMarks, stretchOf, useWaterfall, type WaterfallHost } from "./Waterfall";
-import { WaterfallDetails } from "./WaterfallDetails";
+import { marksWhere, named, ofKind, useWaterfall, type WaterfallHost, within } from "./Waterfall";
+import { RangeDetails, WaterfallDetails } from "./WaterfallDetails";
 
 /** From this width of the call tree its details open beside it; narrower, under their row. */
 const SIDE_MIN_WIDTH = 760;
@@ -173,45 +173,37 @@ function hostSelection(host: WaterfallHost, traceId: string) {
   };
 }
 
-/** The rows a zoom keeps: the row zoomed to, alone at the top; none of a trace the zoom is not in. */
-function zoomedTree(tree: Node[], host: WaterfallHost, trace: Trace): Node[] {
-  const zoom = host.zoom;
-  if (!zoom) return tree;
-  if (zoom.trace !== trace.id) return [];
-  const found = findNode(tree, zoom.key, trace);
-  return found ? [found.node] : tree;
+/**
+ * The rows the filter keeps (its text and kind; their ancestors dimmed), and those outside the stretch dragged across
+ * the bars dimmed: nothing hidden for the stretch, only faded.
+ */
+function waterfallMarks(
+  tree: readonly Node[],
+  host: WaterfallHost,
+  issues: ReadonlyMap<string, IssueKind>,
+): Map<string, Mark> | undefined {
+  const { filter, kind, range, axis } = host;
+  if (!(filter || kind || range)) return undefined;
+  const keep = (node: Node) => (!filter || named(node, filter)) && (!kind || ofKind(node, kind, issues));
+  const marks: Map<string, Mark> = filter || kind ? marksWhere(tree, keep) : marksWhere(tree, () => true);
+  if (!(range && axis)) return marks;
+  const [from, to] = [axis.start + range.from, axis.start + range.to];
+  const all = (nodes: readonly Node[]) => {
+    for (const node of nodes) {
+      if (marks.get(node.key) === "match" && !within(node, from, to)) marks.set(node.key, "path");
+      all(childrenOf(node));
+    }
+  };
+  all(tree);
+  return marks;
 }
 
-/** z zooms the waterfall to the row selected in this trace. */
-function useZoomKey(host: WaterfallHost, tree: Node[], trace: Trace, selected: string | null): void {
-  const latest = useRef({ host, tree, trace, selected });
-  latest.current = { host, tree, trace, selected };
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "z" || isTyping(event)) return;
-      const { host: now, tree: rows, trace: of, selected: key } = latest.current;
-      if (!key || now.selected?.trace !== of.id) return;
-      const found = findNode(rows, key, of);
-      if (found) zoomTo(now, of, found.node);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-}
-
-/** Below this share of the axis, a request picked zooms the axis to it. */
-const ZOOM_SHARE = 0.15;
-
-/** A request: a call another app served, a trace's own root, a task's run. */
-function isRequest(node: Node): boolean {
-  if (node.type === "task") return true;
-  return node.type === "span" && (node.served !== undefined || node.span.parent_id === null);
-}
-
-function zoomTo(host: WaterfallHost, trace: Trace, node: Node): void {
-  const axis = stretchOf(node);
-  if (!axis) return;
-  host.setZoom({ trace: trace.id, key: node.key, ...crumbOf(node), axis });
+/** The stretch dragged, on this trace's clock: µs since the trace started. */
+function windowsIn(host: WaterfallHost, trace: Trace): Windows | null {
+  if (!(host.range && host.axis)) return null;
+  const from = Math.max(host.axis.start + host.range.from - trace.start, 0);
+  const to = Math.min(host.axis.start + host.range.to - trace.start, trace.duration);
+  return to > from ? [[from, to]] : null;
 }
 
 function WaterfallRows({
@@ -231,30 +223,24 @@ function WaterfallRows({
   details: ReactNode;
   selected: string | null;
 }) {
-  useZoomKey(host, tree, trace, selected);
-  const shown = zoomedTree(tree, host, trace);
-  const marks = useMemo(() => (host.filter ? filterMarks(shown, host.filter) : ctx.marks), [shown, host.filter, ctx]);
-  if (shown.length === 0) return null;
+  const marks = useMemo(
+    () => waterfallMarks(tree, host, ctx.issueBySpan) ?? ctx.marks,
+    [tree, host, ctx.issueBySpan, ctx.marks],
+  );
   const found = selected ? findNode(tree, selected, trace) : undefined;
-  // A request picked that is a sliver of the axis: the axis follows it, as the page's one waterfall reads a request.
-  const onSelect = (key: string) => {
-    ctx.onSelect(key);
-    if (key === selected) return;
-    const node = findNode(tree, key, trace)?.node;
-    const stretch = node && isRequest(node) ? stretchOf(node) : null;
-    if (stretch && host.axis && stretch.duration < host.axis.duration * ZOOM_SHARE) zoomTo(host, trace, node as Node);
-  };
+  const windows = windowsIn(host, trace);
+  const facts = host.facts.get(trace.id);
   return (
     <div className="dt-map" data-waterfall="">
       <div className="dt-map-rows">
-        <Rows nodes={shown} depth={host.zoom ? 0 : depth} ctx={{ ...ctx, marks, onSelect }} />
+        <Rows nodes={tree} depth={depth} ctx={{ ...ctx, marks }} />
       </div>
       {found && host.details
         ? createPortal(
             <WaterfallDetails
               node={found.node}
               trace={found.trace}
-              onZoom={() => zoomTo(host, trace, found.node)}
+              totals={found.node.type === "span" && found.node.span.parent_id === null ? facts : undefined}
               onClose={() => host.select(trace.id, null)}
               onShow={(key) => host.select(trace.id, key)}
             >
@@ -262,6 +248,9 @@ function WaterfallRows({
             </WaterfallDetails>,
             host.details,
           )
+        : null}
+      {!host.selected && windows && host.details
+        ? createPortal(<RangeDetails trace={trace} windows={windows} />, host.details)
         : null}
     </div>
   );
@@ -615,12 +604,12 @@ export function CallMap({
     expected: wiring.expected,
     reloadRoot: wiring.reloadRelated,
   });
-  const { tree, hidden } = useShownLogs(trace, related, current.logs, chain.loaded);
+  const host = useWaterfall();
+  const { tree, hidden } = useShownLogs(trace, related, host ? true : current.logs, chain.loaded);
   const issues = useMemo(
     () => withCallIssues(issueBySpan, related, chain.loaded),
     [issueBySpan, related, chain.loaded],
   );
-  const host = useWaterfall();
   const own = useSelection(initialSpan);
   const { selected, select, close } = host ? hostSelection(host, trace.id) : own;
   const map = useRef<HTMLDivElement>(null);

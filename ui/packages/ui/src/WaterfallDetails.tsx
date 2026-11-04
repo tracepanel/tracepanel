@@ -1,15 +1,16 @@
 // The waterfall's one details pane (redesign A, a prototype): the selected row's name, where its time went (the
 // caller's wait, the app's time, the network), the issues in it as cards, its queries, then the row's own details.
-import { ScanSearchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { appName } from "./CallRows";
 import type { Node } from "./callTree";
 import { duration } from "./format";
 import { IssueList } from "./IssueList";
 import { CloseIcon } from "./icons";
+import type { Windows } from "./lib/slice";
+import { splitOf } from "./lib/split";
 import { TraceBadge } from "./primitives";
 import type { Issue, Span, Trace } from "./types";
-import { crumbOf } from "./Waterfall";
+import { crumbOf, type WaterfallFacts } from "./Waterfall";
 
 /** Every span under a row, in its trace and in the traces served for its calls. */
 function spansUnder(node: Node, trace: Trace): Span[] {
@@ -89,16 +90,17 @@ function HopSplit({ node }: { node: Node }) {
 export function WaterfallDetails({
   node,
   trace,
-  onZoom,
   onClose,
   onShow,
+  totals,
   children,
 }: {
   node: Node;
   trace: Trace;
-  onZoom: () => void;
   onClose: () => void;
   onShow: (key: string) => void;
+  /** A trace's root row: its totals, said here once (the toolbar has none). */
+  totals?: WaterfallFacts | undefined;
   children: ReactNode;
 }) {
   const crumb = crumbOf(node);
@@ -112,15 +114,12 @@ export function WaterfallDetails({
       <header className="dt-wf-details-head">
         <TraceBadge word={crumb.badge} />
         <h3 title={crumb.label}>{crumb.label}</h3>
-        <button type="button" className="dt-wf-zoom" title="Zoom the axis to this row (z)" onClick={onZoom}>
-          <ScanSearchIcon />
-          Zoom
-        </button>
         <button type="button" className="icon-button" aria-label="Close the details" onClick={onClose}>
           <CloseIcon />
         </button>
       </header>
       <HopSplit node={node} />
+      {totals ? <Totals facts={totals} /> : null}
       {found.length > 0 ? (
         <section className="dt-wf-section">
           <h4>
@@ -151,6 +150,74 @@ export function WaterfallDetails({
         </section>
       ) : null}
       <section className="dt-wf-own">{children}</section>
+    </div>
+  );
+}
+
+/** A trace's totals, in its root row's details: its queries and HTTP calls with their time, its records, its issues. */
+function Totals({ facts }: { facts: WaterfallFacts }) {
+  const rows: [string, string][] = [
+    ["Issues", String(facts.issues)],
+    ["Queries", facts.db.count ? `${facts.db.count}${facts.db.time ? ` · ${facts.db.time}` : ""}` : "0"],
+    ["HTTP calls", facts.http.count ? `${facts.http.count}${facts.http.time ? ` · ${facts.http.time}` : ""}` : "0"],
+    ["Log records", String(facts.logs)],
+  ];
+  return (
+    <section className="dt-wf-section">
+      <h4>In this trace</h4>
+      <dl className="dt-wf-totals">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+/** What a stretch dragged across the bars holds, of one trace: where its time went (split.ts), and its calls. */
+export function RangeDetails({ trace, windows }: { trace: Trace; windows: Windows }) {
+  const split = splitOf(trace, windows);
+  const [[from, to] = [0, 0]] = windows;
+  const calls = trace.spans.filter(
+    (span) =>
+      span.parent_id !== null && span.start - trace.start <= to && span.start + span.duration - trace.start >= from,
+  );
+  const byKind = new Map<string, number>();
+  for (const span of calls) byKind.set(span.kind, (byKind.get(span.kind) ?? 0) + 1);
+  return (
+    <div className="dt-wf-details">
+      <header className="dt-wf-details-head">
+        <h3 title={trace.name}>{trace.name}</h3>
+      </header>
+      <section className="dt-wf-section">
+        <h4 className="normal-case tracking-normal">
+          {split.of} · {split.time}
+        </h4>
+        <ul className="dt-wf-queries">
+          {split.shares.map((share) => (
+            <li key={share.share}>
+              <span className="dt-wf-query-name">{share.label}</span>
+              <span className="dt-wf-query-bar" aria-hidden="true">
+                <span style={{ width: share.percent.startsWith("<") ? "1%" : share.percent }} />
+              </span>
+              <span className="dt-wf-query-time">{share.time}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {byKind.size ? (
+        <section className="dt-wf-section">
+          <h4>
+            {calls.length} {calls.length === 1 ? "call" : "calls"} in this stretch
+          </h4>
+          <p className="text-sm text-muted-foreground">
+            {[...byKind].map(([kind, count]) => `${count} ${kind}`).join(" · ")}
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }

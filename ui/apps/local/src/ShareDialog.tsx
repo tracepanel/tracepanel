@@ -158,8 +158,18 @@ function ShareDialog({
 }
 
 /** What opens the dialog: a labelled button in the console's trace header, an icon in the panel's bar of icons. */
-function ShareButton({ compact, onClick }: { compact: boolean; onClick: () => void }) {
+function ShareButton({ compact, labeled, onClick }: { compact: boolean; labeled: boolean; onClick: () => void }) {
   const title = "Share this trace as one HTML file";
+  if (labeled) {
+    return (
+      <Hint title="Share" detail="This trace as one HTML file: it opens anywhere, no Tracepanel needed.">
+        <button type="button" className="wf-action" onClick={onClick}>
+          <Share2Icon aria-hidden="true" />
+          Share
+        </button>
+      </Hint>
+    );
+  }
   if (compact) {
     return (
       <Hint title="Share" detail="This trace as one HTML file: it opens anywhere, no Tracepanel needed.">
@@ -188,16 +198,19 @@ export function ShareAction({
   traceId,
   source,
   compact = false,
+  labeled = false,
 }: {
   traceId: string | null;
   source: DataSource;
   compact?: boolean;
+  /** The panel's toolbar: a labelled button as tall as Console. */
+  labeled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!(traceId && source.snapshot)) return null;
   return (
     <>
-      <ShareButton compact={compact} onClick={() => setOpen(true)} />
+      <ShareButton compact={compact} labeled={labeled} onClick={() => setOpen(true)} />
       <ShareDialog traceId={traceId} source={source} open={open} onOpenChange={setOpen} />
     </>
   );

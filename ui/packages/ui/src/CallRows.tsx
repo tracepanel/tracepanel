@@ -5,6 +5,7 @@ import {
   aliasOf,
   Bar,
   barPlace,
+  barTitle,
   CallStatus,
   Caret,
   CUT_NOTE,
@@ -633,7 +634,11 @@ function HopBar({
   const [at, length] = clipped(run.start, run.duration, narrowed(within, span));
   const server = barPlace(axis, at, length);
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span
+      className="dt-map-track"
+      aria-hidden="true"
+      title={`${barTitle(span.name, span.kind, span.duration, trace.duration)}\nserver ${duration(run.duration)} · ${run.name}`}
+    >
       <span className="dt-map-bar" data-call="" data-past={call.past} style={call.style} />
       <span className="dt-map-bar" data-server="" style={server.style} />
     </span>

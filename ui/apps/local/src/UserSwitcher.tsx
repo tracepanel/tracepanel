@@ -8,7 +8,7 @@ import {
   CommandItem,
   CommandList,
 } from "@tracepanel/ui/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { CheckIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
@@ -48,8 +48,15 @@ function Role({ user }: { user: User }) {
  * reloads (`onSwitched`), so it renders for the new user.
  */
 /** The switcher where the app behind the console offers one (Django); nothing elsewhere, and nobody asked. */
-export function SwitchUser(props: { source: DataSource; onSwitched: () => void }) {
+export function SwitchUser(props: SwitchUserProps) {
   return useCapability(props.source, "users") ? <UserSwitcher {...props} /> : null;
+}
+
+interface SwitchUserProps {
+  source: DataSource;
+  onSwitched: () => void;
+  /** Opened from elsewhere (a menu's row), anchored here: no button of its own. */
+  control?: { open: boolean; onOpen: (open: boolean) => void; onCurrent: (user: User | null) => void };
 }
 
 // What the user button says: its name and hint, nobody logged in or someone.
@@ -98,13 +105,19 @@ function UserIcon({ set }: { set: boolean }) {
   );
 }
 
-function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwitched: () => void }) {
+function UserSwitcher({ source, onSwitched, control }: SwitchUserProps) {
   const [current, setCurrent] = useState<User | null | undefined>(undefined);
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = control ? control.open : ownOpen;
+  const setOpen = control ? control.onOpen : setOwnOpen;
+  const onCurrent = control?.onCurrent;
+  useEffect(() => {
+    if (current !== undefined) onCurrent?.(current);
+  }, [current, onCurrent]);
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<User[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const closeMenu = useCallback(() => setOpen(false), []);
+  const closeMenu = useCallback(() => setOpen(false), [setOpen]);
   useCloseOnBlur(open, closeMenu);
 
   useEffect(() => {
@@ -142,7 +155,13 @@ function UserSwitcher({ source, onSwitched }: { source: DataSource; onSwitched: 
         setOpen(next);
       }}
     >
-      <UserTrigger current={current} />
+      {control ? (
+        <PopoverAnchor asChild>
+          <span className="wf-anchor" />
+        </PopoverAnchor>
+      ) : (
+        <UserTrigger current={current} />
+      )}
       <PopoverContent
         align="end"
         collisionPadding={8}
