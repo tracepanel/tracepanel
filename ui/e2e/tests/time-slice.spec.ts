@@ -57,11 +57,13 @@ test("a share's stretch says its time, its part of the whole and how many calls 
   await openHome(page);
   await segment(page, "sql").hover();
 
-  await expect(page.getByRole("tooltip", { name: /^Database/ })).toHaveText(/^Database\s*\d+ ms · \d+% · 151 calls$/);
+  await expect(page.getByRole("tooltip", { name: /^Database/ })).toHaveText(
+    /^Database\s*[\d.,]+ ms · \d+% · 151 calls$/,
+  );
 
   await segment(page, "template").hover();
 
-  await expect(page.getByRole("tooltip", { name: /^Templates/ })).toHaveText(/^Templates\s*\d+ ms · \d+% · 1 call/);
+  await expect(page.getByRole("tooltip", { name: /^Templates/ })).toHaveText(/^Templates\s*[\d.,]+ ms · \d+% · 1 call/);
 });
 
 test("a share picked keeps its calls, dims the way to them and goes into the URL; again, or Esc, lets it go", async ({
@@ -194,7 +196,9 @@ test("in the panel: the numbers on hover, a share and a stretch of time picked, 
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await segment(frame, "sql").hover();
 
-  await expect(frame.getByRole("tooltip", { name: /^Database/ })).toHaveText(/^Database\s*\d+ ms · \d+% · 151 calls$/);
+  await expect(frame.getByRole("tooltip", { name: /^Database/ })).toHaveText(
+    /^Database\s*[\d.,]+ ms · \d+% · 151 calls$/,
+  );
 
   await segment(frame, "template").click();
 
