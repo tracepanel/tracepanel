@@ -13,12 +13,14 @@ import {
   type ViewMemory,
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
+import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { useTabHistory } from "./hooks";
 import { readLastTab, writeLastTab } from "./lastTab";
+import { PANEL_A_KEY, PanelA } from "./PanelA";
 import { forgetUnless, goBackInPanel, restoringFor, setCurrentView, useBackStep } from "./panelBack";
 import { useChainOpen, useKnownApps, useRowChains, useTabRows } from "./panelChains";
 import { type Dock, SplitHandle, tellWidget, useDock, useSplit } from "./panelLayout";
@@ -174,7 +176,7 @@ function useSearchKey(setSearching: (change: (open: boolean) => boolean) => void
  * request: the request a link asked for (the pill's card) stays on screen. Only requests that arrive after it are
  * followed.
  */
-function useFollowNew(follow: boolean, latest: string | undefined, loaded: boolean): void {
+export function useFollowNew(follow: boolean, latest: string | undefined, loaded: boolean): void {
   const followed = useRef(latest);
   const seeded = useRef(loaded);
   useEffect(() => {
@@ -249,6 +251,16 @@ function PanelActions({
         </a>
       </Hint>
       {explore}
+      <button
+        type="button"
+        className="icon-button px-2 text-xs"
+        onClick={() => {
+          writeItem(PANEL_A_KEY, "on");
+          window.location.reload();
+        }}
+      >
+        New panel
+      </button>
       <ShareAction traceId={traceId} source={source} compact={true} />
       <ThemeToggle compact={true} />
       <DockButton dock={dock} />
@@ -462,7 +474,11 @@ export function App() {
     <TooltipProvider delayDuration={300}>
       <RefreshProvider>
         {embedded ? (
-          <PanelApp route={route} />
+          readItem(PANEL_A_KEY) === "off" ? (
+            <PanelApp route={route} />
+          ) : (
+            <PanelA route={route} />
+          )
         ) : (
           <ScopeProvider source={source}>
             <Console route={route} source={source} />

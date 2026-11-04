@@ -3625,3 +3625,116 @@ div.dt-map-row[data-kind="code"] {
 .dt-pending {
   color: var(--dt-text-3);
 }
+
+/* ---------- The waterfall (redesign A, a prototype) ---------- */
+
+/* The bars take most of the width: the names a little over a third, the time column fixed. */
+.dt-map[data-waterfall] .dt-map-row {
+  grid-template-columns: minmax(0, 40fr) minmax(0, 60fr) 4.5rem;
+  min-height: 1.625rem;
+}
+@container map-rows (max-width: 44rem) {
+  .dt-map[data-waterfall] .dt-map-row {
+    grid-template-columns: minmax(0, 50fr) minmax(0, 50fr) 4rem;
+  }
+}
+.dt-map[data-waterfall] .dt-map-time {
+  text-align: right;
+}
+
+.dt-wf-details {
+  display: grid;
+  align-content: start;
+}
+.dt-wf-details-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.75rem 0.25rem 1rem;
+}
+.dt-wf-details-head h3 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--dt-mono);
+  font-size: var(--dt-size-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-wf-split {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.25rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--dt-border);
+  font-size: var(--dt-size-sm);
+  color: var(--dt-text-2);
+}
+.dt-wf-split b {
+  color: var(--dt-text);
+}
+.dt-wf-split-bar {
+  position: relative;
+  height: 0.375rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dt-k-http) 22%, transparent);
+}
+.dt-wf-split-bar > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--dt-k-http);
+}
+.dt-wf-section {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-wf-section h4 {
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dt-wf-queries {
+  display: grid;
+  gap: 0.25rem;
+}
+.dt-wf-queries li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6rem 4rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--dt-mono);
+  font-size: var(--dt-size-sm);
+}
+.dt-wf-query-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-wf-query-bar {
+  height: 0.375rem;
+  border-radius: 999px;
+  background: var(--dt-muted-bg);
+}
+.dt-wf-query-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dt-k-sql);
+}
+.dt-wf-query-time {
+  text-align: right;
+}
+.dt-wf-own .dt-map-details-title {
+  display: none;
+}
+/* A call's method says its kind; what served it follows its path without an arrow. */
+.dt-map[data-waterfall] .dt-map-lead[data-http] > .dt-map-kind,
+.dt-map[data-waterfall] .dt-map-hop {
+  display: none;
+}

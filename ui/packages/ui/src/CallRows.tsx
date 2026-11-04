@@ -69,6 +69,7 @@ import { RunChips } from "./RunChips";
 import { SignalNotes } from "./SignalNotes";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 import { GroupNotTraced, NotTraced, useUntraced } from "./Untraced";
+import { useAxis } from "./Waterfall";
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
 function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
@@ -522,11 +523,12 @@ function groupTimes(node: Extract<Node, { type: "group" }>): string {
 
 /** Where each call of a group started, on the request's timeline. */
 function GroupTicks({ spans, trace, within }: { spans: readonly Span[]; trace: Trace; within: Within | undefined }) {
+  const axis = useAxis(trace);
   return (
     <span className="dt-map-track" aria-hidden="true">
       {spans.map((span) => {
         const [at] = clipped(span.start, 0, within);
-        const left = Math.min(Math.max(((at - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100);
+        const left = Math.min(Math.max(((at - axis.start) / Math.max(axis.duration, 1)) * 100, 0), 100);
         return <span key={span.id} className="dt-map-bar" data-tick="" style={{ left: `${left}%` }} />;
       })}
     </span>
@@ -616,9 +618,10 @@ function HopBar({
   within: Within | undefined;
 }) {
   const [from, long] = clipped(span.start, span.duration, within);
-  const call = barPlace(trace, from, long);
+  const axis = useAxis(trace);
+  const call = barPlace(axis, from, long);
   const [at, length] = clipped(run.start, run.duration, narrowed(within, span));
-  const server = barPlace(trace, at, length);
+  const server = barPlace(axis, at, length);
   return (
     <span className="dt-map-track" aria-hidden="true">
       <span className="dt-map-bar" data-call="" data-past={call.past} style={call.style} />

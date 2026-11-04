@@ -15,6 +15,7 @@ import { type Quiet, quietSpans } from "./lib/quiet";
 import type { Slice, Windows } from "./lib/slice";
 import { FailedStatus, KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
+import { type Axis, useAxis } from "./Waterfall";
 
 export interface RowContext {
   trace: Trace;
@@ -111,7 +112,8 @@ export function Bar({
   within?: Within | undefined;
 }) {
   const [from, long] = clipped(start, length, within);
-  const place = point ? pointPlace(trace, from) : barPlace(trace, from, long);
+  const axis = useAxis(trace);
+  const place = point ? pointPlace(axis, from) : barPlace(axis, from, long);
   const past = place.past ?? (cut ? "" : undefined);
   return (
     <span className="dt-map-track" aria-hidden="true">
@@ -121,7 +123,7 @@ export function Bar({
 }
 
 /** Where a point sits on the request's timeline. */
-function pointPlace(trace: Trace, at: number): { style: CSSProperties; past: undefined } {
+function pointPlace(trace: Axis, at: number): { style: CSSProperties; past: undefined } {
   const left = Math.min(Math.max(((at - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100);
   return { style: { left: `${left}%` }, past: undefined };
 }
@@ -133,7 +135,7 @@ const PAST_MIN = 6;
  * Where a bar sits on the request's timeline. One that runs past its end (a task runs longer than the request that
  * enqueued it, or starts after it answered) runs to the right edge and fades out there (`past`).
  */
-export function barPlace(trace: Trace, start: number, length: number): { style: CSSProperties; past: "" | undefined } {
+export function barPlace(trace: Axis, start: number, length: number): { style: CSSProperties; past: "" | undefined } {
   const total = Math.max(trace.duration, 1);
   const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100 - PAST_MIN);
   const past = start + length > trace.start + total;
@@ -317,6 +319,7 @@ export function spanButton(ctx: RowContext, node: SpanNode, mark: Mark | undefin
     "data-kind": span.kind,
     "data-category": ctx.categories.get(span.id),
     "data-status": rowStatus(node),
+    "data-issue": ctx.issueBySpan.has(span.id) || (node.served?.run.issue_kinds.length ?? 0) > 0 ? "" : undefined,
     "aria-expanded": fold,
     onClick: () => clickSpan(ctx, node.key, fold),
     onKeyDown: foldKeys(fold, () => ctx.onToggle(node.key)),

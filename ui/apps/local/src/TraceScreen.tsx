@@ -62,7 +62,8 @@ export interface TraceScreenProps {
   explore?: ((trace: Trace) => ExploreItem[]) | undefined;
   onTabChange?: TraceViewProps["onTabChange"];
   onTabShown?: TraceViewProps["onTabShown"];
-  variant?: "full" | "compact" | "strip" | undefined;
+  variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
+  waterfall?: TraceViewProps["waterfall"];
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];
@@ -422,6 +423,21 @@ function NoTrace({
   back: ReactNode;
   running: Running | undefined;
 }) {
+  if (variant === "waterfall") {
+    const text =
+      loaded === undefined
+        ? "Loading…"
+        : loaded === "arriving"
+          ? running
+            ? "Still running…"
+            : "On its way…"
+          : "Not in the store any more";
+    return (
+      <p className="wf-hint" role="status">
+        {text}
+      </p>
+    );
+  }
   if (loaded === undefined) return <TraceLoading variant={variant} />;
   if (loaded === "arriving") return <TraceArriving variant={variant} running={running} />;
   return (

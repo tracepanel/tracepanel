@@ -1,5 +1,7 @@
 import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Details } from "./CallDetails";
+import type { RowContext } from "./CallRowParts";
 import { hopText, type ProfilesIn, type TraceProfileOpener, UnderSlot } from "./CallRowParts";
 import { appName, Rows } from "./CallRows";
 import type { ExplainOf } from "./CallTable";
@@ -23,6 +25,7 @@ import {
 import { type CatchUp, useChain } from "./hooks/useChain";
 import { CloseIcon } from "./icons";
 import { type Category, spanCategories } from "./lib/breakdown";
+import { isTyping } from "./lib/keys";
 import { quietSpans } from "./lib/quiet";
 import type { SpanScope } from "./lib/scope";
 import type { Slice, TimeRange, Windows } from "./lib/slice";
@@ -32,6 +35,8 @@ import type { TraceLinks } from "./links";
 import { SideResize, useSideWidth } from "./SideResize";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { IssueKind, Related, Span, Trace } from "./types";
+import { crumbOf, filterMarks, stretchOf, useWaterfall, type WaterfallHost } from "./Waterfall";
+import { WaterfallDetails } from "./WaterfallDetails";
 
 /** From this width of the call tree its details open beside it; narrower, under their row. */
 const SIDE_MIN_WIDTH = 760;
@@ -156,6 +161,95 @@ function MapBody({ details, onClose, children }: { details: ReactNode; onClose: 
   );
 }
 
+/* ---------- the waterfall (redesign A) ---------- */
+
+/** The selection the waterfall holds for every trace's rows: one row selected across them. */
+function hostSelection(host: WaterfallHost, traceId: string) {
+  const selected = host.selected?.trace === traceId ? host.selected.key : null;
+  return {
+    selected,
+    select: (key: string) => host.select(traceId, selected === key ? null : key),
+    close: () => host.select(traceId, null),
+  };
+}
+
+/** The rows a zoom keeps: the row zoomed to, alone at the top; none of a trace the zoom is not in. */
+function zoomedTree(tree: Node[], host: WaterfallHost, trace: Trace): Node[] {
+  const zoom = host.zoom;
+  if (!zoom) return tree;
+  if (zoom.trace !== trace.id) return [];
+  const found = findNode(tree, zoom.key, trace);
+  return found ? [found.node] : tree;
+}
+
+/** z zooms the waterfall to the row selected in this trace. */
+function useZoomKey(host: WaterfallHost, tree: Node[], trace: Trace, selected: string | null): void {
+  const latest = useRef({ host, tree, trace, selected });
+  latest.current = { host, tree, trace, selected };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "z" || isTyping(event)) return;
+      const { host: now, tree: rows, trace: of, selected: key } = latest.current;
+      if (!key || now.selected?.trace !== of.id) return;
+      const found = findNode(rows, key, of);
+      if (found) zoomTo(now, of, found.node);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}
+
+function zoomTo(host: WaterfallHost, trace: Trace, node: Node): void {
+  const axis = stretchOf(node);
+  if (!axis) return;
+  host.setZoom({ trace: trace.id, key: node.key, ...crumbOf(node), axis });
+}
+
+function WaterfallRows({
+  host,
+  tree,
+  trace,
+  ctx,
+  depth,
+  details,
+  selected,
+}: {
+  host: WaterfallHost;
+  tree: Node[];
+  trace: Trace;
+  ctx: RowContext;
+  depth: number;
+  details: ReactNode;
+  selected: string | null;
+}) {
+  useZoomKey(host, tree, trace, selected);
+  const shown = zoomedTree(tree, host, trace);
+  const marks = useMemo(() => (host.filter ? filterMarks(shown, host.filter) : ctx.marks), [shown, host.filter, ctx]);
+  if (shown.length === 0) return null;
+  const found = selected ? findNode(tree, selected, trace) : undefined;
+  return (
+    <div className="dt-map" data-waterfall="">
+      <div className="dt-map-rows">
+        <Rows nodes={shown} depth={host.zoom ? 0 : depth} ctx={{ ...ctx, marks }} />
+      </div>
+      {found && host.details
+        ? createPortal(
+            <WaterfallDetails
+              node={found.node}
+              trace={found.trace}
+              onZoom={() => zoomTo(host, trace, found.node)}
+              onClose={() => host.select(trace.id, null)}
+              onShow={(key) => host.select(trace.id, key)}
+            >
+              {details}
+            </WaterfallDetails>,
+            host.details,
+          )
+        : null}
+    </div>
+  );
+}
+
 /* ---------- component ---------- */
 
 const readKey = (value: string): string | null | undefined => value || undefined;
@@ -210,8 +304,14 @@ const writeKeys = (keys: ReadonlySet<string>): string | undefined =>
 function useFolded(
   tree: readonly Node[],
   initialSpan: string | undefined,
+  folded: readonly string[] = [],
 ): [ReadonlySet<string>, (key: string) => void] {
-  const [keys, setKeys] = useRemembered<ReadonlySet<string>>(VIEW_KEYS.folded, () => new Set(), readKeys, writeKeys);
+  const [keys, setKeys] = useRemembered<ReadonlySet<string>>(
+    VIEW_KEYS.folded,
+    () => new Set(folded),
+    readKeys,
+    writeKeys,
+  );
   const toggle = (key: string) => {
     const next = new Set(keys);
     if (next.has(key)) next.delete(key);
@@ -488,6 +588,9 @@ export function CallMap({
   loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
   /** Under a row's details' title: what is under it (its records, ...), each a way to the tab that lists them. */
   under?: ((scope: SpanScope, subject: UnderSubject) => ReactNode) | undefined;
+  /** In the waterfall: how deep its rows start (a page's requests under the page), its root row folded. */
+  depth?: number | undefined;
+  foldRoot?: boolean | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
@@ -500,11 +603,14 @@ export function CallMap({
     () => withCallIssues(issueBySpan, related, chain.loaded),
     [issueBySpan, related, chain.loaded],
   );
-  const { selected, select, close } = useSelection(initialSpan);
+  const host = useWaterfall();
+  const own = useSelection(initialSpan);
+  const { selected, select, close } = host ? hostSelection(host, trace.id) : own;
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
-  const [collapsed, toggle] = useFolded(tree, initialSpan);
+  const rootKeys = wiring.foldRoot ? tree.map((node) => node.key) : [];
+  const [collapsed, toggle] = useFolded(tree, initialSpan, rootKeys);
   const details = detailsOf(tree, selected, trace, {
     links,
     explainOf: wiring.explainOf,
@@ -514,6 +620,42 @@ export function CallMap({
   const { categories, quiet } = useSpansTime(trace);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
   const inline = side ? null : details;
+  const ctx: RowContext = {
+    trace,
+    issueBySpan: issues,
+    selected,
+    onSelect: select,
+    collapsed,
+    onToggle: toggle,
+    marks,
+    details: host ? null : inline,
+    hiddenLogs: hidden,
+    code: {
+      trace,
+      quiet,
+      onProfile: profileOpener(wiring.onProfile, trace, profileAt),
+      profiles: wiring.profilesIn?.(trace) === true,
+    },
+    categories,
+    slice: current,
+    onTraceProfile: wiring.onTraceProfile,
+    profilesIn: wiring.profilesIn,
+    onShowLogs: () => change({ ...current, logs: true }),
+    onChain: chain.want,
+  };
+  if (host) {
+    return (
+      <WaterfallRows
+        host={host}
+        tree={tree}
+        trace={trace}
+        ctx={ctx}
+        depth={wiring.depth ?? 0}
+        details={details}
+        selected={selected}
+      />
+    );
+  }
 
   return (
     <div className="dt-map" ref={map}>
@@ -521,33 +663,7 @@ export function CallMap({
       <MapBody details={side ? details : null} onClose={close}>
         <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
           <div className="dt-map-rows" ref={rows}>
-            <Rows
-              nodes={tree}
-              depth={0}
-              ctx={{
-                trace,
-                issueBySpan: issues,
-                selected,
-                onSelect: select,
-                collapsed,
-                onToggle: toggle,
-                marks,
-                details: inline,
-                hiddenLogs: hidden,
-                code: {
-                  trace,
-                  quiet,
-                  onProfile: profileOpener(wiring.onProfile, trace, profileAt),
-                  profiles: wiring.profilesIn?.(trace) === true,
-                },
-                categories,
-                slice: current,
-                onTraceProfile: wiring.onTraceProfile,
-                profilesIn: wiring.profilesIn,
-                onShowLogs: () => change({ ...current, logs: true }),
-                onChain: chain.want,
-              }}
-            />
+            <Rows nodes={tree} depth={0} ctx={ctx} />
           </div>
         </TimedRows>
       </MapBody>

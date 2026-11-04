@@ -61,6 +61,7 @@ import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import type { App, Chain, Issue, IssueKind, Related, Trace } from "./types";
 import { UntracedCalls } from "./Untraced";
+import { useWaterfall } from "./Waterfall";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
 
@@ -375,7 +376,9 @@ export interface TraceViewProps {
    * `compact` for the in-page panel: no title (the switcher shows it), one-line metrics, no overview timeline.
    * `strip` for the panel docked at the bottom: tabs, Explore and `actions` in a single toolbar row.
    */
-  variant?: "full" | "compact" | "strip" | undefined;
+  variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
+  /** In the waterfall: how deep its rows start, its root row folded (a page's request under the page). */
+  waterfall?: { depth: number; foldRoot: boolean } | undefined;
   /** The Explore menu; hidden when empty. */
   explore?: readonly ExploreItem[] | undefined;
   /** Called when the reader picks another tab (its bar, its keys, a tile that leads to one). */
@@ -711,6 +714,37 @@ function ViewScopes({
   );
 }
 
+/** What this trace adds to the waterfall's facets: its findings, queries, HTTP calls and records. */
+function ReportFacts({
+  trace,
+  findings,
+  calls,
+  logs,
+}: {
+  trace: Trace;
+  findings: readonly Issue[];
+  calls: Partial<Record<CallsTabId, SystemCalls>>;
+  logs: number;
+}) {
+  const host = useWaterfall();
+  const report = host?.report;
+  const of = (id: CallsTabId) => {
+    const each = calls[id];
+    if (!each) return { count: 0, us: 0, time: "" };
+    const us = onTheClock(each.spans);
+    return { count: each.spans.length, us, time: us > 0 ? callsTime(trace, each.spans) : "" };
+  };
+  const db = of("sql");
+  const http = of("http");
+  const key = `${findings.length}|${db.count}|${db.time}|${http.count}|${http.time}|${logs}`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` says when the facts changed.
+  useEffect(() => {
+    report?.(trace.id, { issues: findings.length, db, http, logs });
+  }, [key, report, trace.id]);
+  useEffect(() => () => report?.(trace.id, null), [report, trace.id]);
+  return null;
+}
+
 /** Tells the host the tab on screen whenever it changes, the first one too. */
 function useTabShown(active: TabId, onTabShown: ((tab: TabId) => void) | undefined): void {
   const told = useRef(onTabShown);
@@ -783,6 +817,7 @@ export function TraceView({
   initialMemory,
   onMemoryChange,
   variant = "full",
+  waterfall,
   // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
   ...held
 }: TraceViewProps) {
@@ -896,6 +931,39 @@ export function TraceView({
 
   const placed = placeExplore(exploreMenu, actions);
   const tabsBar = <Tabs label="Trace details" tabs={tabs} active={active} onChange={openTab} />;
+
+  if (variant === "waterfall") {
+    return (
+      <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
+        <UntracedCalls value={chain.untraced}>
+          <article className="dt-trace" data-variant="waterfall" data-trace={trace.id}>
+            <ReportFacts trace={trace} findings={tabbed.findings} calls={tabbed.calls} logs={chain.logs.length} />
+            <CallMap
+              trace={trace}
+              issueBySpan={tabbed.issueBySpan}
+              related={related}
+              reloadRelated={reloadRelated}
+              loadRelated={loadRelated}
+              links={links}
+              initialSpan={treeSpan}
+              explainOf={explainOf}
+              onTraceProfile={onTraceProfile ?? linkedProfiles(links)}
+              profilesIn={held.profilesIn}
+              expected={chain.members}
+              under={(under, subject) => (
+                <UnderThis
+                  counts={underCounts(chain.members, under, chain.chainIssues, chain.setScope, openTab)}
+                  subject={subject}
+                />
+              )}
+              depth={waterfall?.depth}
+              foldRoot={waterfall?.foldRoot}
+            />
+          </article>
+        </UntracedCalls>
+      </ViewScopes>
+    );
+  }
 
   // In the panel (either dock) the tabs carry the status and timings: one toolbar row, then the content.
   if (compact) {
