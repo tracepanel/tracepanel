@@ -859,23 +859,25 @@ function TabTimeline({
   const track = useRef<HTMLDivElement>(null);
   const width = useWidth(track);
   const all = onOneClock(rows);
-  const axis = pageAxis(all);
-  if (!axis || all.length < 2) return null;
-  const px = (us: number) => (us / axis.duration) * width;
-  const lanes = packLanes(all, axis, px);
-  const laneCount = Math.max(...lanes.values(), 0) + 1;
+  if (all.length < 2) return null;
+  const now = Date.now() * 1000;
+  const lasted = (row: TraceRow) =>
+    row.open || row.trace.id.startsWith("~") ? Math.max(now - row.trace.start, row.trace.duration) : row.trace.duration;
+  const cap = capOf(all.map(lasted));
+  const shown = (row: TraceRow) => Math.min(lasted(row), cap);
+  const start = Math.min(...all.map((row) => row.trace.start));
+  const end = Math.max(...all.map((row) => row.trace.start + shown(row)));
+  const axis = { start, duration: Math.max(end - start, 1) };
   return (
-    <div className="wf-band" style={{ "--wf-lanes": laneCount } as React.CSSProperties}>
+    <div className="wf-band">
       <div className="wf-band-track" ref={track}>
         {all.map((row) => {
           const left = ((row.trace.start - axis.start) / axis.duration) * 100;
+          const share = Math.min(Math.max((shown(row) / axis.duration) * 100, 0.4), 100 - Math.min(left, 99.6));
+          const capped = lasted(row) > cap;
+          const label = `${shortName(row)} ${duration(lasted(row))}`;
+          const fits = (share / 100) * width >= labelWidth(label);
           const running = row.open || row.trace.id.startsWith("~");
-          const lasted = running
-            ? Math.max(Date.now() * 1000 - row.trace.start, row.trace.duration)
-            : row.trace.duration;
-          const share = Math.min(Math.max((lasted / axis.duration) * 100, 0.3), 100 - Math.min(left, 99.7));
-          const label = `${shortName(row)} ${duration(row.trace.duration)}`;
-          const fits = px(row.trace.duration) >= labelWidth(label);
           const issues = row.trace.issues
             ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}`
             : "";
@@ -888,34 +890,34 @@ function TabTimeline({
               data-kind={row.trace.kind}
               data-depth={row.depth ?? 0}
               data-failed={row.trace.status === "error" ? "" : undefined}
+              data-capped={capped ? "" : undefined}
               aria-current={entryKey(row) === openKey ? "true" : undefined}
               aria-label={`Open ${row.trace.name}`}
               title={
                 running
-                  ? `${row.trace.name} · running for ${duration(lasted)}`
-                  : `${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}`
+                  ? `${row.trace.name} · running for ${duration(lasted(row))}`
+                  : `${row.trace.name}${status} · ${duration(row.trace.duration)}${issues}${capped ? " (drawn shorter)" : ""}`
               }
-              style={{
-                left: `${Math.min(left, 99.7)}%`,
-                width: `${share}%`,
-                top: `${(lanes.get(row) ?? 0) * 18}px`,
-              }}
+              style={{ left: `${Math.min(left, 99.6)}%`, width: `${share}%` }}
               onClick={() => onOpen(row)}
             >
               {fits ? label : null}
             </button>
           );
         })}
-        <span className="wf-band-ticks" aria-hidden="true">
-          {ticks(axis).map((tick) => (
-            <span key={tick.at} style={{ left: `${tick.at * 100}%` }}>
-              {tick.label}
-            </span>
-          ))}
-        </span>
       </div>
     </div>
   );
+}
+
+/**
+ * The longest a block is drawn in the band: an outlier (a 31 s request among 200 ms ones) about as long as the next
+ * longest (a quarter more), so the others keep their room; it says so with a break mark at its end.
+ */
+function capOf(durations: readonly number[]): number {
+  const sorted = [...durations].sort((a, b) => b - a);
+  const [first = 0, second = 0] = sorted;
+  return second > 0 && first > second * 2 ? second * 1.25 : Number.POSITIVE_INFINITY;
 }
 
 /** An entry's identity in the list: several entries may share a trace (fetches carrying the page's trace). */
@@ -932,21 +934,6 @@ function shortName(row: TraceRow): string {
 /** About how wide a label is in the band's 10.5px type (px). */
 function labelWidth(label: string): number {
   return label.length * 6 + 12;
-}
-
-/** Lanes for the band's blocks: a block goes on the first lane where nothing overlaps it (its label included). */
-function packLanes(rows: readonly TraceRow[], axis: Axis, px: (us: number) => number): Map<TraceRow, number> {
-  const ends: number[] = [];
-  const lanes = new Map<TraceRow, number>();
-  for (const row of [...rows].sort((a, b) => a.trace.start - b.trace.start)) {
-    const start = px(row.trace.start - axis.start);
-    const end = start + Math.max(px(row.trace.duration), 4);
-    const lane = ends.findIndex((each) => each <= start);
-    const at = lane === -1 ? ends.length : lane;
-    ends[at] = end + 2;
-    lanes.set(row, Math.min(at, 3));
-  }
-  return lanes;
 }
 
 /** A page or request of the tab, folded to one line (name, status, time): a click opens it here, on its own time. */

@@ -85,7 +85,7 @@ function Headline({ node, trace, onClose }: { node: Node; trace: Trace; onClose:
       : node.type === "task"
         ? node.run.duration
         : node.type === "group"
-          ? node.spans.reduce((all, span) => all + span.duration, 0)
+          ? node.end - node.start
           : null;
   return (
     <header className="dt-wf-details-head">
@@ -198,7 +198,11 @@ export function WaterfallDetails({
       {root ? profile ? null : <SplitBar trace={trace} /> : <HopSplit node={node} />}
       {found.length > 0 ? (
         <section className="dt-wf-section">
-          <IssueList issues={found} onShowSpans={(ids) => ids[0] && onShow(String(ids[0]))} />
+          <IssueList
+            issues={found}
+            // The spans an issue points at are this row or right under it: no link to what is on screen.
+            onShowSpans={pointsHere(node) ? undefined : (ids) => ids[0] && onShow(String(ids[0]))}
+          />
         </section>
       ) : null}
       {totals ? <TotalsLine facts={totals} /> : null}
@@ -212,7 +216,7 @@ export function WaterfallDetails({
       {profile ? (
         <section className="dt-wf-section dt-wf-profile">
           <header className="flex items-center justify-between">
-            <h4>Profile · {profileScope ?? "the whole trace"}</h4>
+            <h4>Profile of {profileScope ?? "the whole trace"}</h4>
             <button
               type="button"
               className="dt-wf-link"
@@ -277,4 +281,9 @@ export function RangeDetails({ trace, windows }: { trace: Trace; windows: Window
       ) : null}
     </div>
   );
+}
+
+/** A query or a group of them: its issue's spans are the row itself and its repeats. */
+function pointsHere(node: Node): boolean {
+  return node.type === "group" || (node.type === "span" && node.span.kind === "sql");
 }

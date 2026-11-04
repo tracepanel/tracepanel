@@ -3981,3 +3981,27 @@ div.dt-map-row[data-kind="code"] {
   /* Over the paragraph's `flex` utility, a layer above this file's. */
   display: none !important;
 }
+/* ---------- round 8: the details in sentence case, one profile title, real targets ---------- */
+.dt-wf-section h4 {
+  color: var(--dt-text-2);
+  font-size: var(--dt-size-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* The profile's own title ("Profile of the whole trace") under the section's says it again. */
+.dt-wf-profile [class~="gap-0.5"] > .text-xs:first-child {
+  display: none !important;
+}
+/* Links and copy buttons in the details: 24px to hit, whatever they look. */
+.dt-wf-details :is(.dt-wf-link, .dt-issue-card button, [data-slot="copy"], button[aria-label^="Copy"]) {
+  position: relative;
+}
+.dt-wf-details :is(.dt-wf-link, .dt-issue-card button, [data-slot="copy"], button[aria-label^="Copy"])::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+:root[data-theme="light"] .wf-panel {
+  --muted-foreground: #5d6475;
+}

@@ -24,6 +24,7 @@ import { windowProfile } from "./lib/windowProfile";
 import { RowFlame } from "./ProfileHint";
 import { KindBadge, TaskName } from "./primitives";
 import type { Span, Trace } from "./types";
+import { useAxis } from "./Waterfall";
 
 /** A code row shows unless other shares are picked, or a range it doesn't overlap. */
 function codeShown(quiet: Quiet, category: Category, ctx: RowContext): boolean {
@@ -117,23 +118,31 @@ function CodeBars({
   trace: Trace;
   owner: Trace;
 }) {
-  const total = Math.max(trace.duration, 1);
+  // On the axis the rows are drawn on (the waterfall's), else the trace's own time.
+  const axis = useAxis(trace);
+  const total = Math.max(axis.duration, 1);
   // A call's trace's pieces are of its own time: on this trace's from where it starts on this one's clock.
-  const offset = owner.start - trace.start;
+  const offset = owner.start - axis.start;
   return (
     <span className="dt-map-track" aria-hidden="true">
       {part.pieces
         .filter((piece) => piece.to - piece.from >= total * 0.004)
-        .map((piece) => (
-          <span
-            key={piece.from}
-            className="dt-map-bar"
-            data-quiet=""
-            data-waiting={piece.waiting ? "" : undefined}
-            data-category={category}
-            style={{ left: widthOf(piece.from + offset, total), width: widthOf(piece.to - piece.from, total) }}
-          />
-        ))}
+        .map((piece) => {
+          // A piece begun before the axis does: the part on it.
+          const from = Math.max(piece.from + offset, 0);
+          const to = piece.to + offset;
+          if (to <= from) return null;
+          return (
+            <span
+              key={piece.from}
+              className="dt-map-bar"
+              data-quiet=""
+              data-waiting={piece.waiting ? "" : undefined}
+              data-category={category}
+              style={{ left: widthOf(from, total), width: widthOf(to - from, total) }}
+            />
+          );
+        })}
     </span>
   );
 }

@@ -3391,3 +3391,80 @@ button.wf-crumb:hover {
   .dt-kind {
   color: #5b2fc9;
 }
+/* ---------- round 8 ---------- */
+/* The band: one lane, 28px with its padding; an outlier drawn shorter ends in a break mark. */
+.wf-band {
+  padding: 6px 12px;
+}
+.wf-band-track {
+  height: 16px;
+}
+.wf-band-block,
+.wf-band-block[data-depth="0"] {
+  top: 0;
+  height: 16px;
+}
+.wf-band-block[data-depth="0"] {
+  z-index: 0;
+}
+.wf-band-block[data-depth="1"] {
+  z-index: 1;
+}
+.wf-band-block[data-capped]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  background: repeating-linear-gradient(-60deg, transparent 0 3px, var(--dt-panel) 3px 5px);
+}
+.wf-band-ticks {
+  display: none;
+}
+/* Names 45% by default in the bottom dock. */
+.wf-panel {
+  --wf-cols: minmax(0, min(var(--wf-names, 45%), calc(100% - 14rem))) minmax(12rem, 1fr);
+}
+/* An issue chip never cut mid-word: its icon alone when its name cell is tight. */
+.dt-map[data-waterfall] .dt-map-row > .dt-map-name {
+  container: wf-name / inline-size;
+}
+.dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind] {
+  flex: none;
+}
+@container wf-name (max-width: 20rem) {
+  .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind] {
+    min-width: 0 !important;
+    width: 17px !important;
+    padding: 0 !important;
+    justify-content: center;
+  }
+  .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind] > span {
+    display: none;
+  }
+  .dt-map[data-waterfall] .dt-map-name [data-slot="badge"][data-kind]::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background: currentColor;
+    mask:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+  .dt-map[data-waterfall] .dt-alias,
+  .dt-map[data-waterfall] .dt-app-name {
+    display: none;
+  }
+}
+/* A group: its repeats' stretch faint, their starts as ticks over it. */
+.dt-map[data-waterfall] .dt-map-bar[data-range] {
+  top: 11px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--dt-k) 30%, transparent);
+}
+.dt-map[data-waterfall] .dt-map-bar[data-tick] {
+  width: 1px;
+  min-width: 1px;
+}

@@ -250,7 +250,7 @@ function WaterfallRows({
               profile={profileFor(found.node, found.trace, profileOf)}
               profileScope={
                 found.node.type === "span" && found.node.served?.whole?.profile
-                  ? `this call (${appName(found.node.served) ?? "its app"})`
+                  ? `this call · ${appName(found.node.served) ?? "its app"}`
                   : "the whole trace"
               }
               onOpen={

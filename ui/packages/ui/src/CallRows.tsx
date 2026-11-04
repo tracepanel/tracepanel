@@ -559,8 +559,13 @@ function groupTimes(node: Extract<Node, { type: "group" }>): string {
 /** Where each call of a group started, on the request's timeline. */
 function GroupTicks({ spans, trace, within }: { spans: readonly Span[]; trace: Trace; within: Within | undefined }) {
   const axis = useAxis(trace);
+  // The repeats' whole stretch, faint, under their ticks: where they ran, from the first's start to the last's end.
+  const first = Math.min(...spans.map((span) => span.start));
+  const last = Math.max(...spans.map((span) => span.start + span.duration));
+  const range = barPlace(axis, first, last - first);
   return (
     <span className="dt-map-track" aria-hidden="true">
+      <span className="dt-map-bar" data-range="" style={range.style} />
       {spans.map((span) => {
         const [at] = clipped(span.start, 0, within);
         const left = Math.min(Math.max(((at - axis.start) / Math.max(axis.duration, 1)) * 100, 0), 100);
