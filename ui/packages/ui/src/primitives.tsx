@@ -326,15 +326,18 @@ export function KindBadge({
   kind,
   muted = false,
   className,
+  title,
 }: {
   kind: string;
   muted?: boolean | undefined;
   className?: string | undefined;
+  /** What a short word stands for, on hover. */
+  title?: string | undefined;
 }) {
   // A call's kind is its own word (a span may be a "command"); a trace's in short.
   const word = muted ? kind : shortKind(kind);
   return (
-    <span className={cn("dt-kind", className)} data-muted={muted ? "" : undefined}>
+    <span className={cn("dt-kind", className)} data-muted={muted ? "" : undefined} title={title}>
       {word}
     </span>
   );

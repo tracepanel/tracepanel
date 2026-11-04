@@ -35,7 +35,7 @@ import type { TraceLinks } from "./links";
 import { SideResize, useSideWidth } from "./SideResize";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { IssueKind, Related, Span, Trace } from "./types";
-import { marksWhere, named, ofKind, useWaterfall, type WaterfallHost, within } from "./Waterfall";
+import { marksWhere, ofKind, useWaterfall, type WaterfallHost, within } from "./Waterfall";
 import { RangeDetails, WaterfallDetails } from "./WaterfallDetails";
 
 /** From this width of the call tree its details open beside it; narrower, under their row. */
@@ -174,18 +174,13 @@ function hostSelection(host: WaterfallHost, traceId: string) {
 }
 
 /**
- * The rows the filter keeps (its text and kind; their ancestors dimmed), and those outside the stretch dragged across
+ * The rows of the kind kept (their ancestors dimmed), and those outside the stretch dragged across
  * the bars dimmed: nothing hidden for the stretch, only faded.
  */
-function waterfallMarks(
-  tree: readonly Node[],
-  host: WaterfallHost,
-  issues: ReadonlyMap<string, IssueKind>,
-): Map<string, Mark> | undefined {
-  const { filter, kind, range, axis } = host;
-  if (!(filter || kind || range)) return undefined;
-  const keep = (node: Node) => (!filter || named(node, filter)) && (!kind || ofKind(node, kind, issues));
-  const marks: Map<string, Mark> = filter || kind ? marksWhere(tree, keep) : marksWhere(tree, () => true);
+function waterfallMarks(tree: readonly Node[], host: WaterfallHost): Map<string, Mark> | undefined {
+  const { kind, range, axis } = host;
+  if (!(kind || range)) return undefined;
+  const marks: Map<string, Mark> = marksWhere(tree, (node) => !kind || ofKind(node, kind));
   if (!(range && axis)) return marks;
   const [from, to] = [axis.start + range.from, axis.start + range.to];
   const all = (nodes: readonly Node[]) => {
@@ -214,7 +209,9 @@ function WaterfallRows({
   depth,
   details,
   selected,
+  profileOf,
 }: {
+  profileOf: ((trace: Trace) => ReactNode) | undefined;
   host: WaterfallHost;
   tree: Node[];
   trace: Trace;
@@ -223,10 +220,7 @@ function WaterfallRows({
   details: ReactNode;
   selected: string | null;
 }) {
-  const marks = useMemo(
-    () => waterfallMarks(tree, host, ctx.issueBySpan) ?? ctx.marks,
-    [tree, host, ctx.issueBySpan, ctx.marks],
-  );
+  const marks = useMemo(() => waterfallMarks(tree, host) ?? ctx.marks, [tree, host, ctx.marks]);
   const found = selected ? findNode(tree, selected, trace) : undefined;
   const windows = windowsIn(host, trace);
   const facts = host.facts.get(trace.id);
@@ -241,6 +235,7 @@ function WaterfallRows({
               node={found.node}
               trace={found.trace}
               totals={found.node.type === "span" && found.node.span.parent_id === null ? facts : undefined}
+              profile={found.trace.profile ? profileOf?.(found.trace) : undefined}
               onClose={() => host.select(trace.id, null)}
               onShow={(key) => host.select(trace.id, key)}
             >
@@ -597,6 +592,8 @@ export function CallMap({
   /** In the waterfall: how deep its rows start (a page's requests under the page), its root row folded. */
   depth?: number | undefined;
   foldRoot?: boolean | undefined;
+  /** In the waterfall: a row's trace's profile, in its details. */
+  profileOf?: ((trace: Trace) => ReactNode) | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
@@ -659,6 +656,7 @@ export function CallMap({
         depth={wiring.depth ?? 0}
         details={details}
         selected={selected}
+        profileOf={wiring.profileOf}
       />
     );
   }

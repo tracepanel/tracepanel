@@ -3791,3 +3791,7 @@ div.dt-map-row[data-kind="code"] {
   filter: brightness(1.35);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--dt-text) 35%, transparent);
 }
+/* A request's query count is its details': not said again on its row. */
+.dt-map[data-waterfall] .dt-request-queries {
+  display: none;
+}

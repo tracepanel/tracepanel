@@ -343,7 +343,12 @@ function leafView(node: Extract<Node, { type: "log" | "error" }>) {
   }
   // A dump is a kind of its own, its badge and its line: printed to be looked at, not logged.
   if (isDump(node.log)) return { kind: "dump", level: "dump", time: node.log.time, text: "" };
-  return { kind: "log", level: node.log.level, time: node.log.time, text: withoutAnsi(node.log.message) };
+  return {
+    kind: "log",
+    level: node.log.level,
+    time: node.log.time,
+    text: withoutConsoleFormat(withoutAnsi(node.log.message)),
+  };
 }
 
 /** A leaf's badge: its level, muted, or a dump's own. */
@@ -356,6 +361,29 @@ function LeafBadge({ kind, level }: { kind: string; level: string }) {
 function LeafText({ node, text }: { node: Extract<Node, { type: "log" | "error" }>; text: string }) {
   if (node.type === "log" && isDump(node.log)) return <DumpLine log={node.log} className="dt-map-text" />;
   return <span className="dt-map-text">{text}</span>;
+}
+
+/**
+ * A browser console's format: `%c` and the CSS it takes as arguments ("font-weight: bold") are how it looked, not
+ * what it said.
+ */
+function withoutConsoleFormat(text: string): string {
+  if (!text.includes("%c")) return text;
+  return text
+    .replace(/%c/g, "")
+    .replace(/(\s+[a-z-]+\s*:\s*[^;]+;?)+\s*$/i, "")
+    .trim();
+}
+
+/** A record's time: when, since the request started; in the waterfall only on hover (its column says durations). */
+function LeafTime({ time, trace }: { time: number; trace: Trace }) {
+  const offset = `+${duration(Math.max(time - trace.start, 0))}`;
+  const waterfall = useWaterfall() !== null;
+  return (
+    <span className="dt-map-time" title={`Logged ${since(time, trace.start)} (${offset})`}>
+      {waterfall ? "" : offset}
+    </span>
+  );
 }
 
 /** A log record or an error: a point on the timeline, at its time since the request started. */
@@ -383,9 +411,7 @@ function LeafRow({
           <LeafText node={node} text={view.text} />
         </span>
         <Bar trace={ctx.trace} start={view.time} length={0} point={true} within={ctx.within} />
-        <span className="dt-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
-          +{duration(Math.max(view.time - ctx.trace.start, 0))}
-        </span>
+        <LeafTime time={view.time} trace={ctx.trace} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
     </>

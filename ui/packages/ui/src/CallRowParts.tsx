@@ -138,7 +138,10 @@ const PAST_MIN = 6;
  * Where a bar sits on the request's timeline. One that runs past its end (a task runs longer than the request that
  * enqueued it, or starts after it answered) runs to the right edge and fades out there (`past`).
  */
-export function barPlace(trace: Axis, start: number, length: number): { style: CSSProperties; past: "" | undefined } {
+export function barPlace(trace: Axis, begin: number, span: number): { style: CSSProperties; past: "" | undefined } {
+  // Begun before the axis does (the waterfall's axis starts where the work does): the part on the axis.
+  const start = Math.max(begin, trace.start);
+  const length = Math.max(span - (start - begin), 0);
   const total = Math.max(trace.duration, 1);
   const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100 - PAST_MIN);
   const past = start + length > trace.start + total;
@@ -216,9 +219,15 @@ const OP = /^([A-Z][A-Z_]+)( .*)$/;
 export function OpText({ text, kind, className }: { text: string; kind: string | undefined; className?: string }) {
   const op = OP.exec(text);
   const classes = className ? `dt-map-text ${className}` : "dt-map-text";
-  if (!op) return <span className={classes}>{text}</span>;
+  if (!op) {
+    return (
+      <span className={classes} title={text}>
+        {text}
+      </span>
+    );
+  }
   return (
-    <span className={classes}>
+    <span className={classes} title={text}>
       <span className="dt-map-op" data-method={kind === "http.client" ? op[1] : undefined}>
         {op[1]}
       </span>
@@ -360,7 +369,7 @@ export function SpanFold({
   return (
     <>
       <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-      <KindBadge kind={short} muted={true} className="dt-map-kind" />
+      <KindBadge kind={short} muted={true} className="dt-map-kind" title={short === kind ? undefined : kind} />
     </>
   );
 }

@@ -2724,3 +2724,27 @@ button.wf-crumb:hover {
 .wf-call-head > .wf-filter {
   overflow: hidden;
 }
+/* The kinds of spans to keep: one segmented control at the names' left edge; Follow and Clear at the row's end. */
+.wf-call-head > .wf-kinds {
+  height: 1.75rem;
+  padding: 2px;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-subtle);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.wf-call-head > .wf-kinds .wf-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  height: 100%;
+  padding: 0 0.5rem;
+}
+.wf-kind-count {
+  color: var(--dt-warn);
+  font-variant-numeric: tabular-nums;
+}
+.wf-call-head > .wf-follow {
+  margin-left: auto;
+}

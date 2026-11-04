@@ -23,6 +23,7 @@ import { CallMap } from "./CallMap";
 import type { ProfilesIn, TraceProfileOpener } from "./CallRowParts";
 import type { Explain, ExplainOf } from "./CallTable";
 import { ScopedCalls, ScopedIssues } from "./ChainTabs";
+import { rootOf } from "./callTree";
 import { Button } from "./components/ui/button";
 import {
   DropdownMenu,
@@ -735,11 +736,14 @@ function ReportFacts({
   findings,
   calls,
   logs,
+  anchor,
 }: {
   trace: Trace;
   findings: readonly Issue[];
   calls: Partial<Record<CallsTabId, SystemCalls>>;
   logs: number;
+  /** Where the page's list has the trace start, on the page's clock. */
+  anchor?: number | undefined;
 }) {
   const host = useWaterfall();
   const report = host?.report;
@@ -751,10 +755,13 @@ function ReportFacts({
   };
   const db = of("sql");
   const http = of("http");
-  const key = `${findings.length}|${db.count}|${db.time}|${http.count}|${http.time}|${logs}`;
+  // Where its work starts, on the page's clock: its first span under its root (a page's first request).
+  const firsts = trace.spans.filter((span) => span.parent_id !== null).map((span) => span.start);
+  const work = (firsts.length ? Math.min(...firsts) : trace.start) + ((anchor ?? trace.start) - trace.start);
+  const key = `${findings.length}|${db.count}|${db.time}|${http.count}|${http.time}|${logs}|${work}`;
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` says when the facts changed.
   useEffect(() => {
-    report?.(trace.id, { issues: findings.length, db, http, logs });
+    report?.(trace.id, { issues: findings.length, db, http, logs, work });
   }, [key, report, trace.id]);
   useEffect(() => () => report?.(trace.id, null), [report, trace.id]);
   return null;
@@ -954,7 +961,13 @@ export function TraceView({
         <UntracedCalls value={chain.untraced}>
           <WaterfallContext.Provider value={onClock}>
             <article className="dt-trace" data-variant="waterfall" data-trace={trace.id}>
-              <ReportFacts trace={trace} findings={tabbed.findings} calls={tabbed.calls} logs={chain.logs.length} />
+              <ReportFacts
+                trace={trace}
+                findings={tabbed.findings}
+                calls={tabbed.calls}
+                logs={chain.logs.length}
+                anchor={waterfall?.anchor}
+              />
               <CallMap
                 trace={trace}
                 issueBySpan={tabbed.issueBySpan}
@@ -967,14 +980,17 @@ export function TraceView({
                 onTraceProfile={onTraceProfile ?? linkedProfiles(links)}
                 profilesIn={held.profilesIn}
                 expected={chain.members}
-                under={(under, subject) => (
-                  <UnderThis
-                    counts={underCounts(chain.members, under, chain.chainIssues, chain.setScope, openTab)}
-                    subject={subject}
-                  />
-                )}
                 depth={waterfall?.depth}
                 foldRoot={waterfall?.foldRoot}
+                onProfile={trace.profile ? () => onClock?.select(trace.id, rootOf(trace)) : undefined}
+                profileOf={(each) => (
+                  <ProfileTab
+                    trace={each}
+                    open={true}
+                    chain={chain}
+                    onShowRow={(row) => onClock?.select(trace.id, row)}
+                  />
+                )}
               />
             </article>
           </WaterfallContext.Provider>

@@ -53,11 +53,11 @@ function servedIssues(node: Node): Issue[] {
 }
 
 /** The row's queries, by statement: how many, how long all told. */
-function queriesOf(spans: readonly Span[]): { name: string; count: number; us: number }[] {
-  const by = new Map<string, { name: string; count: number; us: number }>();
+function queriesOf(spans: readonly Span[]): { name: string; count: number; us: number; first: string }[] {
+  const by = new Map<string, { name: string; count: number; us: number; first: string }>();
   for (const span of spans) {
     if (span.kind !== "sql") continue;
-    const entry = by.get(span.name) ?? { name: span.name, count: 0, us: 0 };
+    const entry = by.get(span.name) ?? { name: span.name, count: 0, us: 0, first: span.id };
     entry.count += 1;
     entry.us += span.duration;
     by.set(span.name, entry);
@@ -93,6 +93,7 @@ export function WaterfallDetails({
   onClose,
   onShow,
   totals,
+  profile,
   children,
 }: {
   node: Node;
@@ -101,6 +102,8 @@ export function WaterfallDetails({
   onShow: (key: string) => void;
   /** A trace's root row: its totals, said here once (the toolbar has none). */
   totals?: WaterfallFacts | undefined;
+  /** The row's trace's profile, where it has one: its bar and flame. */
+  profile?: ReactNode;
   children: ReactNode;
 }) {
   const crumb = crumbOf(node);
@@ -118,8 +121,6 @@ export function WaterfallDetails({
           <CloseIcon />
         </button>
       </header>
-      <HopSplit node={node} />
-      {totals ? <Totals facts={totals} /> : null}
       {found.length > 0 ? (
         <section className="dt-wf-section">
           <h4>
@@ -128,6 +129,9 @@ export function WaterfallDetails({
           <IssueList issues={found} onShowSpans={(ids) => ids[0] && onShow(String(ids[0]))} />
         </section>
       ) : null}
+      <HopSplit node={node} />
+      {profile ? <section className="dt-wf-section">{profile}</section> : null}
+      {totals ? <Totals facts={{ ...totals, issues: found.length }} /> : null}
       {queries.length > 0 ? (
         <section className="dt-wf-section">
           <h4>
@@ -144,12 +148,20 @@ export function WaterfallDetails({
                   <span style={{ width: `${(query.us / longest) * 100}%` }} />
                 </span>
                 <span className="dt-wf-query-time">{duration(query.us)}</span>
+                <button type="button" className="dt-wf-link" onClick={() => onShow(query.first)}>
+                  Explain
+                </button>
               </li>
             ))}
           </ul>
         </section>
       ) : null}
-      <section className="dt-wf-own">{children}</section>
+      <details className="dt-wf-more">
+        <summary>
+          {node.type === "span" && (node.served || node.span.parent_id === null) ? "Request details" : "Details"}
+        </summary>
+        <section className="dt-wf-own">{children}</section>
+      </details>
     </div>
   );
 }

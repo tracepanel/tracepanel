@@ -1,5 +1,5 @@
 // The panel's one waterfall (redesign A, a prototype): the page's traces as rows on one time axis, each opening into
-// its call tree; one selection across them, its details in one pane; a filter by text and kind over all the rows; a
+// its call tree; one selection across them, its details in one pane; a kind of spans to keep over all the rows; a
 // stretch of time dragged across the bars. The host (the panel) holds this state; each trace's rows read it here.
 import { createContext, useContext } from "react";
 import type { Node } from "./callTree";
@@ -16,10 +16,12 @@ export interface WaterfallFacts {
   db: { count: number; us: number; time: string };
   http: { count: number; us: number; time: string };
   logs: number;
+  /** Where its work starts (µs, on the page's clock): the axis may start there. */
+  work: number;
 }
 
 /** The kinds of rows the filter can keep. */
-export type RowKind = "sql" | "http" | "logs" | "issues";
+export type RowKind = "sql" | "http" | "logs";
 
 /** A stretch of the axis (µs since the axis starts). */
 export interface Stretch {
@@ -33,7 +35,6 @@ export interface WaterfallHost {
   select: (trace: string, key: string | null) => void;
   /** Where the selected row's details go: one pane for every trace's rows. */
   details: HTMLElement | null;
-  filter: string;
   kind: RowKind | null;
   /** The stretch dragged across the bars; the rows outside it dim, the details say what is in it. */
   range: Stretch | null;
@@ -112,20 +113,12 @@ export function marksWhere(nodes: readonly Node[], keep: (node: Node) => boolean
   return marks;
 }
 
-/** Whether a row's name has the text. */
-export function named(node: Node, text: string): boolean {
-  return nameOf(node).toLowerCase().includes(text.toLowerCase());
-}
-
-/** Whether a row is of a kind: a query, an HTTP call, a log record, one with an issue. */
-export function ofKind(node: Node, kind: RowKind, issues: ReadonlyMap<string, unknown>): boolean {
+/** Whether a row is of a kind: a query, an HTTP call, a log record. */
+export function ofKind(node: Node, kind: RowKind): boolean {
   if (kind === "logs") return node.type === "log" || node.type === "error";
   const spans = node.type === "span" ? [node.span] : node.type === "group" ? node.spans : [];
   if (kind === "sql") return spans.some((span) => span.kind === "sql");
-  if (kind === "http")
-    return spans.some((span) => span.kind === "http.client") || (node.type === "span" && !!node.served);
-  const served = node.type === "span" ? (node.served?.run.issue_kinds.length ?? 0) > 0 : false;
-  return served || spans.some((span) => issues.has(span.id));
+  return spans.some((span) => span.kind === "http.client") || (node.type === "span" && !!node.served);
 }
 
 /** Whether a row overlaps a stretch of its trace's clock (µs). */
@@ -140,13 +133,4 @@ function kids(node: Node): readonly Node[] {
   if (node.type === "span" || node.type === "task") return node.children;
   if (node.type === "group") return node.members;
   return [];
-}
-
-function nameOf(node: Node): string {
-  if (node.type === "span") return `${node.span.name} ${node.served?.run.name ?? ""}`;
-  if (node.type === "group") return node.spans[0]?.name ?? "";
-  if (node.type === "task") return node.run.name;
-  if (node.type === "log") return node.log.message;
-  if (node.type === "error") return `${node.error.type} ${node.error.message}`;
-  return node.span.name;
 }
