@@ -27,9 +27,12 @@ test("the Profile tab says how much it sampled, what it couldn't, and waiting as
   await expect(
     page.getByText("500 ms not sampled: other traces ran on the same thread, filled in from the samples around it"),
   ).toBeVisible();
+  // Each share said, the smallest too: the query's 18 ms and the 2 ms before the first sample.
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
     /^Your code\s*100 ms\s*6%$/,
-    /^Waiting\s*1\.5 s\s*94%$/,
+    /^Database\s*18 ms\s*1%$/,
+    /^Not profiled\s*2 ms\s*<1%$/,
+    /^Waiting\s*1\.5 s\s*93%$/,
   ]);
 });
 
@@ -163,9 +166,12 @@ test("All frames says which of its functions waited, as Your code does: their ti
   await page.getByRole("tab", { name: "All frames" }).click();
   const functions = page.getByRole("region", { name: "Functions" });
 
+  // Each share said, the smallest too: the query's 18 ms and the 2 ms before the first sample.
   await expect(page.getByRole("region", { name: "Time by package" }).getByRole("button")).toHaveText([
     /^Your code\s*100 ms\s*6%$/,
-    /^Waiting\s*1\.5 s\s*94%$/,
+    /^Database\s*18 ms\s*1%$/,
+    /^Not profiled\s*2 ms\s*<1%$/,
+    /^Waiting\s*1\.5 s\s*93%$/,
   ]);
   await expect(functions.getByText(/^waiting · sleep$/)).toBeVisible();
   await expect(functions.getByText(/^render_digest$/)).toBeVisible();

@@ -71,20 +71,19 @@ test("in the panel, dark, the strip lights the same way", async ({ page }) => {
   await checkStrip(panel(page));
 });
 
-test("the Profile tab's package bar lights a package in its own colour with its legend item, both ways", async ({
-  page,
-}) => {
+test("the Profile tab's bar lights a share in its own colour with its legend item, both ways", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("GET /reports/sales")}?tab=profile`);
   await page.getByRole("tab", { name: "All frames" }).click();
   const packages = page.getByRole("region", { name: "Time by package" });
   const segments = packages.locator(".dt-share-bar > span");
   await segments.nth(1).hover();
 
-  await expect(packages.locator(".dt-share[data-lit]")).toHaveText([/^django\.template/]);
+  // The strip's shares in either view: Your code, then GC.
+  await expect(packages.locator(".dt-share[data-lit]")).toHaveText([/^GC/]);
   for (const { ring, fill } of await rings(packages.locator(".dt-share-bar > span[data-lit]"))) expect(ring).toBe(fill);
 
   await packages.getByRole("button", { name: /^Your code/ }).hover();
 
-  await expect(segments.last()).toHaveAttribute("data-lit", "");
+  await expect(segments.first()).toHaveAttribute("data-lit", "");
   await expect(packages.locator(".dt-share-bar > span[data-lit]")).toHaveCount(1);
 });

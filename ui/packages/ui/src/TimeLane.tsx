@@ -3,10 +3,10 @@ import { partOfCategory } from "./callTree";
 import { duration } from "./format";
 import type { Category, Stretch } from "./lib/breakdown";
 import { GC } from "./lib/memory";
+import { WAITING } from "./lib/profile";
 import { quietSpans } from "./lib/quiet";
 import type { TimeRange } from "./lib/slice";
 import { type Segment, segmentsOf } from "./lib/timeShares";
-import { WAITED_SHARE } from "./lib/waitingShare";
 import { litKey } from "./lit";
 import { type ShareOf, ShareTip, sharesOf, TIP_CLASS } from "./TimeLegend";
 import type { Trace } from "./types";
@@ -44,7 +44,7 @@ function hoverAt(event: PointerEvent<HTMLDivElement>): Hover | null {
   if (!over) return null;
   return {
     // A wait is waiting's share, whichever span's own time it is.
-    category: "waiting" in over.dataset ? WAITED_SHARE : (over.dataset["category"] ?? ""),
+    category: "waiting" in over.dataset ? WAITING : (over.dataset["category"] ?? ""),
     x: event.clientX - event.currentTarget.getBoundingClientRect().left,
   };
 }
@@ -107,7 +107,7 @@ function drawnOf(trace: Trace): Drawn[] {
 /** A segment as the lane draws it: a wait in its span's colour, hatched; a pause in GC's. */
 function pieceOf(segment: Segment, quiet: ReadonlyMap<string, unknown>): Drawn {
   const gc = segment.share === GC;
-  const waiting = segment.share === WAITED_SHARE;
+  const waiting = segment.share === WAITING;
   const category = gc || waiting ? segment.category : (segment.share as Category);
   return {
     stretch: { from: segment.from, to: segment.to, category, quiet: segment.quiet, span: segment.span },
@@ -162,7 +162,7 @@ function quietLabel(lane: Lane, each: Drawn): string {
 /** The share a piece of the lane counts in: the collector's, waiting's, or its category's. */
 function shareOf(each: Drawn): string {
   if (each.gc) return GC;
-  return each.waiting ? WAITED_SHARE : each.stretch.category;
+  return each.waiting ? WAITING : each.stretch.category;
 }
 
 /**

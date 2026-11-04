@@ -15,8 +15,9 @@ import { answers, callAnswer, cutLength } from "./lib/callAnswer";
 import { GC } from "./lib/memory";
 import type { Profile } from "./lib/profile";
 import { isShown, overlaps, type Slice, type TimeRange, togglePart } from "./lib/slice";
+import { wholeWindows } from "./lib/split";
 import { DATASTORES, MESSAGING, RPC } from "./lib/systems";
-import { timed } from "./lib/waiting";
+import { readable } from "./lib/timeShares";
 import { litKey, litScope } from "./lit";
 import { rangeIn, TimeLane } from "./TimeLane";
 import { TimeLegend } from "./TimeLegend";
@@ -376,10 +377,10 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined, pro
   };
   return {
     slice,
-    // The profile at a stretch of the code's own time, where the profile says when its samples were taken: the
-    // Profile tab's own stretch, not a range of the call tree's.
+    // The profile at a stretch of the code's own time, where its time can be split by the profile (lib/split): the
+    // Profile tab's own stretch, in whole µs as a code row's, not a range of the call tree's.
     openProfile: (range: TimeRange | undefined) => {
-      if (range && timed(profile)) profileAt([range]);
+      if (range && readable(profile)) profileAt(wholeWindows([range]));
       onSelect?.({ tab: "profile" });
     },
     onRange: (range: TimeRange | null) => pick({ ...slice, range }, range !== null),

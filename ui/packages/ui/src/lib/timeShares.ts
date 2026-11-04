@@ -3,13 +3,11 @@
 // say what ran when (a query is the database's time, a pause the collector's); in a span's own code, a timed profile
 // says, bucket by bucket, how much of it waited, ran your code, or ran only the framework's. One rule, so a row, its
 // profile and the strip give the same time for the same stretch. Plain data, no React.
-import type { Span, Trace } from "../types";
+import type { Trace } from "../types";
 import { type Category, categoryLabel, stretches } from "./breakdown";
 import { cutByPauses, GC, gcPauses } from "./memory";
-import { apportion } from "./percent";
-import { type Frame, type Profile, runsYours, type ShareFrame, type Stack, WAITING } from "./profile";
+import { type Profile, runsYours, type Stack, WAITING } from "./profile";
 import type { TimeRange, Windows } from "./slice";
-import { callLabel, waitFrame } from "./waitCalls";
 import { bucketStacks, type Timed, timed, waits } from "./waiting";
 
 /**
@@ -22,7 +20,7 @@ export const NOT_PROFILED = "unprofiled";
 export type Share = Category | typeof GC | typeof WAITING | typeof NOT_PROFILED;
 
 /** The categories whose time is the code's own: a profile splits it into its waits and what ran. */
-const OWN_CODE: ReadonlySet<string> = new Set<Category>(["code", "django", "signal", "template"]);
+export const OWN_CODE: ReadonlySet<string> = new Set<Category>(["code", "django", "signal", "template"]);
 
 /** A trace as its shares read it. */
 export type Shared = Pick<Trace, "start" | "duration" | "spans" | "attrs" | "profile"> & { kind?: string };
@@ -88,11 +86,13 @@ function bucketSegments(
   profile: Timed | null,
   stacks: ReadonlyMap<number, number> | undefined,
   bucket: number,
+  unsampled: boolean,
 ): Segment[] {
   const plain: Share = gc ? GC : base.category;
   if (!(profile && stacks?.size)) {
-    // With a timed profile, a span's own code it didn't sample is said so: not your code's, nor the framework's.
-    const share = profile && !gc && OWN_CODE.has(base.category) ? NOT_PROFILED : plain;
+    // Where a profile could say and has no samples, a span's own code is said so: not your code's, nor the
+    // framework's. Spans say the rest (a call's time, the collector's).
+    const share = unsampled && !gc && OWN_CODE.has(base.category) ? NOT_PROFILED : plain;
     return [{ ...base, from, to, share, stacks: null }];
   }
   if (gc || !OWN_CODE.has(base.category)) {
@@ -113,14 +113,21 @@ function bucketSegments(
 
 const SEGMENTS = new WeakMap<object, Segment[]>();
 
+/** A profile with no samples at all (a Go request shorter than its profiler's tick): it says when nothing ran. */
+function empty(profile: Profile | undefined): boolean {
+  return profile?.stacks.every((stack) => stack.count <= 0) ?? false;
+}
+
 /**
  * The trace's time in segments, in order: each span's stretches (the deepest span running), the collector's pauses
- * cut out as GC's, and, with a timed profile, each bucket of a span's own code in its parts (ownParts).
+ * cut out as GC's, and, with a timed profile, each bucket of a span's own code in its parts (ownParts). With a profile
+ * that has no samples, a span's own code is not profiled; the spans say the rest.
  */
 export function segmentsOf(trace: Shared): Segment[] {
   const known = SEGMENTS.get(trace);
   if (known) return known;
   const profile = timed(trace.profile) ? trace.profile : null;
+  const unsampled = profile !== null || empty(trace.profile);
   const buckets = profile ? bucketStacks(profile, trace.duration) : new Map<number, ReadonlyMap<number, number>>();
   const pauses = gcPauses(trace.profile, trace.duration);
   const segments = stretches(trace as Trace).flatMap((stretch) => {
@@ -128,9 +135,9 @@ export function segmentsOf(trace: Shared): Segment[] {
     return cutByPauses(stretch.from, stretch.to, pauses).flatMap(({ range, gc }) =>
       profile
         ? byBucket(range, profile.bucket_us).flatMap(([part, bucket]) =>
-            bucketSegments(base, part, gc, profile, buckets.get(bucket), bucket),
+            bucketSegments(base, part, gc, profile, buckets.get(bucket), bucket, unsampled),
           )
-        : bucketSegments(base, range, gc, null, undefined, 0),
+        : bucketSegments(base, range, gc, null, undefined, 0, unsampled),
     );
   });
   SEGMENTS.set(trace, segments);
@@ -145,46 +152,6 @@ function byBucket([from, to]: TimeRange, width: number): [TimeRange, number][] {
     if (part[1] > part[0]) parts.push([part, bucket]);
   }
   return parts;
-}
-
-/** How much of a segment the windows take (all of it with none). */
-function taken(segment: Segment, windows: Windows | null): number {
-  if (windows === null) return segment.to - segment.from;
-  return windows.reduce(
-    (sum, [from, to]) => sum + Math.max(Math.min(segment.to, to) - Math.max(segment.from, from), 0),
-    0,
-  );
-}
-
-/**
- * The step a time is said in (format's duration): a tenth of a second from a second on, a millisecond from one, a
- * tenth of one, else a microsecond.
- */
-export function displayStep(us: number): number {
-  if (Math.round(us / 1000) >= 1000) return 100_000;
-  if (us >= 1000) return 1000;
-  return us >= 100 ? 100 : 1;
-}
-
-/** Times as said: rounded to the step their total is said in, adding up to that total as said. */
-export function rounded<K>(times: ReadonlyMap<K, number>): Map<K, number> {
-  const total = [...times.values()].reduce((sum, us) => sum + us, 0);
-  const step = displayStep(total);
-  const parts = apportion([...times.values()], step, Math.round(total / step));
-  return new Map([...times.keys()].map((key, at) => [key, parts[at] ?? 0]));
-}
-
-/**
- * The time of each share (µs), of the whole trace or of the windows, as said: rounded so the shares add up to their
- * total (rounded). What the strip's legend and the Profile tab's bar say.
- */
-export function shareTimes(trace: Shared, windows: Windows | null = null): Map<Share, number> {
-  const times = new Map<Share, number>();
-  for (const segment of segmentsOf(trace)) {
-    const time = taken(segment, windows);
-    if (time > 0) times.set(segment.share, (times.get(segment.share) ?? 0) + time);
-  }
-  return rounded(times);
 }
 
 /** The segments of a span's own time: what its code rows are, its waits and the rest, GC's left to GC. */
@@ -211,145 +178,15 @@ export function shareLabel(share: Share): string {
   return categoryLabel(share);
 }
 
-/** The frame a segment's time goes under in a profile, where its share isn't the code's own or a wait. */
-function frameOf(segment: Segment, byId: ReadonlyMap<string, Span>): ShareFrame | null {
-  if (segment.share === "code" || segment.share === WAITING) return null;
-  const share = shareLabel(segment.share);
-  const span = byId.get(segment.span);
-  const call =
-    segment.share !== GC && segment.share !== NOT_PROFILED && !OWN_CODE.has(segment.share) && span ? span : null;
-  return {
-    function: call ? callLabel(call) : share,
-    module: null,
-    file: "",
-    line: 0,
-    // biome-ignore lint/style/useNamingConvention: a frame as the SDKs send it.
-    in_app: false,
-    share,
-    category: segment.share,
-    ...(call ? { calls: [call.id] } : {}),
-  };
+/** A trace with a profile its time can be read by: a timed one, or one with no samples (the spans say it all). */
+export type Readable = Shared & { profile: Profile };
+
+/** Whether a trace's time can be read by this profile: a timed one, or one with no samples. */
+export function readable(profile: Profile | undefined): profile is Profile {
+  return timed(profile) || empty(profile);
 }
 
-/** A profile's frames with more of the console's own added, each once: where a frame is, added if new. */
-function frameTable(profile: Profile): { frames: Frame[]; frameAt: (frame: Frame) => number } {
-  const frames: Frame[] = [...profile.frames];
-  const index = new Map<string, number>();
-  const frameAt = (frame: Frame): number => {
-    const key = JSON.stringify(frame);
-    const found = index.get(key);
-    if (found !== undefined) return found;
-    index.set(key, frames.length);
-    return frames.push(frame) - 1;
-  };
-  return { frames, frameAt };
-}
-
-/** A stack's time in a profile of windows, before it is rounded: its share's, by bucket (µs). */
-interface Timing {
-  frames: number[];
-  share: Share;
-  us: number;
-  at: Map<number, number>;
-}
-
-/** A stack seen for `us` in a bucket, added to the stacks by its frames. */
-function addStack(stacks: Map<string, Timing>, path: number[], share: Share, us: number, bucket: number): void {
-  const key = path.join(",");
-  const found = stacks.get(key) ?? { frames: path, share, us: 0, at: new Map<number, number>() };
-  found.us += us;
-  found.at.set(bucket, (found.at.get(bucket) ?? 0) + us);
-  stacks.set(key, found);
-}
-
-/**
- * The stacks as said (in samples of `interval`): the shares rounded as shareTimes rounds them, each share's stacks
- * rounded to add up to it, so every sum of them said (a share, a function's own time, all of it) adds up as said.
- */
-function roundedStacks(timings: readonly Timing[], interval: number): Stack[] {
-  const byShare = new Map<Share, Timing[]>();
-  for (const timing of timings) byShare.set(timing.share, [...(byShare.get(timing.share) ?? []), timing]);
-  const shares = rounded(new Map([...byShare].map(([share, list]) => [share, sum(list.map((each) => each.us))])));
-  const total = [...shares.values()].reduce((all, us) => all + us, 0);
-  const step = displayStep(total);
-  return [...byShare].flatMap(([share, list]) => {
-    const parts = apportion(
-      list.map((each) => each.us),
-      step,
-      Math.round((shares.get(share) ?? 0) / step),
-    );
-    return list.flatMap((each, at): Stack[] => {
-      const us = parts[at] ?? 0;
-      if (us <= 0) return [];
-      const scale = us / each.us / interval;
-      return [
-        { frames: each.frames, count: us / interval, at: [...each.at].map(([bucket, seen]) => [bucket, seen * scale]) },
-      ];
-    });
-  });
-}
-
-function sum(values: readonly number[]): number {
-  return values.reduce((all, value) => all + value, 0);
-}
-
-/**
- * A stack's frames in a segment: under its share's frame (a call's, the collector's, the framework's); a wait, in
- * Your code (`named`), with its waiting frame named by what waited.
- */
-function pathIn(
-  profile: Profile,
-  stack: Stack,
-  share: number | null,
-  named: boolean,
-  frameAt: (frame: Frame) => number,
-): number[] {
-  if (share !== null) return [...stack.frames, share];
-  const leaf = profile.frames[stack.frames.at(-1) ?? -1];
-  if (!(named && leaf?.waiting)) return stack.frames;
-  const wait = waitFrame(leaf.function === WAITING ? null : leaf.function);
-  return [...stack.frames.slice(0, -1), frameAt(wait)];
-}
-
-/**
- * The profile of the trace's time, or of the windows', as its shares have it: each segment's stacks for as much of
- * it as the windows take, a call's, the collector's or the framework's time under a frame of that share (ShareFrame).
- * `named`: Your code's, its waits named by the frame that waited ("waiting · waiter.acquire"). Counted in samples of
- * the profile's interval, so its numbers read as the strip's and the call tree's.
- */
-export function windowProfile(trace: Shared & { profile: Timed }, windows: Windows | null, named = false): Profile {
-  const { profile } = trace;
-  const byId = new Map(trace.spans.map((span) => [span.id, span]));
-  const { frames, frameAt } = frameTable(profile);
-  const timings = new Map<string, Timing>();
-  for (const segment of segmentsOf(trace)) {
-    const time = taken(segment, windows);
-    if (time <= 0) continue;
-    const frame = frameOf(segment, byId);
-    const share = frame ? frameAt(frame) : null;
-    const bucket = Math.floor(segment.from / profile.bucket_us);
-    // Time the profile has no samples of is its share's all the same (a call's, the collector's, not profiled), as
-    // the strip says it: under that share's frame alone.
-    if (!segment.stacks) {
-      if (share !== null) addStack(timings, [share], segment.share, time, bucket);
-      continue;
-    }
-    const part = time / (segment.to - segment.from);
-    for (const [at, us] of segment.stacks) {
-      const path = pathIn(profile, profile.stacks[at] as Stack, share, named, frameAt);
-      addStack(timings, path, segment.share, us * part, bucket);
-    }
-  }
-  const list = roundedStacks([...timings.values()], profile.interval_us);
-  return { ...profile, frames, stacks: list, samples: sum(list.map((stack) => stack.count)) };
-}
-
-/** How much of the trace's time (or the windows') a timed profile sampled: the segments it has stacks for (µs). */
-export function profiledTime(trace: Shared, windows: Windows | null): number {
-  return segmentsOf(trace).reduce((sum, segment) => sum + (segment.stacks ? taken(segment, windows) : 0), 0);
-}
-
-/** Whether the trace's time can be split by its profile: a timed one. */
-export function splitByProfile(trace: Shared): trace is Shared & { profile: Timed } {
-  return timed(trace.profile);
+/** Whether the trace's time can be read by its profile (readable). */
+export function splitByProfile(trace: Shared): trace is Readable {
+  return readable(trace.profile);
 }
