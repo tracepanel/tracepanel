@@ -259,7 +259,198 @@
         "Waiting",
         40000
       ]
-    ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 350000,
+      "shares": [
+        [
+          "External calls",
+          150000,
+          "150 ms",
+          "43%"
+        ],
+        [
+          "Not profiled",
+          100000,
+          "100 ms",
+          "29%"
+        ],
+        [
+          "Database",
+          60000,
+          "60 ms",
+          "17%"
+        ],
+        [
+          "Waiting",
+          40000,
+          "40 ms",
+          "11%"
+        ]
+      ],
+      "profiled": 250000,
+      "samples": 25,
+      "sampled": "25 samples, one every 10 ms"
+    },
+    "stretches": [
+      {
+        "windows": [
+          [
+            0,
+            100000
+          ]
+        ],
+        "split": {
+          "of": "0 – 100 ms",
+          "windows": [
+            [
+              0,
+              100000
+            ]
+          ],
+          "total": 100000,
+          "shares": [
+            [
+              "Not profiled",
+              100000,
+              "100 ms",
+              "100%"
+            ]
+          ],
+          "profiled": 0,
+          "samples": 0,
+          "sampled": "0 samples, one every 10 ms"
+        }
+      },
+      {
+        "windows": [
+          [
+            310000,
+            350000
+          ]
+        ],
+        "split": {
+          "of": "310 ms – 350 ms",
+          "windows": [
+            [
+              310000,
+              350000
+            ]
+          ],
+          "total": 40000,
+          "shares": [
+            [
+              "Waiting",
+              40000,
+              "40 ms",
+              "100%"
+            ]
+          ],
+          "profiled": 40000,
+          "samples": 4,
+          "sampled": "4 samples, one every 10 ms"
+        }
+      },
+      {
+        "windows": [
+          [
+            0,
+            100000
+          ],
+          [
+            310000,
+            350000
+          ]
+        ],
+        "split": {
+          "of": "0 – 100 ms, 310 ms – 350 ms",
+          "windows": [
+            [
+              0,
+              100000
+            ],
+            [
+              310000,
+              350000
+            ]
+          ],
+          "total": 140000,
+          "shares": [
+            [
+              "Not profiled",
+              100000,
+              "100 ms",
+              "71%"
+            ],
+            [
+              "Waiting",
+              40000,
+              "40 ms",
+              "29%"
+            ]
+          ],
+          "profiled": 40000,
+          "samples": 4,
+          "sampled": "4 samples, one every 10 ms"
+        }
+      }
+    ],
+    "app": {
+      "cases": [
+        "Python: a query, then an HTTP call, then a sleep with nothing in flight",
+        "Python: a query and a Redis command at once: each moment the latest call's, a wait with no call running waiting's",
+        "Python: a query, then an HTTP call, then a sleep with nothing in flight",
+        "Python: a query, then an HTTP call, then a sleep with nothing in flight"
+      ],
+      "split": {
+        "of": "4 traces",
+        "windows": null,
+        "total": 1250000,
+        "shares": [
+          [
+            "External calls",
+            510000,
+            "510 ms",
+            "41%"
+          ],
+          [
+            "Not profiled",
+            300000,
+            "300 ms",
+            "24%"
+          ],
+          [
+            "Database",
+            220000,
+            "220 ms",
+            "17%"
+          ],
+          [
+            "Redis",
+            60000,
+            "60 ms",
+            "5%"
+          ],
+          [
+            "Your code",
+            20000,
+            "20 ms",
+            "2%"
+          ],
+          [
+            "Waiting",
+            140000,
+            "140 ms",
+            "11%"
+          ]
+        ],
+        "profiled": 950000,
+        "samples": 93,
+        "sampled": "93 samples, one every 10 ms"
+      }
+    }
   },
   {
     "name": "a JVM virtual thread parked on its JDBC query",
@@ -440,7 +631,35 @@
         "Database",
         60000
       ]
-    ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 360000,
+      "shares": [
+        [
+          "Not profiled",
+          200000,
+          "200 ms",
+          "55%"
+        ],
+        [
+          "Your code",
+          100000,
+          "100 ms",
+          "28%"
+        ],
+        [
+          "Database",
+          60000,
+          "60 ms",
+          "17%"
+        ]
+      ],
+      "profiled": 160000,
+      "samples": 16,
+      "sampled": "16 samples, one every 10 ms"
+    }
   },
   {
     "name": "Python: a query and a Redis command at once: each moment the latest call's, a wait with no call running waiting's",
@@ -664,7 +883,47 @@
         "Your code",
         20000
       ]
-    ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 200000,
+      "shares": [
+        [
+          "Redis",
+          60000,
+          "60 ms",
+          "30%"
+        ],
+        [
+          "External calls",
+          60000,
+          "60 ms",
+          "30%"
+        ],
+        [
+          "Database",
+          40000,
+          "40 ms",
+          "20%"
+        ],
+        [
+          "Your code",
+          20000,
+          "20 ms",
+          "10%"
+        ],
+        [
+          "Waiting",
+          20000,
+          "20 ms",
+          "10%"
+        ]
+      ],
+      "profiled": 200000,
+      "samples": 18,
+      "sampled": "18 samples, one every 10 ms"
+    }
   },
   {
     "name": "Go: a CPU profile placed at ingest: its samples over the code's own time, the rest waiting off the CPU; a query the database's",
@@ -959,7 +1218,41 @@
         "External calls",
         10000
       ]
-    ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 99000,
+      "shares": [
+        [
+          "Your code",
+          28000,
+          "28 ms",
+          "28%"
+        ],
+        [
+          "Database",
+          20000,
+          "20 ms",
+          "20%"
+        ],
+        [
+          "External calls",
+          10000,
+          "10 ms",
+          "10%"
+        ],
+        [
+          "Waiting",
+          41000,
+          "41 ms",
+          "42%"
+        ]
+      ],
+      "profiled": 99000,
+      "samples": 99,
+      "sampled": "30 samples of CPU time, one every 1 ms, spread evenly over your code's time, the rest of it waiting off the CPU (not sampled)"
+    }
   },
   {
     "name": "Node: the idle event loop's samples waiting; a query the database's, the router's code the framework's",
@@ -1123,7 +1416,41 @@
         "Framework & middleware",
         5000
       ]
-    ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 50000,
+      "shares": [
+        [
+          "Database",
+          20000,
+          "20 ms",
+          "40%"
+        ],
+        [
+          "Your code",
+          12000,
+          "12 ms",
+          "24%"
+        ],
+        [
+          "Framework & middleware",
+          5000,
+          "5 ms",
+          "10%"
+        ],
+        [
+          "Waiting",
+          13000,
+          "13 ms",
+          "26%"
+        ]
+      ],
+      "profiled": 50000,
+      "samples": 50,
+      "sampled": "50 samples, one every 1 ms"
+    }
   },
   {
     "name": "Node: app code in the request's root span after its handler's span ended is Your code, the router's the framework's",
@@ -1285,7 +1612,41 @@
         "Framework & middleware",
         8000
       ]
-    ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 40000,
+      "shares": [
+        [
+          "Your code",
+          13000,
+          "13 ms",
+          "33%"
+        ],
+        [
+          "Database",
+          10000,
+          "10 ms",
+          "25%"
+        ],
+        [
+          "Framework & middleware",
+          8000,
+          "8 ms",
+          "20%"
+        ],
+        [
+          "Waiting",
+          9000,
+          "9 ms",
+          "22%"
+        ]
+      ],
+      "profiled": 40000,
+      "samples": 40,
+      "sampled": "40 samples, one every 1 ms"
+    }
   },
   {
     "name": "Node: a task's function span with no calls, idle on the event loop: its buckets waiting's, its app code Your code",
@@ -1506,7 +1867,41 @@
         "Framework & middleware",
         2000
       ]
-    ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 137000,
+      "shares": [
+        [
+          "Your code",
+          3000,
+          "3 ms",
+          "2%"
+        ],
+        [
+          "Database",
+          3000,
+          "3 ms",
+          "2%"
+        ],
+        [
+          "Framework & middleware",
+          2000,
+          "2 ms",
+          "2%"
+        ],
+        [
+          "Waiting",
+          129000,
+          "129 ms",
+          "94%"
+        ]
+      ],
+      "profiled": 137000,
+      "samples": 102,
+      "sampled": "102 samples, one every 1 ms"
+    }
   },
   {
     "name": "Node: a profile of only the trace's last 5 ms (one sample, after its call): the trace's time by share is the strip's, the profile's the time it covers",
@@ -1683,6 +2078,906 @@
         "GC",
         1000
       ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 35000,
+      "shares": [
+        [
+          "External calls",
+          28000,
+          "28 ms",
+          "80%"
+        ],
+        [
+          "Not profiled",
+          3000,
+          "3 ms",
+          "9%"
+        ],
+        [
+          "Framework & middleware",
+          3000,
+          "3 ms",
+          "8%"
+        ],
+        [
+          "GC",
+          1000,
+          "1 ms",
+          "3%"
+        ]
+      ],
+      "profiled": 32000,
+      "samples": 1,
+      "sampled": "1 sample, one every 1 ms"
+    },
+    "app": {
+      "cases": [
+        "Node: a profile of only the trace's last 5 ms (one sample, after its call): the trace's time by share is the strip's, the profile's the time it covers",
+        "Node: the idle event loop's samples waiting; a query the database's, the router's code the framework's",
+        "Node: app code in the request's root span after its handler's span ended is Your code, the router's the framework's"
+      ],
+      "split": {
+        "of": "3 traces",
+        "windows": null,
+        "total": 125000,
+        "shares": [
+          [
+            "Database",
+            30000,
+            "30 ms",
+            "24%"
+          ],
+          [
+            "External calls",
+            28000,
+            "28 ms",
+            "22%"
+          ],
+          [
+            "Your code",
+            25000,
+            "25 ms",
+            "20%"
+          ],
+          [
+            "Framework & middleware",
+            16000,
+            "16 ms",
+            "13%"
+          ],
+          [
+            "Not profiled",
+            3000,
+            "3 ms",
+            "2%"
+          ],
+          [
+            "GC",
+            1000,
+            "1 ms",
+            "1%"
+          ],
+          [
+            "Waiting",
+            22000,
+            "22 ms",
+            "18%"
+          ]
+        ],
+        "profiled": 122000,
+        "samples": 91,
+        "sampled": "91 samples, one every 1 ms"
+      }
+    }
+  },
+  {
+    "name": "Go: a request over before its profiler's first tick: no samples, its spans say its time, its own code not profiled",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 2400,
+      "attrs": {
+        "telemetry.sdk.language": "go"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "task",
+          "name": "rank products",
+          "start": 1790000000000000,
+          "duration": 2400,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT product",
+          "start": 1790000000000300,
+          "duration": 1800,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 0,
+        "dropped": 0,
+        "frames": [],
+        "stacks": [],
+        "gc": {
+          "collections": 0,
+          "pause_us": 0,
+          "pauses": []
+        }
+      }
+    },
+    "waits": [
+      [
+        "SQL postgresql",
+        1800
+      ],
+      [
+        "Not profiled",
+        600
+      ]
+    ],
+    "shares": [
+      [
+        "Database",
+        1800
+      ],
+      [
+        "Not profiled",
+        600
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 2400,
+      "shares": [
+        [
+          "Database",
+          1800,
+          "2 ms",
+          "75%"
+        ],
+        [
+          "Not profiled",
+          600,
+          "0.6 ms",
+          "25%"
+        ]
+      ],
+      "profiled": 1800,
+      "samples": 0,
+      "sampled": "0 samples, one every 1 ms"
+    },
+    "stretches": [
+      {
+        "windows": [
+          [
+            0,
+            300
+          ],
+          [
+            2100,
+            2400
+          ]
+        ],
+        "split": {
+          "of": "0 – 0.3 ms, 2.1 ms – 2.4 ms",
+          "windows": [
+            [
+              0,
+              300
+            ],
+            [
+              2100,
+              2400
+            ]
+          ],
+          "total": 600,
+          "shares": [
+            [
+              "Not profiled",
+              600,
+              "0.6 ms",
+              "100%"
+            ]
+          ],
+          "profiled": 0,
+          "samples": 0,
+          "sampled": "0 samples, one every 1 ms"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Python: a profile that starts late, after the collector's pause: the pause GC's, the query the database's, the code's 27 µs before the first sample not profiled",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 123000,
+      "attrs": {
+        "telemetry.sdk.language": "python"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /orders",
+          "start": 1790000000000000,
+          "duration": 123000,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT orders",
+          "start": 1790000000030000,
+          "duration": 47000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 112,
+        "dropped": 0,
+        "bucket_us": 10000,
+        "frames": [
+          {
+            "function": "run",
+            "module": "uvicorn.server",
+            "file": "uvicorn/server.py",
+            "line": 60,
+            "in_app": false
+          },
+          {
+            "function": "list_orders",
+            "module": "shop.orders",
+            "file": "shop/orders.py",
+            "line": 12,
+            "in_app": true
+          },
+          {
+            "function": "select",
+            "module": "selectors",
+            "file": "selectors.py",
+            "line": 468,
+            "in_app": false,
+            "waiting": true
+          },
+          {
+            "function": "encode",
+            "module": "json.encoder",
+            "file": "json/encoder.py",
+            "line": 200,
+            "in_app": false
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              1,
+              2
+            ],
+            "count": 65,
+            "at": [
+              [
+                2,
+                10
+              ],
+              [
+                3,
+                10
+              ],
+              [
+                8,
+                9
+              ],
+              [
+                9,
+                9
+              ],
+              [
+                10,
+                9
+              ],
+              [
+                11,
+                9
+              ],
+              [
+                12,
+                9
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              1,
+              3
+            ],
+            "count": 24,
+            "at": [
+              [
+                4,
+                6
+              ],
+              [
+                5,
+                6
+              ],
+              [
+                6,
+                6
+              ],
+              [
+                7,
+                6
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0
+            ],
+            "count": 23,
+            "at": [
+              [
+                4,
+                4
+              ],
+              [
+                5,
+                4
+              ],
+              [
+                6,
+                4
+              ],
+              [
+                7,
+                4
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                9,
+                1
+              ],
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                12,
+                2
+              ]
+            ]
+          }
+        ],
+        "gc": {
+          "collections": 1,
+          "pause_us": 19973,
+          "pauses": [
+            [
+              27,
+              19973,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    "waits": [
+      [
+        "waiting · select",
+        48250
+      ],
+      [
+        "SQL postgresql",
+        47000
+      ],
+      [
+        "GC",
+        19973
+      ],
+      [
+        "Framework & middleware",
+        5950
+      ],
+      [
+        "Not profiled",
+        27
+      ]
+    ],
+    "shares": [
+      [
+        "Waiting",
+        48250
+      ],
+      [
+        "Database",
+        47000
+      ],
+      [
+        "GC",
+        19973
+      ],
+      [
+        "Framework & middleware",
+        5950
+      ],
+      [
+        "Your code",
+        1800
+      ],
+      [
+        "Not profiled",
+        27
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 123000,
+      "shares": [
+        [
+          "Database",
+          47000,
+          "47 ms",
+          "38%"
+        ],
+        [
+          "GC",
+          19973,
+          "20 ms",
+          "16%"
+        ],
+        [
+          "Framework & middleware",
+          5950,
+          "6 ms",
+          "5%"
+        ],
+        [
+          "Your code",
+          1800,
+          "2 ms",
+          "2%"
+        ],
+        [
+          "Not profiled",
+          27,
+          "27 µs",
+          "<1%"
+        ],
+        [
+          "Waiting",
+          48250,
+          "48 ms",
+          "39%"
+        ]
+      ],
+      "profiled": 122973,
+      "samples": 112,
+      "sampled": "112 samples, one every 1 ms"
+    },
+    "stretches": [
+      {
+        "windows": [
+          [
+            0,
+            27
+          ]
+        ],
+        "split": {
+          "of": "0 – 27 µs",
+          "windows": [
+            [
+              0,
+              27
+            ]
+          ],
+          "total": 27,
+          "shares": [
+            [
+              "Not profiled",
+              27,
+              "27 µs",
+              "100%"
+            ]
+          ],
+          "profiled": 0,
+          "samples": 0,
+          "sampled": "0 samples, one every 1 ms"
+        }
+      },
+      {
+        "windows": [
+          [
+            77000,
+            123000
+          ]
+        ],
+        "split": {
+          "of": "77 ms – 123 ms",
+          "windows": [
+            [
+              77000,
+              123000
+            ]
+          ],
+          "total": 46000,
+          "shares": [
+            [
+              "Framework & middleware",
+              6000,
+              "6 ms",
+              "13%"
+            ],
+            [
+              "Your code",
+              2000,
+              "2 ms",
+              "4%"
+            ],
+            [
+              "Waiting",
+              38000,
+              "38 ms",
+              "83%"
+            ]
+          ],
+          "profiled": 46000,
+          "samples": 47,
+          "sampled": "47 samples, one every 1 ms"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Java: a request's time by share, said once: the strip, the card, the Profile tab and get_profile read the same times and percents",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 14800,
+      "attrs": {
+        "telemetry.sdk.language": "java"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /api/catalog/products",
+          "start": 1790000000000000,
+          "duration": 14800,
+          "status": "ok",
+          "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT product",
+          "start": 1790000000005400,
+          "duration": 5300,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql"
+          }
+        }
+      ],
+      "profile": {
+        "interval_us": 1000,
+        "samples": 11,
+        "dropped": 0,
+        "bucket_us": 1000,
+        "frames": [
+          {
+            "function": "Thread.run",
+            "module": "java.lang",
+            "file": "java/lang/Thread.java",
+            "line": 1,
+            "in_app": false
+          },
+          {
+            "function": "CatalogController.listProducts",
+            "module": "shop.catalog",
+            "file": "shop/catalog/CatalogController.java",
+            "line": 90,
+            "in_app": true
+          },
+          {
+            "function": "VirtualThread.park",
+            "module": "java.lang",
+            "file": "java/lang/VirtualThread.java",
+            "line": 1,
+            "in_app": false,
+            "waiting": true
+          },
+          {
+            "function": "DispatcherServlet.doService",
+            "module": "org.springframework.web.servlet",
+            "file": "org/springframework/web/servlet/DispatcherServlet.java",
+            "line": 1,
+            "in_app": false
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              3,
+              1
+            ],
+            "count": 6,
+            "at": [
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              3,
+              1,
+              2
+            ],
+            "count": 3,
+            "at": [
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                1
+              ],
+              [
+                12,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              3
+            ],
+            "count": 2,
+            "at": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          }
+        ],
+        "gc": {
+          "collections": 1,
+          "pause_us": 600,
+          "pauses": [
+            [
+              3000,
+              600,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    "waits": [
+      [
+        "SQL postgresql",
+        5300
+      ],
+      [
+        "waiting · VirtualThread.park",
+        2300
+      ],
+      [
+        "Framework & middleware",
+        2000
+      ],
+      [
+        "GC",
+        600
+      ]
+    ],
+    "shares": [
+      [
+        "Database",
+        5300
+      ],
+      [
+        "Your code",
+        4600
+      ],
+      [
+        "Waiting",
+        2300
+      ],
+      [
+        "Framework & middleware",
+        2000
+      ],
+      [
+        "GC",
+        600
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 14800,
+      "shares": [
+        [
+          "Database",
+          5300,
+          "5 ms",
+          "36%"
+        ],
+        [
+          "Your code",
+          4600,
+          "5 ms",
+          "31%"
+        ],
+        [
+          "Framework & middleware",
+          2000,
+          "2 ms",
+          "13%"
+        ],
+        [
+          "GC",
+          600,
+          "0.6 ms",
+          "4%"
+        ],
+        [
+          "Waiting",
+          2300,
+          "2 ms",
+          "16%"
+        ]
+      ],
+      "profiled": 14800,
+      "samples": 11,
+      "sampled": "11 samples, one every 1 ms"
+    },
+    "stretches": [
+      {
+        "windows": [
+          [
+            1200,
+            3000
+          ],
+          [
+            3600,
+            5400
+          ]
+        ],
+        "split": {
+          "of": "1 ms – 3 ms, 4 ms – 5 ms",
+          "windows": [
+            [
+              1200,
+              3000
+            ],
+            [
+              3600,
+              5400
+            ]
+          ],
+          "total": 3600,
+          "shares": [
+            [
+              "Your code",
+              2800,
+              "3 ms",
+              "78%"
+            ],
+            [
+              "Framework & middleware",
+              800,
+              "0.8 ms",
+              "22%"
+            ]
+          ],
+          "profiled": 3600,
+          "samples": 4,
+          "sampled": "4 samples, one every 1 ms"
+        }
+      },
+      {
+        "windows": [
+          [
+            10700,
+            14800
+          ]
+        ],
+        "split": {
+          "of": "11 ms – 15 ms",
+          "windows": [
+            [
+              10700,
+              14800
+            ]
+          ],
+          "total": 4000,
+          "shares": [
+            [
+              "Your code",
+              2000,
+              "2 ms",
+              "50%"
+            ],
+            [
+              "Waiting",
+              2000,
+              "2 ms",
+              "50%"
+            ]
+          ],
+          "profiled": 4000,
+          "samples": 4,
+          "sampled": "4 samples, one every 1 ms"
+        }
+      }
     ]
   }
 ]
