@@ -210,4 +210,3 @@ pub fn stretches<'a>(doc: &Value, spans: &'a [Span<'a>]) -> Vec<Stretch<'a>> {
     }
     list
 }
-

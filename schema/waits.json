@@ -655,7 +655,51 @@
     ]
   },
   {
-    "name": "Go: its time off the CPU under the functions that made each call, named by them; the rest no call's",
+    "name": "Go: a CPU profile placed at ingest: its samples over the code's own time, the rest waiting off the CPU; a query the database's",
+    "sent": {
+      "interval_us": 1000,
+      "samples": 30,
+      "dropped": 0,
+      "frames": [
+        {
+          "function": "(*App).listProducts",
+          "module": "shop",
+          "file": "catalog.go",
+          "line": 10,
+          "in_app": true
+        },
+        {
+          "function": "(*App).similar",
+          "module": "shop",
+          "file": "similar.go",
+          "line": 5,
+          "in_app": true
+        },
+        {
+          "function": "editDistance",
+          "module": "shop",
+          "file": "similar.go",
+          "line": 40,
+          "in_app": true
+        }
+      ],
+      "stacks": [
+        {
+          "frames": [
+            0,
+            1,
+            2
+          ],
+          "count": 25
+        },
+        {
+          "frames": [
+            0
+          ],
+          "count": 5
+        }
+      ]
+    },
     "trace": {
       "start": 1790000000000000,
       "duration": 99000,
@@ -715,8 +759,10 @@
       ],
       "profile": {
         "interval_us": 1000,
-        "samples": 30,
+        "samples": 99,
         "dropped": 0,
+        "bucket_us": 10000,
+        "spread": true,
         "frames": [
           {
             "function": "(*App).listProducts",
@@ -738,6 +784,14 @@
             "file": "similar.go",
             "line": 40,
             "in_app": true
+          },
+          {
+            "function": "off CPU",
+            "module": null,
+            "file": "",
+            "line": 0,
+            "in_app": false,
+            "waiting": true
           }
         ],
         "stacks": [
@@ -747,35 +801,164 @@
               1,
               2
             ],
-            "count": 25
+            "count": 25,
+            "at": [
+              [
+                0,
+                2
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                5
+              ],
+              [
+                5,
+                4
+              ],
+              [
+                6,
+                3
+              ],
+              [
+                7,
+                3
+              ],
+              [
+                8,
+                4
+              ],
+              [
+                9,
+                3
+              ]
+            ]
           },
           {
             "frames": [
               0
             ],
-            "count": 5
+            "count": 5,
+            "at": [
+              [
+                2,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                6,
+                1
+              ],
+              [
+                7,
+                1
+              ],
+              [
+                9,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              3
+            ],
+            "count": 69,
+            "at": [
+              [
+                0,
+                8
+              ],
+              [
+                1,
+                10
+              ],
+              [
+                2,
+                8
+              ],
+              [
+                3,
+                5
+              ],
+              [
+                4,
+                10
+              ],
+              [
+                5,
+                5
+              ],
+              [
+                6,
+                6
+              ],
+              [
+                7,
+                6
+              ],
+              [
+                8,
+                6
+              ],
+              [
+                9,
+                5
+              ]
+            ]
           }
         ]
       }
     },
     "waits": [
       [
-        "waiting (no call)",
-        39000
+        "waiting · off CPU",
+        41000
       ],
       [
-        "waiting · SQL postgresql",
+        "SQL postgresql",
         20000
       ],
       [
-        "waiting · HTTP GET prices.internal",
+        "HTTP GET prices.internal",
         10000
+      ],
+      [
+        "Framework & middleware",
+        8000
       ]
     ],
-    "shares": []
+    "shares": [
+      [
+        "Waiting",
+        41000
+      ],
+      [
+        "Database",
+        20000
+      ],
+      [
+        "Your code",
+        20000
+      ],
+      [
+        "External calls",
+        10000
+      ],
+      [
+        "Framework & middleware",
+        8000
+      ]
+    ]
   },
   {
-    "name": "Node: off the CPU with no call made: no call's",
+    "name": "Node: the idle event loop's samples waiting; a query the database's, the router's code the framework's",
     "trace": {
       "start": 1790000000000000,
       "duration": 50000,
@@ -792,36 +975,150 @@
           "duration": 50000,
           "status": "ok",
           "attrs": {}
+        },
+        {
+          "id": "q",
+          "parent_id": "r",
+          "kind": "sql",
+          "name": "SELECT campaign",
+          "start": 1790000000010000,
+          "duration": 20000,
+          "status": "ok",
+          "attrs": {
+            "db.system": "postgresql",
+            "code.origin": "app/route.ts:9 in handler"
+          }
         }
       ],
       "profile": {
         "interval_us": 1000,
-        "samples": 20,
+        "samples": 50,
+        "dropped": 0,
+        "bucket_us": 10000,
         "frames": [
+          {
+            "function": "handle",
+            "module": null,
+            "file": "express/lib/router/layer.js",
+            "line": 86,
+            "in_app": false
+          },
           {
             "function": "handler",
             "module": null,
             "file": "app/route.ts",
             "line": 3,
             "in_app": true
+          },
+          {
+            "function": "event loop",
+            "module": null,
+            "file": "",
+            "line": 0,
+            "in_app": false,
+            "waiting": true
           }
         ],
         "stacks": [
           {
             "frames": [
+              0,
+              1
+            ],
+            "count": 12,
+            "at": [
+              [
+                0,
+                6
+              ],
+              [
+                3,
+                4
+              ],
+              [
+                4,
+                2
+              ]
+            ]
+          },
+          {
+            "frames": [
               0
             ],
-            "count": 20
+            "count": 5,
+            "at": [
+              [
+                0,
+                2
+              ],
+              [
+                4,
+                3
+              ]
+            ]
+          },
+          {
+            "frames": [
+              2
+            ],
+            "count": 33,
+            "at": [
+              [
+                0,
+                2
+              ],
+              [
+                1,
+                10
+              ],
+              [
+                2,
+                10
+              ],
+              [
+                3,
+                6
+              ],
+              [
+                4,
+                5
+              ]
+            ]
           }
         ]
       }
     },
     "waits": [
       [
-        "waiting (no call)",
-        30000
+        "SQL postgresql",
+        20000
+      ],
+      [
+        "waiting · event loop",
+        13000
+      ],
+      [
+        "Framework & middleware",
+        5000
       ]
     ],
-    "shares": []
+    "shares": [
+      [
+        "Database",
+        20000
+      ],
+      [
+        "Waiting",
+        13000
+      ],
+      [
+        "Your code",
+        12000
+      ],
+      [
+        "Framework & middleware",
+        5000
+      ]
+    ]
   }
 ]
