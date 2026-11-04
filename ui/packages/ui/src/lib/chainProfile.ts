@@ -2,7 +2,7 @@
 // what each adds up to. The Profile tab of a chain of calls draws them one under another on the chain's clock.
 
 import { type Memory, type Site, sitePlaces } from "./memory";
-import { type Frame, functions, type Profile, type Stack, shareFrame } from "./profile";
+import { FRAMEWORK, type Frame, functions, ownCode, type Profile, type Stack } from "./profile";
 import { type Member, type SpanScope, scopedParts } from "./scope";
 import type { Windows } from "./slice";
 
@@ -182,9 +182,14 @@ export function profileSums(profile: Profile): { time: number; waiting: number; 
   const waiting = profile.stacks
     .filter((stack) => profile.frames[stack.frames[stack.frames.length - 1] ?? -1]?.waiting)
     .reduce((sum, stack) => sum + stack.count, 0);
-  // A function's: a wait, a call's or the collector's time (a share's frame) is none.
-  const top = functions(profile).find((row) => !(row.frame.waiting || shareFrame(row.frame)))?.frame.function;
-  return { time: profile.samples * profile.interval_us, waiting: waiting * profile.interval_us, top };
+  // As Your code's list has it: its own functions, a call's, the collector's or the framework's time under that
+  // share's name (a BFF's "HTTP GET 127.0.0.1", not a 1 ms runtime frame under it); a wait is none.
+  const top = functions(ownCode(profile)).find((row) => !row.frame.waiting)?.frame.function;
+  return {
+    time: profile.samples * profile.interval_us,
+    waiting: waiting * profile.interval_us,
+    top: top === FRAMEWORK ? "Framework & runtime" : top,
+  };
 }
 
 /** What a memory adds up to: its peak, what it kept, the function that allocated most (its largest site's). */

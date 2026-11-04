@@ -35,8 +35,8 @@ test("a browser's view with no profile of its own: the Profile tab has each app'
   // A row an app, its numbers in columns: profiled, waiting, the function most time went in.
   await expect(sums(page)).toHaveCount(2);
   // The BFF's waits on its calls to the service are those calls' time, as its strip has it: not waiting, nor
-  // resolveAuthor's.
-  await expect(sums(page).nth(0).locator("td")).toHaveText(["shop-bff", "8 ms", "2 ms", "handleGraphql"]);
+  // resolveAuthor's. Most of its time went in them, as Your code's list says.
+  await expect(sums(page).nth(0).locator("td")).toHaveText(["shop-bff", "8 ms", "2 ms", "HTTP"]);
   await expect(sums(page).nth(1).locator("td")).toHaveText(["shop", "3 ms", "—", "get_author"]);
   await expect(section(page, "shop-bff")).toContainText("Profile of the whole trace");
   await expect(section(page, "shop")).toContainText("Profile of 3 traces");

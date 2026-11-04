@@ -100,6 +100,11 @@
   said "42.0 ms profiled of the trace's 41.6 ms", its stacks rounded to
   whole milliseconds, and "1 samples". It says "41.6 ms profiled of the
   trace's 41.6 ms" and "1 sample", and the Profile tab caps it the same way.
+- A timed profile's Profile tab opens on Your code, whose bar is the
+  strip's, however little of the time was your code's: a Node BFF's
+  opened on All frames. The profiles of a chain say where most of an
+  app's time went as Your code's list does ("HTTP GET 127.0.0.1"), not a
+  runtime function of 1 ms ("defaultPrepareStackTrace").
 
 ## 0.13.1 (2026-11-03)
 

@@ -178,3 +178,14 @@ test("over a chain, a code row's stretches open the BFF's profile of them, not t
   await expect(page.getByText("profiled of these stretches' 40 ms")).toBeVisible();
   await expect(page.getByRole("region", { name: "Profile of library-api", exact: true })).toHaveCount(0);
 });
+
+test("over a chain, the BFF opens on Your code and its sums name where most time went as Your code does", async ({
+  page,
+}) => {
+  await page.goto(`/#/t/${BFF}?tab=profile`);
+  const section = page.getByRole("region", { name: "Profile of library-bff", exact: true });
+  const sums = page.getByRole("table", { name: "What the profiles add up to" }).locator("tbody tr");
+
+  await expect(section.getByRole("tab", { name: "Your code" })).toHaveAttribute("aria-selected", "true");
+  await expect(sums.filter({ hasText: "library-bff" }).locator("td").nth(3)).toHaveText("HTTP GET 127.0.0.1");
+});

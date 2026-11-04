@@ -2,6 +2,7 @@
 // project's own code, every frame).
 import type { Trace } from "../types";
 import { packageOf as modulePackage } from "./packages";
+import { timed } from "./waiting";
 
 export type Profile = NonNullable<Trace["profile"]>;
 export type Frame = Profile["frames"][number];
@@ -208,11 +209,12 @@ export function allFrames(profile: Profile): Profile {
 }
 
 /**
- * Whether your code ran enough of the time it computed for the profile to open on it, as the time strip splits it
- * (lib/timeShares): its waits are no one's code (a Node task idle on its event loop is still yours to read), and a
- * profile that only waited opens on Your code too, which says so.
+ * Whether the profile opens on Your code. A timed one always does: its Your code is the time strip's split (lib/
+ * timeShares), whatever share is largest (a Node BFF's calls, its event loop). Else where your code ran enough of the
+ * time it computed: its waits are no one's code, and a profile that only waited opens on Your code too, which says so.
  */
 export function mostlyYours(profile: Profile): boolean {
+  if (timed(profile)) return true;
   const ran = profile.stacks.filter((stack) => profile.frames[stack.frames.at(-1) ?? -1]?.waiting !== true);
   const computed = ran.reduce((sum, stack) => sum + stack.count, 0);
   const yours = ran.filter((stack) => runsYours(profile, stack)).reduce((sum, stack) => sum + stack.count, 0);
