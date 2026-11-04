@@ -123,8 +123,14 @@ function hundred(shares) {
 const UNITS = { "µs": 1, ms: 1000, s: 1_000_000 };
 /** "47 ms" in µs. */
 function us(text) {
-  const found = /([\d.]+)\s*(µs|ms|s)\b/.exec(text ?? "");
-  return found ? Number(found[1]) * UNITS[found[2]] : Number.NaN;
+  const found = /([\d.,]+)\s*(µs|ms|s)\b/.exec(text ?? "");
+  return found ? Math.round(Number(found[1].replaceAll(",", "")) * UNITS[found[2]]) : Number.NaN;
+}
+
+/** Shares whose times, as written, don't add up to the total written: what's wrong, if anything. */
+function addsUp(shares, total) {
+  const sum = shares.reduce((all, share) => all + us(share.value), 0);
+  return shares.length === 0 || sum === us(total) ? null : `times as written add up to ${sum} µs, not ${total}`;
 }
 
 /** "Database 47 ms (38%) · Waiting 45 ms (37%)": get_profile's time by share. */
@@ -283,6 +289,8 @@ async function sweep(page, base, { id, profiled, readable }, mcp) {
     const cover = /^(?:≈ )?(\S+ (?:µs|ms|s)) profiled of .*? (\S+ (?:µs|ms|s))$/.exec(head.cover);
     if (!cover) problem(`${what} head reads "${head.cover}"`);
     else if (us(cover[1]) > us(cover[2])) problem(`${what} head says more profiled than its time: ${head.cover}`);
+    const sum = cover && addsUp(head.bar, cover[2]);
+    if (sum) problem(`${what} bar: ${sum} ${said(head.bar)}`);
     // The trace's own profile: the strip's shares, to the letter.
     const traces = head.traces ?? [id];
     const own = idsKey(traces) === id;
@@ -315,6 +323,8 @@ async function sweep(page, base, { id, profiled, readable }, mcp) {
     const of = /of (?:the stretch's|these stretches') (\S+ (?:µs|ms|s))$/.exec(head.cover);
     if (!of) problem(`row ${at} (${rows[at]}) opened "${head.title}": ${head.cover}`);
     else if (of[1] !== rows[at]) problem(`row ${at} says ${rows[at]}, its stretch ${of[1]}`);
+    const sum = of && addsUp(head.bar, of[1]);
+    if (sum) problem(`row ${at} stretch bar: ${sum} ${said(head.bar)}`);
     const wrongBar = hundred(head.bar);
     if (wrongBar) problem(`row ${at} stretch bar: ${wrongBar} ${said(head.bar)}`);
     const ends = head.title.replace(/^Profile of /, "").split(", ");
