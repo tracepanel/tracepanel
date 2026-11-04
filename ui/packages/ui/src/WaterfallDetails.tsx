@@ -123,7 +123,7 @@ export function WaterfallDetails({
       {found.length > 0 ? (
         <section className="dt-wf-section">
           <h4>
-            {found.length} {found.length === 1 ? "issue" : "issues"} in this call
+            {found.length} {found.length === 1 ? "issue" : "issues"} under this span
           </h4>
           <IssueList issues={found} onShowSpans={(ids) => ids[0] && onShow(String(ids[0]))} />
         </section>
@@ -211,7 +211,7 @@ export function RangeDetails({ trace, windows }: { trace: Trace; windows: Window
       {byKind.size ? (
         <section className="dt-wf-section">
           <h4>
-            {calls.length} {calls.length === 1 ? "call" : "calls"} in this stretch
+            {calls.length} {calls.length === 1 ? "span" : "spans"} in this stretch
           </h4>
           <p className="text-sm text-muted-foreground">
             {[...byKind].map(([kind, count]) => `${count} ${kind}`).join(" · ")}

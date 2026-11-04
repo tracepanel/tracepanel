@@ -200,7 +200,7 @@ const KINDS: { id: RowKind; label: string }[] = [
 /** The kinds of rows the filter keeps, inside its field: All, or one kind. No totals here: the root row has them. */
 function KindChips({ kind, onKind }: { kind: RowKind | null; onKind: (kind: RowKind | null) => void }) {
   return (
-    <span className="wf-kinds" role="radiogroup" aria-label="Kind of rows">
+    <span className="wf-kinds" role="radiogroup" aria-label="Kind of spans">
       {[{ id: null, label: "All" } as const, ...KINDS].map((each) => (
         // biome-ignore lint/a11y/useSemanticElements: chips in a field, not a form's radio buttons.
         <button
@@ -251,7 +251,7 @@ function IssueStepper({ count, onStep }: { count: number; onStep: (by: 1 | -1) =
 }
 
 const SHORTCUTS: readonly [string, string][] = [
-  ["Filter the calls", "/"],
+  ["Filter the spans", "/"],
   ["Next issue, previous issue", "] ["],
   ["Pick a stretch of time", "drag across the bars"],
   ["Let the stretch, the row, the panel go", "Esc"],
@@ -398,7 +398,7 @@ function NamesSplitter({
   return (
     <Splitter
       orientation="vertical"
-      label="Resize the call column"
+      label="Resize the span column"
       className="wf-splitter-names"
       value={value}
       fallback={() => (width() - rem(1) - rem(4.5) - 2 * rem(0.625)) * 0.4}
@@ -638,13 +638,13 @@ export function PanelA({ route }: { route: Route }) {
                     ticksRef={ticksRef}
                     filter={
                       <span className="wf-call-head">
-                        <label className="wf-filter" title="Filter the rows below (/)">
+                        <label className="wf-filter" title="Filter the spans below (/)">
                           <SearchIcon />
                           <input
                             ref={filterRef}
                             type="search"
-                            placeholder="Filter calls"
-                            aria-label="Filter calls"
+                            placeholder="Filter spans"
+                            aria-label="Filter spans"
                             value={host.filter}
                             onChange={(event) => setFilter(event.target.value)}
                             onKeyDown={(event) => {
