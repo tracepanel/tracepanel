@@ -4,6 +4,25 @@
 
 ### Fixed
 
+- Every view of a trace's time says it from one result, worked out once
+  for the trace or a stretch of it: the time strip's legend, the hover
+  card, the Profile tab's head and bar, a code row and the stretch it
+  opens, an app's sums in a chain, and the MCP server's get_profile. The
+  Profile tab's bar read 36% where the strip read 37%, its percents added
+  up to 87–99%, a stretch's bar to 93%. Now each share's time is rounded
+  once, to the step its smallest share is said in, so none is dropped (a
+  chain's "Framework & middleware 28 ms" no longer rounds away in 3.6 s),
+  the times add up to the total and the percents to 100%. A Go request
+  over before its profiler's first sample opens its Profile tab on the
+  strip's shares, its own code Not profiled, and its code rows open their
+  stretches. What a profile covers is the time less its Not profiled
+  share ("123 ms profiled of the trace's 123 ms", 27 µs Not profiled),
+  never more than the trace. The sample count is one line wherever it is
+  said, a stretch's its own ("4 samples, one every 1 ms", "1 sample").
+  A stretch whose ends read the same says them apart ("170.2 ms – 170.5
+  ms"). The hover card's "Most time" percent is of the time beside it, or
+  says it is of the server's. get_profile lists Not profiled as a share,
+  not as a function, and says its times as the console does.
 - A failed read of the store or a broken trace now answers with an error in
   the panel and the console. It read as no trace, so a call could say "not
   traced".
