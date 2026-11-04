@@ -20,14 +20,16 @@ import { crumbOf } from "./Waterfall";
 /** Every span under a row, in its trace and in the traces served for its calls. */
 function spansUnder(node: Node, trace: Trace): Span[] {
   if (node.type === "span") {
-    const ids = new Set([node.span.id]);
-    const out: Span[] = [node.span];
+    // Walked from the span down by its children, whatever order the trace lists its spans in.
+    const children = new Map<string, Span[]>();
     for (const span of trace.spans) {
-      if (span.parent_id && ids.has(span.parent_id)) {
-        ids.add(span.id);
-        out.push(span);
-      }
+      if (!span.parent_id) continue;
+      const list = children.get(span.parent_id) ?? [];
+      list.push(span);
+      children.set(span.parent_id, list);
     }
+    const out: Span[] = [node.span];
+    for (let at = 0; at < out.length; at += 1) out.push(...(children.get(out[at]?.id ?? "") ?? []));
     if (node.served?.whole) out.push(...node.served.whole.spans);
     for (const child of node.children) if (child.type !== "span") out.push(...spansUnder(child, trace));
     return out;
@@ -199,6 +201,7 @@ export function WaterfallDetails({
   profile,
   profileScope,
   explainable,
+  isRoot,
   children,
 }: {
   node: Node;
@@ -211,12 +214,15 @@ export function WaterfallDetails({
   profileScope?: string | undefined;
   /** Whether the row's app runs EXPLAIN (its query's details then have it). */
   explainable?: boolean | undefined;
+  /** The row is its trace's root (its parent, if any, in another app). */
+  isRoot?: boolean | undefined;
   children: ReactNode;
 }) {
   const spans = spansUnder(node, trace);
   const found = issuesUnder(node, trace, spans);
-  const root = node.type === "span" && node.span.parent_id === null;
-  const queries = requestish(node) ? queriesOf(spans) : [];
+  // The trace's own root (a remote parent or not): its request's issues, queries and split.
+  const root = isRoot ?? (node.type === "span" && node.span.parent_id === null);
+  const queries = requestish(node) || root ? queriesOf(spans) : [];
   const errors = errorsOf(node, trace);
   const main = mainLabel(node);
   // The row's categories, the non-empty ones: tabs where there are several, the one shown as is.
@@ -327,9 +333,12 @@ export function WaterfallDetails({
 const CATEGORY_OF = new Map<string, string>();
 
 /** Opens the next details of a span of this kind on this tab: a code row opens its span's Profile. */
-export function preferCategory(kind: string, id: string): void {
-  CATEGORY_OF.set(kind, id);
+export function preferCategory(_kind: string, id: string): void {
+  NEXT_TAB.id = id;
 }
+
+/** The tab the next details open on, once (a code row's click: its span's Profile). */
+const NEXT_TAB: { id: string | null } = { id: null };
 
 /** A span's badge word, as its row says it (a span's kind in short). */
 export function spanWord(span: Span, trace: Trace): string {
@@ -340,6 +349,12 @@ export function spanWord(span: Span, trace: Trace): string {
 function useCategory(kind: string, categories: readonly { id: string }[]): [string, (id: string) => void] {
   const [, redraw] = useState(0);
   const ids = categories.map((each) => each.id);
+  // Asked for once (a code row opened its span on Profile): kept for that kind from then on.
+  const asked = NEXT_TAB.id;
+  if (asked && ids.includes(asked)) {
+    NEXT_TAB.id = null;
+    CATEGORY_OF.set(kind, asked);
+  }
   const kept = CATEGORY_OF.get(kind);
   // The most useful by default: what broke, then its issues, then what the span is.
   const best = ["error", "issues", "main"].find((id) => ids.includes(id)) ?? ids[0] ?? "main";

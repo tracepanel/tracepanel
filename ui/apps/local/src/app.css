@@ -2779,52 +2779,6 @@ button.wf-crumb:hover {
 .wf-details {
   background: var(--dt-chrome);
 }
-/* The tab's timeline: one band on the shared grid, every page and request a block; a click opens one. */
-.wf-band {
-  height: 28px;
-  border-bottom: 1px solid var(--dt-border);
-}
-.wf-band-track {
-  position: relative;
-  height: 14px;
-  margin: 0 var(--wf-track-pad);
-  border-radius: 3px;
-  background: var(--dt-faint);
-}
-.wf-band-block {
-  position: absolute;
-  top: 3px;
-  height: 8px;
-  min-width: 3px;
-  border-radius: 2px;
-  background: var(--dt-k-http);
-  opacity: 0.75;
-  cursor: pointer;
-}
-.wf-band-block[data-depth="0"] {
-  top: 1px;
-  height: 12px;
-  background: color-mix(in srgb, var(--dt-k-view) 45%, transparent);
-}
-.wf-band-block[data-failed] {
-  background: var(--dt-error);
-}
-.wf-band-block:hover {
-  opacity: 1;
-  filter: brightness(1.25);
-  z-index: 2;
-}
-.wf-band-block::before {
-  content: "";
-  position: absolute;
-  inset: -6px -2px;
-}
-.wf-band-block[aria-current="true"] {
-  opacity: 1;
-  outline: 1.5px solid var(--dt-accent);
-  outline-offset: 1px;
-  z-index: 1;
-}
 
 /* ---------- round 6 ---------- */
 /* Docked right: names 60%, time 40%; an issue chip says its kind on hover only; no app chip (no room for its name). */
@@ -2869,71 +2823,6 @@ button.wf-crumb:hover {
   margin-right: var(--wf-track-pad);
 }
 
-/* The band: the tab's every page and request on one axis, named inline where the name fits; full width. */
-.wf-band {
-  height: auto;
-  padding: 8px 12px 4px;
-  border-bottom: 1px solid var(--dt-border);
-}
-.wf-band-track {
-  position: relative;
-  height: calc(var(--wf-lanes, 1) * 20px + 14px);
-  margin: 0;
-  background: none;
-}
-.wf-band-block {
-  top: 0;
-  height: 16px;
-  overflow: hidden;
-  padding: 0 6px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--dt-k-http) 22%, transparent);
-  box-shadow: inset 2px 0 0 var(--dt-k-http);
-  color: var(--dt-text);
-  font: 500 10.5px / 16px var(--dt-mono);
-  text-align: left;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  opacity: 1;
-}
-.wf-band-block[data-depth="0"] {
-  top: 0;
-  height: 16px;
-  background: color-mix(in srgb, var(--dt-k-view) 20%, transparent);
-  box-shadow: inset 2px 0 0 var(--dt-k-view);
-}
-.wf-band-block[data-failed] {
-  background: color-mix(in srgb, var(--dt-error) 20%, transparent);
-  box-shadow: inset 2px 0 0 var(--dt-error);
-}
-.wf-band-block:hover {
-  filter: brightness(1.3);
-}
-.wf-band-block[aria-current="true"] {
-  outline: 1.5px solid var(--dt-accent);
-  outline-offset: 0;
-}
-.wf-band-ticks {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 12px;
-  border-top: 1px solid var(--dt-border);
-  pointer-events: none;
-}
-.wf-band-ticks > span {
-  position: absolute;
-  top: 1px;
-  padding-left: 3px;
-  border-left: 1px solid var(--dt-border-strong);
-  color: var(--dt-text-3);
-  font-size: 9.5px;
-  line-height: 10px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 /* Kinds: plain text tabs on the head's baseline; the active one in the text's colour, underlined with the accent. */
 .wf-head {
   align-items: stretch;
@@ -2957,10 +2846,6 @@ button.wf-crumb:hover {
   border-radius: 3px;
   background: color-mix(in srgb, var(--dt-panel) 78%, transparent);
   color: var(--dt-text);
-}
-/* The band: three lanes at most, 14px each. */
-.wf-band-track {
-  height: calc(min(var(--wf-lanes, 1), 4) * 18px + 14px);
 }
 /* ---------- round 7: critique fixes ---------- */
 /* The name wins the row's room: the chips beside it give way first, the db alias goes when narrow. */
@@ -3025,37 +2910,6 @@ button.wf-crumb:hover {
   .dt-kind {
   color: #5b2fc9;
 }
-/* ---------- round 8 ---------- */
-/* The band: one lane, 28px with its padding; an outlier drawn shorter ends in a break mark. */
-.wf-band {
-  padding: 6px 12px;
-}
-.wf-band-track {
-  height: 16px;
-}
-.wf-band-block,
-.wf-band-block[data-depth="0"] {
-  top: 0;
-  height: 16px;
-}
-.wf-band-block[data-depth="0"] {
-  z-index: 0;
-}
-.wf-band-block[data-depth="1"] {
-  z-index: 1;
-}
-.wf-band-block[data-capped]::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 8px;
-  background: repeating-linear-gradient(-60deg, transparent 0 3px, var(--dt-panel) 3px 5px);
-}
-.wf-band-ticks {
-  display: none;
-}
 /* Names 45% by default in the bottom dock. */
 .wf-panel {
   --wf-cols: minmax(0, min(var(--wf-names, 45%), calc(100% - 14rem))) minmax(12rem, 1fr);
@@ -3114,22 +2968,6 @@ button.wf-crumb:hover {
 .wf-panel[data-dock="right"] .dt-map[data-waterfall] .dt-map-name[style] {
   padding-left: calc(12px + var(--dt-depth, 0) * 10px) !important;
 }
-/* Kind tabs: 24px wide to hit at least. */
-/* The band: two lanes of 12px when blocks overlap; a failed one on top. */
-.wf-band[data-lanes="2"] {
-  padding-block: 3px;
-}
-.wf-band[data-lanes="2"] .wf-band-track {
-  height: 21px;
-}
-.wf-band[data-lanes="2"] .wf-band-block {
-  height: 10px;
-  font-size: 9px;
-  line-height: 10px;
-}
-.wf-band-block[data-failed] {
-  z-index: 2;
-}
 /* The details' kind tag looks as the row's does, in both themes. */
 .dt-wf-details-head :is(.dt-kind, .dt-method) {
   min-width: 30px;
@@ -3160,9 +2998,6 @@ button.wf-crumb:hover {
 .wf-band-block[data-hovered] {
   background-color: var(--dt-hover);
   outline: 1px solid var(--dt-border-strong);
-}
-.wf-band-block[data-issues] {
-  box-shadow: inset 0 -2px 0 var(--dt-warn);
 }
 /* A kind kept: code and wait pieces dim with the rows it doesn't keep. */
 .wf-rows[data-filter] .dt-map-row[data-kind="code"] {
@@ -3241,18 +3076,6 @@ button.wf-crumb:hover {
   position: absolute;
   inset: -5px -2px;
 }
-.wf-band-block::before {
-  inset: -6px -2px;
-}
-.wf-band-label-beside {
-  position: absolute;
-  top: 0;
-  z-index: 3;
-  color: var(--dt-text-2);
-  font: 500 10.5px / 16px var(--dt-mono);
-  white-space: nowrap;
-  pointer-events: none;
-}
 /* Every chip container keeps its chips whole (run chips too). */
 .dt-map[data-waterfall] .dt-run-chips {
   flex: none;
@@ -3283,31 +3106,6 @@ button.wf-crumb:hover {
 .wf-shortcuts dd {
   color: var(--dt-text-2);
   text-align: right;
-}
-/* The band: the open block's name beside it, cut to its room; an issue as a dot, the kind's fill kept. */
-.wf-band-label-beside {
-  max-width: 30%;
-  overflow: hidden;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: var(--dt-panel);
-  text-overflow: ellipsis;
-}
-.wf-band-block[data-issues] {
-  box-shadow: inset 2px 0 0 var(--dt-k-http);
-}
-.wf-band-block[data-depth="0"][data-issues] {
-  box-shadow: inset 2px 0 0 var(--dt-k-view);
-}
-.wf-band-block[data-issues]::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--dt-warn);
 }
 /* A bar begun before the axis (the idle start left off): its left end broken, as the axis's. */
 .dt-map[data-waterfall] .dt-map-bar[data-before] {
@@ -3368,10 +3166,6 @@ button.wf-crumb:hover {
 .dt-map[data-waterfall] .dt-map-bar[data-range] {
   background: color-mix(in srgb, var(--dt-k) 60%, transparent);
 }
-/* The band in 28px. */
-.wf-band {
-  padding: 6px 12px 5px;
-}
 /* The names' divider in the middle of the gutter between the names and the track. */
 .wf-splitter-names {
   left: calc(var(--wf-split-x, 40%) - var(--wf-track-pad) / 2 - 0.3125rem);
@@ -3419,10 +3213,6 @@ button.wf-crumb:hover {
 .wf-shortcuts-backdrop {
   position: absolute;
 }
-/* The band's blocks: a request neutral, a page view violet, a failed one red; the kind's edge on the left. */
-.wf-band-block {
-  background: color-mix(in srgb, var(--dt-k-request) 35%, transparent);
-}
 /* ---------- round 11, B ---------- */
 /* Chips never clipped: their box doesn't shrink or hide them; the name gives way. */
 .dt-map[data-waterfall] .dt-map-chips {
@@ -3441,16 +3231,6 @@ button.wf-crumb:hover {
 .dt-map[data-waterfall] .dt-map-bar[data-call] {
   background: color-mix(in srgb, var(--dt-k-http) 45%, transparent);
 }
-.wf-band-block {
-  outline: 1px solid color-mix(in srgb, var(--dt-k-request) 100%, transparent);
-  outline-offset: -1px;
-}
-.wf-band-block[data-depth="0"] {
-  outline-color: color-mix(in srgb, var(--dt-k-view) 75%, transparent);
-}
-.wf-band-block[data-failed] {
-  outline-color: var(--dt-error);
-}
 .dt-map[data-waterfall] .dt-map-bar[data-quiet] {
   border-top: 1px solid color-mix(in srgb, var(--dt-k-view) 85%, transparent);
 }
@@ -3468,12 +3248,6 @@ button.wf-crumb:hover {
   bottom: 0;
   left: calc(50% - 12px);
   width: 24px;
-}
-.wf-band-block {
-  min-width: 6px;
-}
-.wf-band-block::before {
-  inset: -4px max(-4px, calc((24px - 100%) / -2));
 }
 .wf-panel .dt-wf-details :is(button, a):not(.icon-button) {
   position: relative;
@@ -3526,15 +3300,6 @@ button.wf-crumb:hover {
 .wf-rows .dt-map[data-waterfall][data-trace] > .dt-map-rows > div > .dt-map-row:first-child {
   z-index: 3;
 }
-/* The band's open entry: filled and underlined; the others a step back. */
-.wf-band-block:not([aria-current="true"]) {
-  opacity: 0.72;
-}
-.wf-band-block[aria-current="true"] {
-  opacity: 1;
-  filter: brightness(1.35) saturate(1.2);
-  box-shadow: inset 0 -2px 0 var(--dt-accent);
-}
 /* The keys sheet: arrows on one line; the legend's marks. */
 .wf-shortcuts kbd {
   white-space: nowrap;
@@ -3572,19 +3337,6 @@ button.wf-crumb:hover {
 }
 .dt-map[data-waterfall] .dt-map-text {
   flex: 1 1 0;
-}
-/* The band's blocks: their label clips inside, their hit area reaches out (24px). */
-.wf-band-block {
-  overflow: visible;
-}
-.wf-band-block > .wf-band-text {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wf-band[data-lanes="2"] .wf-band-block::before {
-  inset: -2px max(-4px, calc((24px - 100%) / -2));
 }
 /* Small targets: copy buttons and the sheet's divider hit at 24px. */
 .wf-panel .dt-wf-details button[aria-label^="Copy"] {
@@ -3635,84 +3387,6 @@ button.wf-crumb:hover {
     display: none;
   }
 }
-/* A page's block: behind its requests, faint, the view's colour at its edge. */
-.wf-band-block[data-depth="0"] {
-  z-index: 0;
-  background: color-mix(in srgb, var(--dt-k-view) 14%, transparent);
-}
-/* ---------- the band, folded ---------- */
-.wf-band {
-  padding: 4px 12px;
-}
-.wf-band-track {
-  height: 24px;
-}
-.wf-band[data-lanes="2"] .wf-band-track {
-  height: 25px;
-}
-.wf-band-block,
-.wf-band-block[data-depth="0"],
-.wf-band[data-lanes="2"] .wf-band-block {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 24px;
-  padding: 0 6px 0 8px;
-  overflow: visible;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--dt-k-request) 22%, var(--dt-panel));
-  box-shadow: inset 2px 0 0 var(--wf-tone, var(--dt-k-http));
-  outline: 1px solid var(--dt-border-strong);
-  outline-offset: -1px;
-  color: var(--dt-text);
-  font: 500 11px / 1 var(--dt-mono);
-  opacity: 1;
-  filter: none;
-}
-.wf-band[data-lanes="2"] .wf-band-block {
-  height: 12px;
-  font-size: 9.5px;
-}
-.wf-band-block[data-depth="0"] {
-  background: color-mix(in srgb, var(--dt-k-view) 16%, var(--dt-panel));
-}
-.wf-band-block[data-tone="ok"] {
-  --wf-tone: var(--dt-ok);
-}
-.wf-band-block[data-tone="warn"] {
-  --wf-tone: var(--dt-warn);
-}
-.wf-band-block[data-tone="error"] {
-  --wf-tone: var(--dt-error);
-}
-.wf-band-block[data-issues]::after,
-.wf-band-block[data-capped]::after {
-  display: none;
-}
-.wf-band-block[aria-current="true"] {
-  outline: 1.5px solid var(--dt-accent);
-  box-shadow: inset 2px 0 0 var(--wf-tone, var(--dt-k-http));
-  z-index: 3;
-}
-.wf-band-block:hover,
-.wf-band-block[data-hovered] {
-  background: color-mix(in srgb, var(--dt-k-request) 34%, var(--dt-panel));
-  z-index: 4;
-}
-.wf-band-issue {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  color: var(--dt-warn);
-}
-.wf-band-break {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  width: 6px;
-  background: repeating-linear-gradient(-60deg, transparent 0 3px, var(--dt-text-3) 3px 4px);
-  opacity: 0.6;
-}
 /* ---------- one head row: Follow and Clear; the open entry's ticks over the tab's entries ---------- */
 .wf-head {
   min-height: 38px;
@@ -3726,39 +3400,6 @@ button.wf-crumb:hover {
 .wf-time-cell > .wf-ticks {
   min-height: 22px;
 }
-.wf-time-cell > .wf-band {
-  padding: 0 var(--wf-track-gutter) 3px var(--wf-track-pad);
-  border: 0;
-}
-.wf-time-cell .wf-band-track,
-.wf-time-cell .wf-band[data-lanes="2"] .wf-band-track {
-  height: 9px;
-}
-.wf-time-cell .wf-band-block,
-.wf-time-cell .wf-band-block[data-depth="0"],
-.wf-time-cell .wf-band[data-lanes="2"] .wf-band-block {
-  height: 8px;
-  padding: 0;
-  border-radius: 2px;
-  font-size: 0;
-}
-.wf-time-cell .wf-band-block[data-depth="0"] {
-  z-index: 0;
-}
-.wf-time-cell .wf-band-text,
-.wf-time-cell .wf-band-issue {
-  display: none;
-}
-.wf-time-cell .wf-band-block[data-chip] {
-  width: 6px !important;
-}
-.wf-time-cell .wf-band-block::before {
-  inset: -8px -2px;
-}
-.wf-time-cell .wf-band-break {
-  top: 0;
-  bottom: 0;
-}
 .wf-call-head > .wf-follow {
   margin-left: 0;
 }
@@ -3766,34 +3407,6 @@ button.wf-crumb:hover {
 /* A query's database is its details' (Query tab): not said again on every SQL row. */
 .dt-map[data-waterfall] .dt-alias {
   display: none;
-}
-/* ---------- round 13, B ---------- */
-/* The head's overview: two thin lanes where entries overlap, fills at 3:1. */
-.wf-time-cell .wf-band-block,
-.wf-time-cell .wf-band-block[data-depth="0"],
-.wf-time-cell .wf-band[data-lanes="2"] .wf-band-block {
-  height: 4px;
-}
-.wf-time-cell .wf-band[data-lanes="1"] .wf-band-block {
-  height: 8px;
-}
-.wf-time-cell .wf-band-block {
-  background: color-mix(in srgb, var(--dt-k-http) 70%, transparent);
-  box-shadow: none;
-  outline: 0;
-}
-.wf-time-cell .wf-band-block[data-depth="0"] {
-  background: color-mix(in srgb, var(--dt-k-view) 60%, transparent);
-}
-.wf-time-cell .wf-band-block[data-tone="error"] {
-  background: var(--dt-error);
-}
-.wf-time-cell .wf-band-block[data-tone="warn"] {
-  background: var(--dt-warn);
-}
-.wf-time-cell .wf-band-block[aria-current="true"] {
-  outline: 1.5px solid var(--dt-accent);
-  outline-offset: 1px;
 }
 /* Dividers above the rows and the details: their whole hit area answers. */
 .wf-splitter {
@@ -3803,4 +3416,76 @@ button.wf-crumb:hover {
 :root[data-theme="light"] .dt-map[data-waterfall] .dt-map-caret {
   opacity: 1;
   color: var(--dt-text-3);
+}
+/* ---------- round 14 ---------- */
+/* The tab's entries under the ticks: an ordered strip, equal segments with gaps (not the ticks' scale). */
+.wf-time-cell > .wf-band {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+  padding: 0 var(--wf-track-gutter) 3px var(--wf-track-pad);
+}
+.wf-time-cell .wf-band-block,
+.wf-time-cell .wf-band-block[data-depth="0"] {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 6px;
+  max-width: 64px;
+  height: 6px;
+  margin-top: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--dt-k-http) 70%, transparent);
+}
+.wf-time-cell .wf-band-block[data-depth="0"] {
+  max-width: 24px;
+  background: color-mix(in srgb, var(--dt-k-view) 70%, transparent);
+}
+.wf-time-cell .wf-band-block::before {
+  content: "";
+  position: absolute;
+  inset: -9px -1px;
+}
+.wf-time-cell .wf-band-block[data-issues] {
+  box-shadow: inset 0 -2px 0 var(--dt-warn);
+}
+.wf-time-cell .wf-band-block[aria-current="true"] {
+  height: 8px;
+  margin-top: 2px;
+  outline: 2px solid var(--dt-accent);
+  outline-offset: 1px;
+}
+/* Names never under 12ch: chips go to their icon first. */
+.dt-map[data-waterfall] .dt-map-text {
+  min-width: min(12ch, 100%);
+}
+/* At wide panels the names don't take what they don't use. */
+.wf-panel {
+  --wf-cols: minmax(0, min(var(--wf-names, 45%), 36rem, calc(100% - 14rem))) minmax(12rem, 1fr);
+}
+/* The keys sheet within the panel. */
+.wf-shortcuts {
+  max-height: 88vh;
+}
+/* ---------- round 14, B ---------- */
+/* Focus on the details' own controls (tabs, copy, disclosures): the accent ring as everywhere else. */
+.wf-panel .dt-wf-details :is(button, a, [role="tab"]):focus-visible {
+  outline: 2px solid var(--dt-accent) !important;
+  outline-offset: 1px !important;
+}
+.dt-wf-details [role="tabpanel"] {
+  overflow-x: hidden;
+}
+/* An app chip whole; its name goes (the dot stays) only where the name cell is tight. */
+.dt-map[data-waterfall] .dt-app-chip {
+  flex: none;
+  min-width: 0;
+  overflow: visible;
+}
+@container wf-name (max-width: 26rem) {
+  .dt-map[data-waterfall] .dt-app-name {
+    display: none;
+  }
+}
+.dt-map[data-waterfall] .dt-map-bar[data-quiet] {
+  min-width: 3px;
 }

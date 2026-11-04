@@ -314,6 +314,7 @@ function WaterfallRows({
               trace={found.trace}
               profile={profileFor(found.node, found.trace, profileOf)}
               explainable={explains}
+              isRoot={found.node === tree[0]}
               profileScope={
                 found.node.type === "span" && found.node.served?.whole?.profile
                   ? `this call · ${appName(found.node.served) ?? "its app"}`

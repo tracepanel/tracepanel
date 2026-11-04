@@ -27,7 +27,7 @@ import {
 } from "@tracepanel/ui";
 import { isTyping } from "@tracepanel/ui/lib/keys";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { ChevronRightIcon, FlameIcon, KeyboardIcon, ListEndIcon, TriangleAlertIcon } from "lucide-react";
+import { ChevronRightIcon, FlameIcon, KeyboardIcon, ListEndIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -212,6 +212,7 @@ function useTreeKeys(
     const followTo = (row: HTMLElement | undefined) => {
       window.clearTimeout(follow);
       follow = window.setTimeout(() => {
+        for (const each of root.querySelectorAll("[data-picked]")) each.removeAttribute("data-picked");
         const key = row?.dataset["key"];
         const trace = row?.closest<HTMLElement>("[data-trace]")?.dataset["trace"];
         if (key && trace) select(trace, key);
@@ -436,7 +437,7 @@ const BADGES: readonly [string, string][] = [
 const SHORTCUTS: readonly [string, string][] = [
   ["Select the focused row", "Enter"],
   ["Pick a stretch of time", "drag across the bars"],
-  ["Clear the stretch, then the kind, then the selection", "Esc"],
+  ["Clear the stretch (back to the row), then the selection", "Esc"],
   ["Move between rows · open · close · to the parent", "↑ ↓ → ←"],
   ["Pick a stretch from the selected row", "Shift + ↑ ↓"],
   ["This list", "?"],
@@ -814,7 +815,6 @@ export function PanelA({ route }: { route: Route }) {
   const { host, setKind, setRange, setSelected } = useHost(axis, details);
   const firstWork = Math.min(...[...host.facts.values()].map((each) => each.work));
   useEffect(() => setWorks(Number.isFinite(firstWork) ? firstWork : null), [firstWork]);
-  useTreeKeys(scrollRef, setRange, axis, host.select);
   // A kind picked: its first row into view.
   useEffect(() => {
     if (!host.kind) return;
@@ -830,7 +830,11 @@ export function PanelA({ route }: { route: Route }) {
   usePanelKeys(
     { range: host.range, kind: host.kind, selected: host.selected, shortcuts },
     {
-      clearRange: () => setRange(null),
+      clearRange: () => {
+        setRange(null);
+        if (before.current) setSelected(before.current);
+        before.current = null;
+      },
       clearKind: () => setKind(null),
       deselect: () => setSelected(null),
       shortcuts: setShortcuts,
@@ -843,10 +847,18 @@ export function PanelA({ route }: { route: Route }) {
     setSelected(null);
   }, [openId]);
   // A stretch picked takes the details: the row selected lets go.
-  const drag = useRangeDrag(axis?.duration ?? 1, (picked) => {
-    setSelected(null);
-    setRange({ from: picked[0], to: picked[1] });
-  });
+  // A stretch takes the details; the row selected before it comes back when it goes (Esc).
+  const before = useRef<{ trace: string; key: string } | null>(null);
+  const pickStretch = useCallback(
+    (stretch: Stretch | null) => {
+      if (stretch && host.selected) before.current = host.selected;
+      setSelected(null);
+      setRange(stretch);
+    },
+    [host.selected, setSelected, setRange],
+  );
+  const drag = useRangeDrag(axis?.duration ?? 1, (picked) => pickStretch({ from: picked[0], to: picked[1] }));
+  useTreeKeys(scrollRef, (stretch) => pickStretch(stretch), axis, host.select);
   const shownRange = drag.draft ? { from: drag.draft[0], to: drag.draft[1] } : host.range;
 
   const latest = followTarget(inOrder(true, rows));
@@ -1069,9 +1081,9 @@ function onOneClock(rows: readonly TraceRow[]): TraceRow[] {
 }
 
 /**
- * The tab's timeline: every page and request as a labelled block on one axis whose idle gaps are folded into narrow
- * breaks (a tab's entries are seconds or minutes apart: on a plain axis they would be specks). Hover says what it is;
- * a click opens it below on its own axis; the open one is outlined.
+ * The tab's entries, in order, as one strip under the open entry's ticks: each page and request an equal segment
+ * (not to scale: they are seconds or minutes apart, and the ticks above are the open entry's time), its status in its
+ * colour, the open one outlined. A click opens one; hover names it.
  */
 function TabTimeline({
   rows,
@@ -1086,155 +1098,63 @@ function TabTimeline({
   hoveredKey: string | null;
   onHover: (key: string | null) => void;
 }) {
-  const track = useRef<HTMLDivElement>(null);
-  const width = useWidth(track) || 600;
   const all = onOneClock(uniqueTraces(rows));
   if (all.length < 2) return null;
   const now = Date.now() * 1000;
-  const running = (row: TraceRow) => row.open || row.trace.id.startsWith("~");
   const lasted = (row: TraceRow) =>
-    running(row) ? Math.max(now - row.trace.start, row.trace.duration) : row.trace.duration;
-  const spans = all.map((row) => ({ row, from: row.trace.start, to: row.trace.start + Math.max(lasted(row), 1) }));
-  const scale = foldedScale(spans, width);
-  const placed = spans.map(({ row, from, to }) => {
-    const label = `${row.trace.name} · ${duration(lasted(row))}`;
-    const x = scale.x(from);
-    const drawn = Math.max(scale.x(to) - x, 2);
-    // Too narrow for its name: a chip as wide as its label, at its place.
-    const chip = drawn < 40;
-    const w = chip ? labelWidth(label) + (row.trace.issues ? 14 : 0) : drawn;
-    return { row, x, w, label, chip };
-  });
-  const lane = bandLanes(placed);
-  const twoDeep = [...lane.values()].some((each) => each > 0);
+    row.open || row.trace.id.startsWith("~") ? Math.max(now - row.trace.start, row.trace.duration) : row.trace.duration;
   return (
-    <div className="wf-band" data-lanes={twoDeep ? "2" : "1"}>
-      <div className="wf-band-track" ref={track}>
-        {scale.breaks.map((each) => (
-          <span
-            key={each.at}
-            className="wf-band-break"
-            style={{ left: `${each.at}px` }}
-            title={`${duration(each.us)} with nothing running`}
+    <div className="wf-band" role="toolbar" aria-label="Pages and requests of this tab">
+      {all.map((row) => {
+        const open = entryKey(row) === openKey;
+        const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
+        const issues = row.trace.issues ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}` : "";
+        const name = `${row.trace.name}${status} · ${duration(lasted(row))}${issues}`;
+        return (
+          <button
+            type="button"
+            key={entryKey(row)}
+            className="wf-band-block"
+            data-depth={row.depth ?? 0}
+            data-tone={bandTone(row)}
+            data-issues={row.trace.issues ? "" : undefined}
+            aria-current={open ? "true" : undefined}
+            data-hovered={hoveredKey === entryKey(row) ? "" : undefined}
+            aria-label={`Open ${name}`}
+            title={name}
+            tabIndex={open ? 0 : -1}
+            onMouseEnter={() => onHover(entryKey(row))}
+            onMouseLeave={() => onHover(null)}
+            onKeyDown={(event) => {
+              const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+              if (!by) return;
+              event.preventDefault();
+              const blocks = [
+                ...(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(".wf-band-block") ?? []),
+              ];
+              const at = blocks.indexOf(event.currentTarget);
+              const next = blocks[Math.min(Math.max(at + by, 0), blocks.length - 1)];
+              for (const block of blocks) block.tabIndex = block === next ? 0 : -1;
+              next?.focus();
+            }}
+            onClick={() => onOpen(row)}
           />
-        ))}
-        {placed.map(({ row, x, w, label, chip }) => {
-          const open = entryKey(row) === openKey;
-          const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
-          const issues = row.trace.issues
-            ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}`
-            : "";
-          return (
-            <button
-              type="button"
-              key={entryKey(row)}
-              className="wf-band-block"
-              data-depth={row.depth ?? 0}
-              data-chip={chip ? "" : undefined}
-              data-tone={bandTone(row)}
-              aria-current={open ? "true" : undefined}
-              data-hovered={hoveredKey === entryKey(row) ? "" : undefined}
-              aria-label={`Open ${row.trace.name}${status} · ${duration(lasted(row))}${issues}`}
-              title={`${row.trace.name}${status} · ${duration(lasted(row))}${issues}`}
-              style={{ left: `${x}px`, width: `${Math.min(w, width - x)}px`, top: `${(lane.get(row) ?? 0) * 5}px` }}
-              tabIndex={open ? 0 : -1}
-              onMouseEnter={() => onHover(entryKey(row))}
-              onMouseLeave={() => onHover(null)}
-              onKeyDown={(event) => {
-                const by = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-                if (!by) return;
-                event.preventDefault();
-                const blocks = [
-                  ...(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(".wf-band-block") ?? []),
-                ];
-                const at = blocks.indexOf(event.currentTarget);
-                const next = blocks[Math.min(Math.max(at + by, 0), blocks.length - 1)];
-                // The Tab stop moves with the focus.
-                for (const block of blocks) block.tabIndex = block === next ? 0 : -1;
-                next?.focus();
-              }}
-              onClick={() => onOpen(row)}
-            >
-              {row.trace.issues ? <TriangleAlertIcon className="wf-band-issue" aria-hidden="true" /> : null}
-              <span className="wf-band-text">{label}</span>
-            </button>
-          );
-        })}
-      </div>
+        );
+      })}
     </div>
   );
 }
 
-/** How an entry went, for its block's edge: failed, answered 4xx, or fine. */
+/** How an entry went, for its segment's colour: failed, answered 4xx, or fine. */
 function bandTone(row: TraceRow): string {
   if (row.trace.status === "error" || (row.trace.http_status ?? 0) >= 500) return "error";
   if ((row.trace.http_status ?? 0) >= 400) return "warn";
   return "ok";
 }
 
-const BREAK_PX = 18;
-
-/**
- * A time scale for the band with its idle gaps folded: a gap longer than the longest entry (or than a fifth of the
- * whole) is a narrow break; the active stretches share the rest of the width by their time.
- */
-function foldedScale(spans: readonly { from: number; to: number }[], width: number) {
-  const sorted = [...spans].sort((a, b) => a.from - b.from);
-  const longest = Math.max(...sorted.map((each) => each.to - each.from));
-  const start = sorted[0]?.from ?? 0;
-  const end = Math.max(...sorted.map((each) => each.to));
-  const limit = Math.min(longest, (end - start) / 5);
-  // The active stretches: entries merged where they meet or the gap between them is short.
-  const pieces: { from: number; to: number }[] = [];
-  for (const each of sorted) {
-    const last = pieces.at(-1);
-    if (last && each.from - last.to <= limit) last.to = Math.max(last.to, each.to);
-    else pieces.push({ from: each.from, to: each.to });
-  }
-  const active = pieces.reduce((all, piece) => all + (piece.to - piece.from), 0) || 1;
-  const room = Math.max(width - (pieces.length - 1) * BREAK_PX, 40);
-  const lefts: number[] = [];
-  let at = 0;
-  for (const [index, piece] of pieces.entries()) {
-    if (index > 0) at += BREAK_PX;
-    lefts.push(at);
-    at += ((piece.to - piece.from) / active) * room;
-  }
-  const breaks = pieces.slice(1).map((piece, index) => ({
-    at: (lefts[index + 1] ?? 0) - BREAK_PX / 2 - 3,
-    us: piece.from - (pieces[index]?.to ?? piece.from),
-  }));
-  const x = (t: number): number => {
-    let index = 0;
-    for (const [at, each] of pieces.entries()) if (each.from <= t) index = at;
-    const piece = pieces[index];
-    if (!piece) return 0;
-    const left = lefts[index] ?? 0;
-    return left + ((Math.min(t, piece.to) - piece.from) / active) * room;
-  };
-  return { x, breaks };
-}
-
-/** Two lanes: a block that overlaps one in the first (its label included) goes to the second. */
-function bandLanes(placed: readonly { row: TraceRow; x: number; w: number }[]): Map<TraceRow, number> {
-  const lanes = new Map<TraceRow, number>();
-  let first = Number.NEGATIVE_INFINITY;
-  for (const each of [...placed].sort((a, b) => a.x - b.x)) {
-    const lane = first <= each.x ? 0 : 1;
-    lanes.set(each.row, lane);
-    if (lane === 0) first = each.x + each.w + 2;
-  }
-  return lanes;
-}
-
 /** An entry's identity in the list: several entries may share a trace (fetches carrying the page's trace). */
 function entryKey(row: TraceRow): string {
   return row.key ?? `${row.trace.id}:${row.trace.start}`;
-}
-
-/** About how wide a label is in the band's 10.5px type (px). */
-function labelWidth(label: string): number {
-  return label.length * 6 + 12;
 }
 
 /** A page or request of the tab, folded to one line (name, status, time): a click opens it here, on its own time. */

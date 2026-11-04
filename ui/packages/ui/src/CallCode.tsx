@@ -125,7 +125,11 @@ function CodeBars({
   // A call's trace's pieces are of its own time: on this trace's from where it starts on this one's clock.
   const offset = owner.start - axis.start;
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span
+      className="dt-map-track"
+      aria-hidden="true"
+      title={`${part.waiting ? "waiting" : "your code"} · ${part.time}`}
+    >
       {part.pieces
         // A piece too short to see is left out (a hundredth of a percent of the axis, as the old tree's 0.4% of its
         // own trace hid the short pieces of a call's trace on a page's longer axis).
