@@ -1,7 +1,6 @@
 // What a profile's calls and waits are named: a call by what it is ("SQL snowflake", "HTTP GET
-// analytics.example.com"), a wait by what it waited for ("waiting · sleep"). A timed profile's calls are shares of
-// their own (lib/timeShares); a CPU profile's (Go's, Node's) time off the CPU waits, named by the call it went to
-// (lib/offCpu). Plain data, no React.
+// analytics.example.com"), a wait by what it waited for ("waiting · sleep"). A profile's calls are shares of their
+// own (lib/timeShares). Plain data, no React.
 import type { Span } from "../types";
 import { type Frame, WAITING } from "./profile";
 

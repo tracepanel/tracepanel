@@ -1,9 +1,10 @@
 // A trace's time by share and its profile's rows that are no function: the console's rule (lib/timeShares), which
 // the MCP server's get_profile shares, over its cases. Each row Your code reads that is a wait or a call's share, by
-// its name, with its own time in µs, most first; and the trace's time by share, as the time strip says it.
+// its name, with its own time in µs, most first; and the trace's time by share, as the time strip says it. A case
+// with what an SDK sent (`sent`, a Go CPU profile) has the profile the agent made of it at ingest: the console reads
+// that one, as every language's.
 import { readFileSync } from "node:fs";
-import { withOffCpu } from "../../packages/ui/src/lib/offCpu.ts";
-import { functions, onCpuOnly, ownCode, type Profile, shareFrame } from "../../packages/ui/src/lib/profile.ts";
+import { functions, ownCode, type Profile, shareFrame } from "../../packages/ui/src/lib/profile.ts";
 import { type Shared, shareLabel, shareTimes, windowProfile } from "../../packages/ui/src/lib/timeShares.ts";
 import { type Timed, timed } from "../../packages/ui/src/lib/waiting.ts";
 import type { Trace } from "../../packages/ui/src/types.ts";
@@ -23,8 +24,7 @@ const CASES: Case[] = JSON.parse(readFileSync(new URL("../../../schema/waits.jso
 /** What Your code reads, as the Profile tab scopes the whole trace. */
 function own(trace: Profiled): Profile {
   const { profile } = trace;
-  if (timed(profile)) return windowProfile(trace as Shared & { profile: Timed }, null, true);
-  return onCpuOnly(trace) ? withOffCpu(profile, trace) : profile;
+  return timed(profile) ? windowProfile(trace as Shared & { profile: Timed }, null, true) : profile;
 }
 
 const byTime = (a: [string, number], b: [string, number]) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
