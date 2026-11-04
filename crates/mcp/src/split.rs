@@ -4,9 +4,11 @@
 //! profile covers (the rest its code's time it didn't sample: Not profiled); how many samples it is drawn from; what
 //! it is of. get_profile says this and nothing it works out itself, so its numbers are the console's to the letter.
 
-use crate::compact::int;
+use crate::compact::{self, int};
 use crate::shares::{self, NOT_PROFILED, WAITING};
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use tracepanel_analysis::stretches::{span_categories, spans_of};
 
 /// Stretches of a trace's time, in µs since it started, in order and apart.
 pub(crate) type Windows = Vec<(f64, f64)>;
@@ -396,6 +398,77 @@ pub(crate) fn split(doc: &Value, windows: Option<&[(f64, f64)]>) -> Split {
     said(raw_of(doc, windows), of, windows.map(<[_]>::to_vec))
 }
 
+/// Calls' time on the clock (side by side counted once), in µs: the console's `onTheClock`.
+pub(crate) fn on_the_clock(spans: &[&Value]) -> f64 {
+    let mut ranges: Vec<(i64, i64)> = spans
+        .iter()
+        .map(|span| {
+            (
+                int(span, "start"),
+                int(span, "start") + int(span, "duration"),
+            )
+        })
+        .collect();
+    ranges.sort_unstable();
+    let (mut total, mut reach) = (0, i64::MIN);
+    for (start, end) in ranges {
+        if end <= reach {
+            continue;
+        }
+        total += end - start.max(reach);
+        reach = end;
+    }
+    total as f64
+}
+
+/// The share calls are all of, where they are all of its time (the console's `shareOfCalls`): each of them of it,
+/// and every other span of it inside one of them. The trace's queries are its Database.
+fn share_of_calls(doc: &Value, calls: &[&Value]) -> Option<&'static str> {
+    let spans = spans_of(doc);
+    let categories = span_categories(&spans);
+    let ids: HashSet<&str> = calls.iter().map(|span| compact::text(span, "id")).collect();
+    let category = *categories.get(compact::text(calls.first()?, "id"))?;
+    if ids.iter().any(|id| categories.get(id) != Some(&category)) {
+        return None;
+    }
+    let parents: HashMap<&str, Option<&str>> =
+        spans.iter().map(|span| (span.id, span.parent)).collect();
+    let inside = |id: &str| {
+        let mut at = parents.get(id).copied().flatten();
+        while let Some(parent) = at {
+            if ids.contains(parent) {
+                return true;
+            }
+            at = parents.get(parent).copied().flatten();
+        }
+        false
+    };
+    spans
+        .iter()
+        .filter(|span| !ids.contains(span.id) && categories.get(span.id) == Some(&category))
+        .all(|span| inside(span.id))
+        .then_some(category)
+}
+
+/// Calls' time on the clock as every place says it (the console's `callsTime`): where they are all of one share's
+/// time (the trace's queries, its Database), the split's text, the time strip's; others as the console's duration
+/// writes it. And what they add up to, where they ran side by side and that reads differently: `57 ms added up`.
+pub(crate) fn calls_time(doc: &Value, calls: &[&Value]) -> (String, Option<String>) {
+    let clock = on_the_clock(calls);
+    let said = share_of_calls(doc, calls).and_then(|share| {
+        split(doc, None)
+            .shares
+            .into_iter()
+            .find(|each| each.share == share)
+            .map(|each| each.time)
+    });
+    let time = said.unwrap_or_else(|| duration(clock));
+    let total: f64 = calls.iter().map(|span| int(span, "duration") as f64).sum();
+    let sum = duration(total);
+    let added = (total > clock && sum != time).then(|| format!("{sum} added up"));
+    (time, added)
+}
+
 /// One app's traces in a chain (each of all of it or of its windows), added up before they are said: one split.
 pub(crate) fn app_split(parts: &[Part]) -> Split {
     if let [(doc, windows)] = parts {
@@ -533,7 +606,10 @@ fn windows_label(windows: &[(f64, f64)]) -> String {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::{Part, Split, Windows, app_split, counted, duration, range_label, split, to_fixed};
+    use super::{
+        Part, Split, Windows, app_split, calls_time, counted, duration, range_label, split,
+        to_fixed,
+    };
     use crate::shares::{self, GC, NOT_PROFILED, WAITING};
     use serde_json::{Value, json};
 
@@ -950,6 +1026,28 @@ pub(crate) mod tests {
             let (read, broke) = queries_broken(&doc);
             queries += usize::from(read);
             problems.extend(broke);
+            // A list line's queries say their time as the strip's Database, where queries run alone, to the letter.
+            if read {
+                let sql: Vec<&Value> = doc["spans"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|span| span["kind"] == "sql")
+                    .collect();
+                let database = split(&doc, None)
+                    .shares
+                    .into_iter()
+                    .find(|share| share.share == "sql")
+                    .map(|share| share.time);
+                if let Some(database) = database
+                    && calls_time(&doc, &sql).0 != database
+                {
+                    problems.push(format!(
+                        "the list line's queries {}, the strip's Database {database}",
+                        calls_time(&doc, &sql).0
+                    ));
+                }
+            }
             for span in doc["spans"].as_array().unwrap() {
                 let windows = row_windows(&doc, span["id"].as_str().unwrap());
                 if !windows.is_empty() {
@@ -977,6 +1075,36 @@ pub(crate) mod tests {
             .flatten()
             .map(|pair| (pair[0].as_f64().unwrap(), pair[1].as_f64().unwrap()))
             .collect()
+    }
+
+    /// A list line and get_trace's head say a trace's time and its queries' as the console's header does: the Go
+    /// request's 25.514 ms of queries, rounded with the rest, 25 ms (not 26); a task's 0.584 ms, 0.6 ms (not 1 ms).
+    #[test]
+    fn a_list_line_says_the_headers_numbers() {
+        let cases: Vec<Value> =
+            serde_json::from_str(include_str!("../../../schema/waits.json")).unwrap();
+        let said = |prefix: &str| {
+            let case = cases
+                .iter()
+                .find(|case| case["name"].as_str().unwrap().starts_with(prefix))
+                .unwrap();
+            let mut doc = case["trace"].clone();
+            doc["id"] = "t".into();
+            let row = json!({"id": "t", "kind": "task", "name": "case", "duration": doc["duration"], "queries": 3, "db_time": 25_514, "start": 0});
+            crate::compact::trace_line(&row, 0, &|_| Some(doc.clone()))
+        };
+
+        assert!(
+            said("Go: queries 25.514 ms").starts_with("t  task case · 88 ms · 3 SQL (25 ms) · "),
+            "{}",
+            said("Go: queries 25.514 ms")
+        );
+        assert!(
+            said("Python: a task's two queries")
+                .starts_with("t  task case · 310 ms · 2 SQL (0.6 ms) · "),
+            "{}",
+            said("Python: a task's two queries")
+        );
     }
 
     /// The cases the console checks itself against (`schema/waits.json`), each said here as there to the letter:

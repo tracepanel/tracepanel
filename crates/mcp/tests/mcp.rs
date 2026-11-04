@@ -334,7 +334,7 @@ async fn a_trace_with_n_plus_one_in_a_few_lines() {
     assert_eq!(
         tool(&server, "get_trace", json!({"id": N_PLUS_ONE})).await,
         (
-            "01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 27.6 ms · 151 SQL (3.2 ms) · view blog.views.post_list
+            "01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 28 ms · 151 SQL (3 ms) · view blog.views.post_list
 
 issues (3):
   n+1  N+1: 50 similar queries · SELECT auth_user
@@ -461,7 +461,7 @@ async fn sql_without_its_values_unless_asked() {
     .await;
 
     assert!(plain.contains(
-        "SQL: 151 queries, 4 statements, 3.2 ms\n  ×1 · 1.2 ms · blog/views.py:26 in post_list\n"
+        "SQL: 151 queries, 4 statements, 3 ms\n  ×1 · 1.2 ms · blog/views.py:26 in post_list\n"
     ));
     assert!(!plain.contains("params"));
     assert!(values.contains(
@@ -487,7 +487,7 @@ async fn an_error_with_its_line_and_secrets_masked() {
 
     assert_eq!(
         plain,
-        "01M4GPC3BF07PDY3T2QJEPN5YZ  GET /error/ → 500 · 29.2 ms · 1 SQL (0.1 ms) · view blog.views.error
+        "01M4GPC3BF07PDY3T2QJEPN5YZ  GET /error/ → 500 · 29 ms · 1 SQL (54 µs) · view blog.views.error
 
 issues (1):
   error  ZeroDivisionError: division by zero
@@ -556,11 +556,11 @@ async fn before_and_after_a_fix() {
 
     assert_eq!(
         tool(&server, "compare_traces", json!({"before": N_PLUS_ONE, "after": FIXED})).await.0,
-        "before  01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 27.6 ms · 151 SQL (3.2 ms) · view blog.views.post_list
-after   01M4GPC1ESW50X1ZHJJ3ZNP7VM  GET /fixed/ → 200 · 6.0 ms · 2 SQL (0.4 ms) · view blog.views.post_list_fixed
+        "before  01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 28 ms · 151 SQL (3 ms) · view blog.views.post_list
+after   01M4GPC1ESW50X1ZHJJ3ZNP7VM  GET /fixed/ → 200 · 6 ms · 2 SQL (0.4 ms) · view blog.views.post_list_fixed
 
-time: 27.6 ms → 6.0 ms (-78%)
-SQL: 151 → 2 queries (-99%), 3.2 ms → 0.4 ms
+time: 28 ms → 6 ms (-78%)
+SQL: 151 → 2 queries (-99%), 3 ms → 0.4 ms
 issues: 3 → 0 (3 fixed, 0 new, 0 still there)
   fixed  n+1  N+1: 50 similar queries · SELECT auth_user — blog/post_list.html (rendered from blog/views.py:28 in post_list)
   fixed  n+1  N+1: 50 similar queries · SELECT blog_category — blog/post_list.html (rendered from blog/views.py:28 in post_list)
@@ -584,13 +584,13 @@ async fn lists_one_line_each() {
             .await
             .0,
         "traces (7, newest first):
-01M4R1ER9RWER0QHV07BJDSZ7B  GET /api/feed → 200 · 13.3 ms · issues: n+1 · <ago>
+01M4R1ER9RWER0QHV07BJDSZ7B  GET /api/feed → 200 · 13 ms · issues: n+1 · <ago>
 01M5GCHAT0K3VJ6TN8C2XWB4FR  POST /summaries/ → 200 · 500 ms · issues: n+1 · <ago>
-01M5GSTRG0K3VJ6TN8C2XWB4FR  GET /gallery/ → 200 · 48.0 ms · issues: duplicates, n+1 · <ago>
-01M4GPCSNDHYSFJGJK7FY7NGH5  GET /books → 200 · 2.0 ms · 21 SQL (0.9 ms) · issues: n+1 · <ago>
-01M4GPC5X4GTP7C29QTSE6VRAM  GET /async/ → 200 · 38.2 ms · 61 SQL (2.3 ms) · issues: n+1 · <ago>
-01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 27.6 ms · 151 SQL (3.2 ms) · issues: n+1 · <ago>
-01M4GPAPP2WXJQE2FXJ7PSQBG5  GET /api/posts → 200 · 4.8 ms · 14 SQL (0.3 ms) · issues: n+1 · <ago>"
+01M5GSTRG0K3VJ6TN8C2XWB4FR  GET /gallery/ → 200 · 48 ms · issues: duplicates, n+1 · <ago>
+01M4GPCSNDHYSFJGJK7FY7NGH5  GET /books → 200 · 2 ms · 21 SQL (0.9 ms) · issues: n+1 · <ago>
+01M4GPC5X4GTP7C29QTSE6VRAM  GET /async/ → 200 · 38 ms · 61 SQL (2 ms) · issues: n+1 · <ago>
+01M4GPC1BHG83SW8X460V23TM0  GET / → 200 · 28 ms · 151 SQL (3 ms) · issues: n+1 · <ago>
+01M4GPAPP2WXJQE2FXJ7PSQBG5  GET /api/posts → 200 · 5 ms · 14 SQL (0.3 ms) · issues: n+1 · <ago>"
     );
 
     assert_eq!(
@@ -622,7 +622,7 @@ slow-sql  Slow query: 376 ms · SELECT n (WITH)
 first seen <ago>
 
 latest traces:
-  01M4GPC3BF07PDY3T2QJEPN5YZ  GET /error/ → 500 · 29.2 ms · 1 SQL (0.1 ms) · issues: error · <ago>"
+  01M4GPC3BF07PDY3T2QJEPN5YZ  GET /error/ → 500 · 29 ms · 1 SQL (54 µs) · issues: error · <ago>"
     );
 
     assert_eq!(
@@ -853,10 +853,10 @@ async fn a_task_run_says_its_workflow() {
         text.split_once("\n\nfollows:").map(|(_, rest)| rest),
         Some(
             "
-  01M4W0RKF10W00000000000A00  task shop.jobs.A (success) · 2.0 ms · <ago>
-  01M4W0RKF10W00000000000B00  task shop.jobs.B (success) · 2.0 ms · <ago>
+  01M4W0RKF10W00000000000A00  task shop.jobs.A (success) · 2 ms · <ago>
+  01M4W0RKF10W00000000000B00  task shop.jobs.B (success) · 2 ms · <ago>
 group g (2 tasks):
-  01M4W0RKF10W00000000000D00  task shop.jobs.D (success) · 2.0 ms · <ago>"
+  01M4W0RKF10W00000000000D00  task shop.jobs.D (success) · 2 ms · <ago>"
         )
     );
 }
@@ -1033,7 +1033,7 @@ allocation sites at the peak (3 of 3, 40 MB in all, largest first; ×: allocatio
 
     assert_eq!(
         tool(&server, "get_profile", json!({"id": QUICK, "kind": "memory"})).await.0,
-        "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 20.0 ms
+        "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 20 ms
 memory profile: peak 6.0 MB above where it started · net +10 KB
 note: the sites are where the memory was at the trace's end, not at its peak.
 note: other traces ran in the process meanwhile: these numbers include what they allocated.
@@ -1070,7 +1070,7 @@ async fn a_node_memory_profile_reads_the_same() {
 
     assert_eq!(
         tool(&server, "get_profile", json!({"id": JS, "kind": "memory"})).await.0,
-        "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14.0 ms
+        "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14 ms
 memory profile: peak 24 MB above where it started · net +3.0 MB
 GC: 1 collection, 1.5 ms paused
 note: the sites are where the memory was at the trace's end, not at its peak.
@@ -1081,7 +1081,7 @@ allocation sites at the end (1 of 1, 3.0 MB in all, largest first; ×: allocatio
     );
     assert_eq!(
         tool(&server, "get_profile", json!({"id": JS})).await.0,
-        "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14.0 ms
+        "01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 14 ms
 CPU profile: 14 ms profiled of the trace's 14 ms · 12 samples, one every 1 ms
 time by share (as the time strip says it): Your code 13 ms (89%) · GC 1 ms (11%)
 GC: 1 collection, 1.5 ms paused
@@ -1114,7 +1114,7 @@ async fn a_trace_says_it_was_profiled() {
     );
 
     assert!(
-        cpu_only.starts_with("01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 20.0 ms\nprofiled: cpu (by the panel's cookie) → get_profile\n\n"),
+        cpu_only.starts_with("01M4PR0F11E0000000000000J0  GET /reports/sales → 200 · 20 ms\nprofiled: cpu (by the panel's cookie) → get_profile\n\n"),
         "{cpu_only}"
     );
 
@@ -1160,10 +1160,10 @@ async fn before_and_after_a_fix_with_profiles() {
     assert_eq!(
         tool(&server, "compare_traces", json!({"before": SLOW, "after": QUICK})).await.0,
         "before  01M4PR0F11E0000000000000S0  GET /reports/sales → 200 · 200 ms
-after   01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 20.0 ms
+after   01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 20 ms
 
-time: 200 ms → 20.0 ms (-90%)
-SQL: 0 → 0 queries, 0.0 ms → 0.0 ms
+time: 200 ms → 20 ms (-90%)
+SQL: 0 → 0 queries, 0 µs → 0 µs
 issues: 0 → 0 (0 fixed, 0 new, 0 still there)
 profile: 200 ms → 20.0 ms profiled, of which waiting 50.0 ms → 0.0 ms
 functions whose self time changed most:
@@ -1205,7 +1205,7 @@ async fn a_profile_too_short_for_a_sample() {
     assert_eq!(
         tool(&server, "get_profile", json!({"id": QUICK})).await,
         (
-            "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 2.9 ms
+            "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 3 ms
 CPU profile: 0 ms profiled of the trace's 3 ms · 0 samples, one every 1 ms
 time by share (as the time strip says it): Not profiled 3 ms (100%)
 note: a sample every 1 ms: a function that ran for less may be missed or miscounted.
@@ -1458,7 +1458,7 @@ async fn get_profile_reads_the_chains_profiles_each_apps_apart() {
     assert_eq!(
         cpu,
         format!(
-            "{bff}  http POST /graphql · 1.0 ms
+            "{bff}  http POST /graphql · 1 ms
 this trace: no cpu profile; those of its chain follow.
 
 chain: cpu profiles of 2 traces down its calls, each app's apart (never one profile across apps):
@@ -1485,12 +1485,12 @@ hottest paths (outermost first):
     assert_eq!(
         memory,
         format!(
-            "{bff}  http POST /graphql · 1.0 ms
+            "{bff}  http POST /graphql · 1 ms
 this trace: no memory profile; those of its chain follow.
 
 chain: memory profiles of 1 trace down its calls, each app's apart (never one profile across apps):
 
-library-api · http GET /authors/1 · 1.0 ms · 1 SQL (0.1 ms) · {api1}
+library-api · http GET /authors/1 · 1 ms · 1 SQL (0.1 ms) · {api1}
 memory profile: peak 6.0 MB above where it started · net +10 KB
 note: the sites are where the memory was at the trace's end, not at its peak.
 note: other traces ran in the process meanwhile: these numbers include what they allocated.

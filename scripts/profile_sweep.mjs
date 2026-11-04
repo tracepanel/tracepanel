@@ -86,7 +86,7 @@ function serve(dir) {
 }
 
 /** get_profile of each trace, as an AI agent reads it: the MCP server over stdio. */
-async function mcpProfiles(dir, ids) {
+async function mcpProfiles(dir, ids, all) {
   const server = spawn(AGENT, ["mcp", "--dir", dir], { stdio: ["pipe", "pipe", "inherit"] });
   const lines = createInterface({ input: server.stdout });
   const waiting = new Map();
@@ -107,13 +107,24 @@ async function mcpProfiles(dir, ids) {
     clientInfo: { name: "profile-sweep", version: "1" },
   });
   server.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+  const text = (answer) => (answer.result?.content ?? []).map((part) => part.text).join("\n");
   const out = new Map();
   for (const id of ids) {
-    const answer = await call("tools/call", { name: "get_profile", arguments: { id } });
-    out.set(id, (answer.result?.content ?? []).map((part) => part.text).join("\n"));
+    out.set(id, text(await call("tools/call", { name: "get_profile", arguments: { id } })));
+  }
+  // Each trace's line as an AI agent reads it: get_trace's head, and find_traces' line where it lists the trace.
+  const said = new Map();
+  for (const id of all) {
+    const head = text(await call("tools/call", { name: "get_trace", arguments: { id } })).split("\n")[0] ?? "";
+    said.set(id, [head]);
+  }
+  const listed = text(await call("tools/call", { name: "find_traces", arguments: { query: "", limit: 50 } }));
+  for (const line of listed.split("\n").slice(1)) {
+    const id = line.split(" ")[0] ?? "";
+    said.get(id)?.push(line);
   }
   server.kill();
-  return out;
+  return Object.assign(out, { lines: said });
 }
 
 /** A share's percent as a number: "<1%" one said as none, ">99%" as all. */
@@ -317,6 +328,30 @@ async function headerBroken(page, trace, strip) {
 }
 
 /**
+ * The MCP server's lines of the trace (get_trace's head, find_traces' line) against its page's header: the trace's
+ * time and its queries' as the header writes them, to the letter. What's wrong, if anything.
+ */
+async function mcpLinesBroken(page, lines, header) {
+  const facts = ((await page.locator(".dt-trace-facts").first().textContent({ timeout: 2000 }).catch(() => "")) ?? "")
+    .split("·")
+    .map((fact) => fact.trim());
+  const queries = facts.find((fact) => /^\d+ quer(?:y|ies) /.test(fact));
+  const problems = [];
+  for (const line of lines ?? []) {
+    READ.mcpLines += 1;
+    const parts = line.split(" · ");
+    const time = parts.find((part) => /^[\d.,]+ (?:µs|ms|s)$/.test(part));
+    if (time !== header) problems.push(`MCP "${line}" says ${time}, the header ${header}`);
+    const sql = parts.map((part) => /^(\d+) SQL \((\S+ (?:µs|ms|s))/.exec(part)).find(Boolean);
+    const said = queries && /^(\d+) quer(?:y|ies) (\S+ (?:µs|ms|s))/.exec(queries);
+    if (sql && said && (sql[1] !== said[1] || sql[2] !== said[2]))
+      problems.push(`MCP "${line}" says ${sql[1]} SQL ${sql[2]}, the header "${queries}"`);
+    if (sql && !said) problems.push(`MCP "${line}" says ${sql[1]} SQL, the header has no queries`);
+  }
+  return problems;
+}
+
+/**
  * The hover card over the widget's pill, on an app's page made for the trace: its bar's pieces are the strip's shares
  * as written, its "Most time" the strip's largest share, its time as the strip writes it, of the time the header says.
  * What's wrong, if anything.
@@ -362,7 +397,7 @@ async function cardBroken(page, base, { id, spanned }, strip, header) {
 }
 
 /** What the sweep read: traces, Profile heads, code and wait rows. */
-const READ = { heads: 0, rows: 0, apart: 0, databases: 0, headers: 0, cards: 0 };
+const READ = { heads: 0, rows: 0, apart: 0, databases: 0, headers: 0, cards: 0, mcpLines: 0 };
 /** Traces not read, each with why: none is left out silently. */
 const SKIPPED = [];
 
@@ -410,6 +445,7 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   if (database) problem(database);
   for (const each of await headerBroken(page, doc, strip)) problem(each);
   const header = (await page.locator(".dt-trace-time").first().textContent())?.trim() ?? "";
+  for (const each of await mcpLinesBroken(page, mcp.lines.get(id), header)) problem(each);
   if (strip.length > 0 && doc.kind !== "page") {
     for (const each of await cardBroken(page, base, { id, spanned }, strip, header)) problem(each);
     if (!(await open())) problem("the console doesn't open it again");
@@ -507,6 +543,7 @@ try {
   const mcp = await mcpProfiles(
     work,
     traces.filter((trace) => trace.profiled).map((trace) => trace.id),
+    traces.map((trace) => trace.id),
   );
   browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
@@ -521,7 +558,7 @@ try {
   }
   const profiled = traces.filter((trace) => trace.profiled).length;
   console.log(
-    `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows, ${READ.databases} Database shares against their DB tab, ${READ.headers} header facts and ${READ.cards} hover cards against their strip: ${problems.length} disagreements`,
+    `${traces.length} traces (${profiled} profiled), ${READ.heads} profile heads (${READ.apart} of a chain's traces get_profile doesn't add up together), ${READ.rows} code and wait rows, ${READ.databases} Database shares against their DB tab, ${READ.headers} header facts and ${READ.cards} hover cards against their strip, ${READ.mcpLines} MCP lines against their header: ${problems.length} disagreements`,
   );
   if (SKIPPED.length) console.log(`${SKIPPED.length} not compared:`);
   for (const skipped of SKIPPED) console.log(`  not compared: ${skipped}`);

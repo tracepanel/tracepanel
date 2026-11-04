@@ -16,7 +16,11 @@
   names the share with the most time before rounding, its time as the
   strip writes it and no percent ("Most time: Waiting 6 ms of the server's
   16 ms"). The Profile tab's functions list every share its bar shows: a
-  Node request's 0.5 ms of GC had no row.
+  Node request's 0.5 ms of GC had no row. The MCP server's lines of a
+  trace (find_traces, get_trace, compare_traces) say its time and its
+  queries' as the header does ("88 ms · 3 SQL (25 ms)", not "88.4 ms · 3
+  SQL (25.5 ms)"), with what queries side by side add up to apart ("· 57
+  ms added up").
 - Every view of a trace's time says it from one result, worked out once
   for the trace or a stretch of it: the time strip's legend, the hover
   card, the Profile tab's head and bar, a code row and the stretch it

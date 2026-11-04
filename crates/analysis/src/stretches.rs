@@ -150,6 +150,15 @@ impl<'a> Owners<'a> {
     }
 }
 
+/// Each span's share of the time, by its id (the console's `spanCategories`): its own category, or its owner's.
+pub fn span_categories<'a>(spans: &'a [Span<'a>]) -> HashMap<&'a str, &'static str> {
+    let owners = Owners::new(spans);
+    spans
+        .iter()
+        .filter_map(|span| owners.category(span).map(|category| (span.id, category)))
+        .collect()
+}
+
 /// A stretch of the trace's time (µs since it started): the deepest span running then, its category, and whether
 /// that was its own code with calls of its own around (`quiet`).
 pub struct Stretch<'a> {
