@@ -1065,11 +1065,11 @@ fn cpu(profile: &Profile, top: usize, merged: bool) -> String {
     let about = if profile.estimated { "≈ " } else { "" };
     let mut out = vec![format!(
         "CPU profile: {about}{} profiled of {} · {}",
-        duration(split.profiled),
+        split.covered,
         if merged {
             split.of_what()
         } else {
-            format!("{what} {}", duration(split.total))
+            format!("{what} {}", split.time)
         },
         split.sampled.as_deref().unwrap_or_default(),
     )];
@@ -1784,8 +1784,8 @@ allocation sites at the peak (1 of 1, 2.0 MB in all, largest first; ×: allocati
             };
             let head = format!(
                 "CPU profile: {about}{} profiled of the trace's {} · {}",
-                duration(split.profiled),
-                duration(split.total),
+                split.covered,
+                split.time,
                 split.sampled.clone().unwrap_or_default()
             );
             let shares: Vec<String> = split

@@ -264,6 +264,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 350000,
+      "time": "350 ms",
       "shares": [
         [
           "External calls",
@@ -291,6 +292,7 @@
         ]
       ],
       "profiled": 250000,
+      "covered": "250 ms",
       "samples": 25,
       "sampled": "25 samples, one every 10 ms"
     },
@@ -311,6 +313,7 @@
             ]
           ],
           "total": 100000,
+          "time": "100 ms",
           "shares": [
             [
               "Not profiled",
@@ -320,6 +323,7 @@
             ]
           ],
           "profiled": 0,
+          "covered": "0 ms",
           "samples": 0,
           "sampled": "0 samples, one every 10 ms"
         }
@@ -340,6 +344,7 @@
             ]
           ],
           "total": 40000,
+          "time": "40 ms",
           "shares": [
             [
               "Waiting",
@@ -349,6 +354,7 @@
             ]
           ],
           "profiled": 40000,
+          "covered": "40 ms",
           "samples": 4,
           "sampled": "4 samples, one every 10 ms"
         }
@@ -377,6 +383,7 @@
             ]
           ],
           "total": 140000,
+          "time": "140 ms",
           "shares": [
             [
               "Not profiled",
@@ -392,6 +399,7 @@
             ]
           ],
           "profiled": 40000,
+          "covered": "40 ms",
           "samples": 4,
           "sampled": "4 samples, one every 10 ms"
         }
@@ -408,6 +416,7 @@
         "of": "4 traces",
         "windows": null,
         "total": 1250000,
+        "time": "1,250 ms",
         "shares": [
           [
             "External calls",
@@ -447,6 +456,7 @@
           ]
         ],
         "profiled": 950000,
+        "covered": "950 ms",
         "samples": 93,
         "sampled": "93 samples, one every 10 ms"
       }
@@ -636,6 +646,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 360000,
+      "time": "360 ms",
       "shares": [
         [
           "Not profiled",
@@ -657,6 +668,7 @@
         ]
       ],
       "profiled": 160000,
+      "covered": "160 ms",
       "samples": 16,
       "sampled": "16 samples, one every 10 ms"
     }
@@ -888,6 +900,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 200000,
+      "time": "200 ms",
       "shares": [
         [
           "Redis",
@@ -921,6 +934,7 @@
         ]
       ],
       "profiled": 200000,
+      "covered": "200 ms",
       "samples": 18,
       "sampled": "18 samples, one every 10 ms"
     }
@@ -1223,6 +1237,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 99000,
+      "time": "99 ms",
       "shares": [
         [
           "Your code",
@@ -1250,6 +1265,7 @@
         ]
       ],
       "profiled": 99000,
+      "covered": "99 ms",
       "samples": 99,
       "sampled": "30 samples of CPU time, one every 1 ms, spread evenly over your code's time, the rest of it waiting off the CPU (not sampled)"
     }
@@ -1421,6 +1437,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 50000,
+      "time": "50 ms",
       "shares": [
         [
           "Database",
@@ -1448,6 +1465,7 @@
         ]
       ],
       "profiled": 50000,
+      "covered": "50 ms",
       "samples": 50,
       "sampled": "50 samples, one every 1 ms"
     }
@@ -1617,6 +1635,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 40000,
+      "time": "40 ms",
       "shares": [
         [
           "Your code",
@@ -1644,6 +1663,7 @@
         ]
       ],
       "profiled": 40000,
+      "covered": "40 ms",
       "samples": 40,
       "sampled": "40 samples, one every 1 ms"
     }
@@ -1872,6 +1892,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 137000,
+      "time": "137 ms",
       "shares": [
         [
           "Your code",
@@ -1899,6 +1920,7 @@
         ]
       ],
       "profiled": 137000,
+      "covered": "137 ms",
       "samples": 102,
       "sampled": "102 samples, one every 1 ms"
     }
@@ -2083,6 +2105,7 @@
       "of": "the whole trace",
       "windows": null,
       "total": 35000,
+      "time": "35 ms",
       "shares": [
         [
           "External calls",
@@ -2110,6 +2133,7 @@
         ]
       ],
       "profiled": 32000,
+      "covered": "32 ms",
       "samples": 1,
       "sampled": "1 sample, one every 1 ms"
     },
@@ -2123,6 +2147,7 @@
         "of": "3 traces",
         "windows": null,
         "total": 125000,
+        "time": "125 ms",
         "shares": [
           [
             "Database",
@@ -2168,6 +2193,7 @@
           ]
         ],
         "profiled": 122000,
+        "covered": "122 ms",
         "samples": 91,
         "sampled": "91 samples, one every 1 ms"
       }
@@ -2242,11 +2268,12 @@
       "of": "the whole trace",
       "windows": null,
       "total": 2400,
+      "time": "2.4 ms",
       "shares": [
         [
           "Database",
           1800,
-          "2 ms",
+          "1.8 ms",
           "75%"
         ],
         [
@@ -2257,6 +2284,7 @@
         ]
       ],
       "profiled": 1800,
+      "covered": "1.8 ms",
       "samples": 0,
       "sampled": "0 samples, one every 1 ms"
     },
@@ -2285,6 +2313,7 @@
             ]
           ],
           "total": 600,
+          "time": "0.6 ms",
           "shares": [
             [
               "Not profiled",
@@ -2294,6 +2323,7 @@
             ]
           ],
           "profiled": 0,
+          "covered": "0.0 ms",
           "samples": 0,
           "sampled": "0 samples, one every 1 ms"
         }
@@ -2547,45 +2577,47 @@
       "of": "the whole trace",
       "windows": null,
       "total": 123000,
+      "time": "123.000 ms",
       "shares": [
         [
           "Database",
           47000,
-          "47 ms",
+          "47.000 ms",
           "38%"
         ],
         [
           "GC",
           19973,
-          "20 ms",
+          "19.973 ms",
           "16%"
         ],
         [
           "Framework & middleware",
           5950,
-          "6 ms",
+          "5.950 ms",
           "5%"
         ],
         [
           "Your code",
           1800,
-          "2 ms",
+          "1.800 ms",
           "2%"
         ],
         [
           "Not profiled",
           27,
-          "27 µs",
+          "0.027 ms",
           "<1%"
         ],
         [
           "Waiting",
           48250,
-          "48 ms",
+          "48.250 ms",
           "39%"
         ]
       ],
       "profiled": 122973,
+      "covered": "122.973 ms",
       "samples": 112,
       "sampled": "112 samples, one every 1 ms"
     },
@@ -2606,6 +2638,7 @@
             ]
           ],
           "total": 27,
+          "time": "27 µs",
           "shares": [
             [
               "Not profiled",
@@ -2615,6 +2648,7 @@
             ]
           ],
           "profiled": 0,
+          "covered": "0 µs",
           "samples": 0,
           "sampled": "0 samples, one every 1 ms"
         }
@@ -2635,6 +2669,7 @@
             ]
           ],
           "total": 46000,
+          "time": "46 ms",
           "shares": [
             [
               "Framework & middleware",
@@ -2656,6 +2691,7 @@
             ]
           ],
           "profiled": 46000,
+          "covered": "46 ms",
           "samples": 47,
           "sampled": "47 samples, one every 1 ms"
         }
@@ -2822,80 +2858,82 @@
     "waits": [
       [
         "SQL postgresql",
-        5300
-      ],
-      [
-        "waiting · VirtualThread.park",
-        2300
+        5000
       ],
       [
         "Framework & middleware",
         2000
       ],
       [
+        "waiting · VirtualThread.park",
+        2000
+      ],
+      [
         "GC",
-        600
+        1000
       ]
     ],
     "shares": [
       [
         "Database",
-        5300
+        5000
       ],
       [
         "Your code",
-        4600
-      ],
-      [
-        "Waiting",
-        2300
+        5000
       ],
       [
         "Framework & middleware",
         2000
       ],
       [
+        "Waiting",
+        2000
+      ],
+      [
         "GC",
-        600
+        1000
       ]
     ],
     "split": {
       "of": "the whole trace",
       "windows": null,
-      "total": 14800,
+      "total": 15000,
+      "time": "15 ms",
       "shares": [
         [
-          "Database",
-          5300,
+          "Your code",
+          5000,
           "5 ms",
-          "36%"
+          "33%"
         ],
         [
-          "Your code",
-          4600,
+          "Database",
+          5000,
           "5 ms",
-          "31%"
+          "33%"
         ],
         [
           "Framework & middleware",
           2000,
           "2 ms",
-          "13%"
+          "14%"
         ],
         [
           "GC",
-          600,
-          "0.6 ms",
-          "4%"
+          1000,
+          "1 ms",
+          "7%"
         ],
         [
           "Waiting",
-          2300,
+          2000,
           "2 ms",
-          "16%"
+          "13%"
         ]
       ],
-      "profiled": 14800,
+      "profiled": 15000,
+      "covered": "15 ms",
       "samples": 11,
       "sampled": "11 samples, one every 1 ms"
     },
@@ -2923,22 +2961,24 @@
               5400
             ]
           ],
-          "total": 3600,
+          "total": 4000,
+          "time": "4 ms",
           "shares": [
             [
               "Your code",
-              2800,
+              3000,
               "3 ms",
-              "78%"
+              "75%"
             ],
             [
               "Framework & middleware",
-              800,
-              "0.8 ms",
-              "22%"
+              1000,
+              "1 ms",
+              "25%"
             ]
           ],
-          "profiled": 3600,
+          "profiled": 4000,
+          "covered": "4 ms",
           "samples": 4,
           "sampled": "4 samples, one every 1 ms"
         }
@@ -2959,6 +2999,7 @@
             ]
           ],
           "total": 4000,
+          "time": "4 ms",
           "shares": [
             [
               "Your code",
@@ -2974,8 +3015,588 @@
             ]
           ],
           "profiled": 4000,
+          "covered": "4 ms",
           "samples": 4,
           "sampled": "4 samples, one every 1 ms"
+        }
+      }
+    ]
+  },
+  {
+    "name": "A code row's 5 ms in shares of 3.15, 0.75 and 1.1 ms: said at one step that keeps every share, 3 + 1 + 1 = 5 ms as read",
+    "trace": {
+      "start": 1790000000000000,
+      "duration": 5000,
+      "attrs": {
+        "telemetry.sdk.language": "python"
+      },
+      "spans": [
+        {
+          "id": "r",
+          "parent_id": null,
+          "kind": "http",
+          "name": "GET /books",
+          "start": 1790000000000000,
+          "duration": 5000,
+          "status": "ok",
+          "attrs": {}
+        }
+      ],
+      "profile": {
+        "interval_us": 50,
+        "samples": 100,
+        "dropped": 0,
+        "bucket_us": 50,
+        "frames": [
+          {
+            "function": "run",
+            "module": "server",
+            "file": "server.py",
+            "line": 1,
+            "in_app": false
+          },
+          {
+            "function": "book_out",
+            "module": "app.books",
+            "file": "app/books.py",
+            "line": 10,
+            "in_app": true
+          },
+          {
+            "function": "select",
+            "module": "selectors",
+            "file": "selectors.py",
+            "line": 3,
+            "in_app": false,
+            "waiting": true
+          }
+        ],
+        "stacks": [
+          {
+            "frames": [
+              0,
+              1
+            ],
+            "count": 63,
+            "at": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                1
+              ],
+              [
+                2,
+                1
+              ],
+              [
+                3,
+                1
+              ],
+              [
+                4,
+                1
+              ],
+              [
+                5,
+                1
+              ],
+              [
+                6,
+                1
+              ],
+              [
+                7,
+                1
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                9,
+                1
+              ],
+              [
+                10,
+                1
+              ],
+              [
+                11,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                13,
+                1
+              ],
+              [
+                14,
+                1
+              ],
+              [
+                15,
+                1
+              ],
+              [
+                16,
+                1
+              ],
+              [
+                17,
+                1
+              ],
+              [
+                18,
+                1
+              ],
+              [
+                19,
+                1
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                21,
+                1
+              ],
+              [
+                22,
+                1
+              ],
+              [
+                23,
+                1
+              ],
+              [
+                24,
+                1
+              ],
+              [
+                25,
+                1
+              ],
+              [
+                26,
+                1
+              ],
+              [
+                27,
+                1
+              ],
+              [
+                28,
+                1
+              ],
+              [
+                29,
+                1
+              ],
+              [
+                30,
+                1
+              ],
+              [
+                31,
+                1
+              ],
+              [
+                32,
+                1
+              ],
+              [
+                33,
+                1
+              ],
+              [
+                34,
+                1
+              ],
+              [
+                35,
+                1
+              ],
+              [
+                36,
+                1
+              ],
+              [
+                37,
+                1
+              ],
+              [
+                38,
+                1
+              ],
+              [
+                39,
+                1
+              ],
+              [
+                40,
+                1
+              ],
+              [
+                41,
+                1
+              ],
+              [
+                42,
+                1
+              ],
+              [
+                43,
+                1
+              ],
+              [
+                44,
+                1
+              ],
+              [
+                45,
+                1
+              ],
+              [
+                46,
+                1
+              ],
+              [
+                47,
+                1
+              ],
+              [
+                48,
+                1
+              ],
+              [
+                49,
+                1
+              ],
+              [
+                50,
+                1
+              ],
+              [
+                51,
+                1
+              ],
+              [
+                52,
+                1
+              ],
+              [
+                53,
+                1
+              ],
+              [
+                54,
+                1
+              ],
+              [
+                55,
+                1
+              ],
+              [
+                56,
+                1
+              ],
+              [
+                57,
+                1
+              ],
+              [
+                58,
+                1
+              ],
+              [
+                59,
+                1
+              ],
+              [
+                60,
+                1
+              ],
+              [
+                61,
+                1
+              ],
+              [
+                62,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0
+            ],
+            "count": 15,
+            "at": [
+              [
+                63,
+                1
+              ],
+              [
+                64,
+                1
+              ],
+              [
+                65,
+                1
+              ],
+              [
+                66,
+                1
+              ],
+              [
+                67,
+                1
+              ],
+              [
+                68,
+                1
+              ],
+              [
+                69,
+                1
+              ],
+              [
+                70,
+                1
+              ],
+              [
+                71,
+                1
+              ],
+              [
+                72,
+                1
+              ],
+              [
+                73,
+                1
+              ],
+              [
+                74,
+                1
+              ],
+              [
+                75,
+                1
+              ],
+              [
+                76,
+                1
+              ],
+              [
+                77,
+                1
+              ]
+            ]
+          },
+          {
+            "frames": [
+              0,
+              2
+            ],
+            "count": 22,
+            "at": [
+              [
+                78,
+                1
+              ],
+              [
+                79,
+                1
+              ],
+              [
+                80,
+                1
+              ],
+              [
+                81,
+                1
+              ],
+              [
+                82,
+                1
+              ],
+              [
+                83,
+                1
+              ],
+              [
+                84,
+                1
+              ],
+              [
+                85,
+                1
+              ],
+              [
+                86,
+                1
+              ],
+              [
+                87,
+                1
+              ],
+              [
+                88,
+                1
+              ],
+              [
+                89,
+                1
+              ],
+              [
+                90,
+                1
+              ],
+              [
+                91,
+                1
+              ],
+              [
+                92,
+                1
+              ],
+              [
+                93,
+                1
+              ],
+              [
+                94,
+                1
+              ],
+              [
+                95,
+                1
+              ],
+              [
+                96,
+                1
+              ],
+              [
+                97,
+                1
+              ],
+              [
+                98,
+                1
+              ],
+              [
+                99,
+                1
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "waits": [
+      [
+        "Framework & middleware",
+        1000
+      ],
+      [
+        "waiting · select",
+        1000
+      ]
+    ],
+    "shares": [
+      [
+        "Your code",
+        3000
+      ],
+      [
+        "Framework & middleware",
+        1000
+      ],
+      [
+        "Waiting",
+        1000
+      ]
+    ],
+    "split": {
+      "of": "the whole trace",
+      "windows": null,
+      "total": 5000,
+      "time": "5 ms",
+      "shares": [
+        [
+          "Your code",
+          3000,
+          "3 ms",
+          "60%"
+        ],
+        [
+          "Framework & middleware",
+          1000,
+          "1 ms",
+          "20%"
+        ],
+        [
+          "Waiting",
+          1000,
+          "1 ms",
+          "20%"
+        ]
+      ],
+      "profiled": 5000,
+      "covered": "5 ms",
+      "samples": 100,
+      "sampled": "100 samples, one every 50 µs"
+    },
+    "stretches": [
+      {
+        "windows": [
+          [
+            0,
+            5000
+          ]
+        ],
+        "split": {
+          "of": "0 – 5 ms",
+          "windows": [
+            [
+              0,
+              5000
+            ]
+          ],
+          "total": 5000,
+          "time": "5 ms",
+          "shares": [
+            [
+              "Your code",
+              3000,
+              "3 ms",
+              "60%"
+            ],
+            [
+              "Framework & middleware",
+              1000,
+              "1 ms",
+              "20%"
+            ],
+            [
+              "Waiting",
+              1000,
+              "1 ms",
+              "20%"
+            ]
+          ],
+          "profiled": 5000,
+          "covered": "5 ms",
+          "samples": 100,
+          "sampled": "100 samples, one every 50 µs"
         }
       }
     ]

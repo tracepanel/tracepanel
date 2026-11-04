@@ -27,17 +27,19 @@ export interface Split {
   of: string;
   /** The stretches it is of (µs since the trace started); none: all of it. */
   windows: Windows | null;
-  /** Its time (µs): its shares' added up. */
+  /** Its time (µs): its shares' added up; and written at the split's step, as its shares are. */
   total: number;
+  time: string;
   /** Largest first, waiting last; none with no time. */
   shares: SaidShare[];
-  /** How much of it the profile covers: all but its code's time before the first sample (Not profiled). */
+  /** How much of it the profile covers: all but its code's time before the first sample (Not profiled); written. */
   profiled: number;
+  covered: string;
   /** How many samples it is drawn from (the profile's in its stretches); 0 without a profile. */
   samples: number;
   /** "50 samples, one every 1 ms", as the profile took them; null without a profile. */
   sampled: string | null;
-  /** The step its times are rounded to (µs): the one its smallest share is said in. */
+  /** The step its times are rounded to and written at (µs): the coarsest that keeps every share. */
   step: number;
 }
 
@@ -157,22 +159,62 @@ function rank(a: SaidShare, b: SaidShare): number {
   return waiting(a) - waiting(b) || b.us - a.us;
 }
 
+/** The steps a split's times can be said at (µs): a tenth of a second, a millisecond, a tenth of one, a µs. */
+const STEPS = [100_000, 1000, 100, 1] as const;
+
+/** "1,204": a whole number with its thousands apart. */
+function thousands(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 /**
- * The raw times said: each rounded to the step its smallest share is said in, so none is lost, all of them adding up
- * to their total rounded to it; percents of that total, largest remainder, adding up to 100%.
+ * A time (µs, a whole number of `step`s) written at the step, so the times of one split read in one precision and
+ * add up as written: "1.6 s", "3 ms", "0.8 ms", "27 µs" (a split under a millisecond), "47.059 ms".
+ */
+export function writtenAt(us: number, step: number, total: number): string {
+  const whole = Math.round(us);
+  if (step >= 100_000)
+    return `${thousands(Math.floor(whole / 1_000_000))}.${Math.round((whole % 1_000_000) / 100_000)} s`;
+  if (step >= 1000) return `${thousands(Math.round(whole / 1000))} ms`;
+  if (step >= 100) return `${thousands(Math.floor(whole / 1000))}.${Math.round((whole % 1000) / 100)} ms`;
+  if (total < 1000) return `${whole} µs`;
+  return `${thousands(Math.floor(whole / 1000))}.${String(whole % 1000).padStart(3, "0")} ms`;
+}
+
+/** The times rounded at the coarsest step (from the one their total is said in) that loses none of them. */
+function roundedAt(exact: readonly number[]): { step: number; rounded: number[] } {
+  const sum = exact.reduce((all, us) => all + us, 0);
+  const from = STEPS.indexOf(displayStep(sum) as (typeof STEPS)[number]);
+  for (const step of STEPS.slice(Math.max(from, 0))) {
+    const rounded = apportion(exact, step, Math.round(sum / step));
+    if (step === 1 || rounded.every((us) => us > 0)) return { step, rounded };
+  }
+  return { step: 1, rounded: [...exact] };
+}
+
+/**
+ * The raw times said: rounded at one step, the coarsest that keeps every share, adding up to their total rounded to
+ * it, and written at it (writtenAt), so the times as read add up too; percents of that total, largest remainder,
+ * adding up to 100%.
  */
 function said(raw: Raw, of: string, windows: Windows | null): Split {
   const entries = [...raw.times].filter(([, us]) => us > 0);
-  const step = displayStep(Math.min(...entries.map(([, us]) => us), Number.POSITIVE_INFINITY));
-  const exact = entries.map(([, us]) => us);
-  const rounded = apportion(exact, step, Math.round(exact.reduce((sum, us) => sum + us, 0) / step));
+  const { step, rounded } = roundedAt(entries.map(([, us]) => us));
   const kept = entries.flatMap(([share], at): [Share, number][] => {
     const us = rounded[at] ?? 0;
     return us > 0 ? [[share, us]] : [];
   });
   const total = kept.reduce((sum, [, us]) => sum + us, 0);
   const shares = kept
-    .map(([share, us]): SaidShare => ({ share, label: shareLabel(share), us, time: duration(us), percent: "" }))
+    .map(
+      ([share, us]): SaidShare => ({
+        share,
+        label: shareLabel(share),
+        us,
+        time: writtenAt(us, step, total),
+        percent: "",
+      }),
+    )
     .sort(rank);
   const said = percents(
     shares.map((share) => share.us),
@@ -186,11 +228,13 @@ function said(raw: Raw, of: string, windows: Windows | null): Split {
     of,
     windows,
     total,
+    time: writtenAt(total, step, total),
     shares,
     profiled: total - unprofiled,
+    covered: writtenAt(total - unprofiled, step, total),
     samples: raw.samples?.all ?? 0,
     sampled: raw.samples ? sampledLine(raw.samples) : null,
-    step: Number.isFinite(step) ? step : 1,
+    step,
   };
 }
 
@@ -265,7 +309,7 @@ export function wholeWindows(windows: Windows): Windows {
 
 /** What a split is of, as a profile's head says it: "the trace's 123 ms", "the stretch's 7 ms", "these stretches' 9 ms". */
 export function ofWhat(split: Split): string {
-  const time = duration(split.total);
+  const time = split.time;
   if (!split.windows) return split.of.endsWith("traces") ? `the traces' ${time}` : `the trace's ${time}`;
   return split.windows.length > 1 ? `these stretches' ${time}` : `the stretch's ${time}`;
 }
@@ -276,8 +320,10 @@ export function splitJson(split: Split): Record<string, unknown> {
     of: split.of,
     windows: split.windows,
     total: split.total,
+    time: split.time,
     shares: split.shares.map(({ label, us, time, percent }) => [label, us, time, percent]),
     profiled: split.profiled,
+    covered: split.covered,
     samples: split.samples,
     sampled: split.sampled,
   };

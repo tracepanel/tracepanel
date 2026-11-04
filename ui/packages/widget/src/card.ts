@@ -461,7 +461,7 @@ export function mountCard(
     if (!top) return [bar];
     bar.setAttribute("aria-label", `Most time: ${top.label}, ${top.time}`);
     // A failed request's story is its error (under Fix first), not where its time went.
-    return failed(info) ? [bar] : [bar, mostLine(top, headTime(info, trace), duration(split.total))];
+    return failed(info) ? [bar] : [bar, mostLine(top, headTime(info, trace), split.time)];
   }
 
   function findings(info: TraceInfo, trace: Trace): HTMLElement | null {

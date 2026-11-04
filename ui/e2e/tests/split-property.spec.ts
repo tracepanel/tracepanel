@@ -138,6 +138,18 @@ function said(percent: string): number {
   return Number(percent.replace("%", ""));
 }
 
+/** A time as written ("1,204.5 ms", "27 µs", "1.6 s") back in whole µs. */
+function read(text: string): number {
+  const [value = "0", unit = "µs"] = text.replaceAll(",", "").split(" ");
+  return Math.round(Number(value) * (unit === "s" ? 1_000_000 : unit === "ms" ? 1000 : 1));
+}
+
+/** A time's unit and how many decimals it is written with: "ms.1" for "0.8 ms". */
+function decimals(text: string): string {
+  const [value = "", unit = ""] = text.split(" ");
+  return `${unit}.${value.split(".")[1]?.length ?? 0}`;
+}
+
 /** What every split says, whatever it is of: what it breaks, if anything (one assertion per test reads them all). */
 function broken(split: Split): string[] {
   const problems: string[] = [];
@@ -154,6 +166,15 @@ function broken(split: Split): string[] {
   check(
     split.shares.length === 0 || split.shares.reduce((sum, share) => sum + said(share.percent), 0) === 100,
     "percents add up to 100%",
+  );
+  // As read: the shares' times written add up to the total written, what it covers to the total less Not profiled.
+  const written = split.shares.reduce((sum, share) => sum + read(share.time), 0);
+  check(written === read(split.time), `times as read add up (${written} of ${split.time})`);
+  const notProfiled = split.shares.find((share) => share.share === NOT_PROFILED)?.time;
+  check(read(split.covered) === read(split.time) - (notProfiled ? read(notProfiled) : 0), "covered as read");
+  check(
+    split.shares.every((share) => decimals(share.time) === decimals(split.time)),
+    "one precision for the shares and the total",
   );
   const unprofiled = split.shares.find((share) => share.share === NOT_PROFILED)?.us ?? 0;
   check(split.profiled === split.total - unprofiled, "covered is the total less Not profiled");

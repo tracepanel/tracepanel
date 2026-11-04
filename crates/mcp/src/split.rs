@@ -28,12 +28,16 @@ pub(crate) struct Split {
     /// What it is of: `the whole trace`, `93 ms – 100 ms`, `3 traces`.
     pub(crate) of: String,
     pub(crate) windows: Option<Windows>,
-    /// Its time (µs): its shares' added up.
+    /// Its time (µs): its shares' added up; and written at the split's step, as its shares are.
     pub(crate) total: f64,
+    pub(crate) time: String,
     /// Largest first, waiting last; none with no time.
     pub(crate) shares: Vec<SaidShare>,
     /// How much of it the profile covers: all but its code's time before the first sample (Not profiled).
+    // Said as `covered`; the number itself is the shared cases'.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) profiled: f64,
+    pub(crate) covered: String,
     /// How many samples it is drawn from; 0 without a profile.
     pub(crate) samples: i64,
     /// `50 samples, one every 1 ms`, as the profile took them; none without a profile.
@@ -55,8 +59,10 @@ impl Split {
             "of": self.of,
             "windows": self.windows.as_ref().map(|windows| windows.iter().map(|&(from, to)| serde_json::json!([number(from), number(to)])).collect::<Vec<_>>()),
             "total": number(self.total),
+            "time": self.time,
             "shares": self.shares.iter().map(|share| serde_json::json!([share.label, number(share.us), share.time, share.percent])).collect::<Vec<_>>(),
             "profiled": number(self.profiled),
+            "covered": self.covered,
             "samples": self.samples,
             "sampled": self.sampled,
         })
@@ -64,7 +70,7 @@ impl Split {
 
     /// `profiled of the trace's 123 ms`: what the profile covers is of, as a profile's head says it.
     pub(crate) fn of_what(&self) -> String {
-        let time = duration(self.total);
+        let time = &self.time;
         match &self.windows {
             None if self.of.ends_with("traces") => format!("the traces' {time}"),
             None => format!("the trace's {time}"),
@@ -246,18 +252,68 @@ fn raw_of(doc: &Value, windows: Option<&[(f64, f64)]>) -> Raw {
     }
 }
 
-/// The raw times said: each rounded to the step its smallest share is said in, so none is lost, all of them adding
-/// up to their total rounded to it; percents of that total, largest remainder, adding up to 100%.
+/// The steps a split's times can be said at (µs): a tenth of a second, a millisecond, a tenth of one, a µs.
+const STEPS: [f64; 4] = [100_000.0, 1000.0, 100.0, 1.0];
+
+/// `1,204`: a whole number with its thousands apart.
+fn thousands(value: i64) -> String {
+    let digits = value.to_string();
+    let mut out = String::new();
+    for (at, digit) in digits.chars().enumerate() {
+        if at > 0 && (digits.len() - at).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
+}
+
+/// A time (µs, a whole number of `step`s) written at the step, so the times of one split read in one precision and
+/// add up as written (the console's `writtenAt`): `1.6 s`, `3 ms`, `0.8 ms`, `27 µs`, `47.059 ms`.
+pub(crate) fn written_at(us: f64, step: f64, total: f64) -> String {
+    let whole = us.round() as i64;
+    if step >= 100_000.0 {
+        format!(
+            "{}.{} s",
+            thousands(whole / 1_000_000),
+            ((whole % 1_000_000) as f64 / 100_000.0).round()
+        )
+    } else if step >= 1000.0 {
+        format!("{} ms", thousands((whole as f64 / 1000.0).round() as i64))
+    } else if step >= 100.0 {
+        format!(
+            "{}.{} ms",
+            thousands(whole / 1000),
+            ((whole % 1000) as f64 / 100.0).round()
+        )
+    } else if total < 1000.0 {
+        format!("{whole} µs")
+    } else {
+        format!("{}.{:03} ms", thousands(whole / 1000), whole % 1000)
+    }
+}
+
+/// The times rounded at the coarsest step (from the one their total is said in) that loses none of them.
+fn rounded_at(exact: &[f64]) -> (f64, Vec<f64>) {
+    let sum = exact.iter().fold(0.0, |all, us| all + us);
+    let from = shares::display_step(sum);
+    for step in STEPS.into_iter().filter(|step| *step <= from) {
+        let rounded = shares::apportion(exact, step, (sum / step).round() as i64);
+        if step == 1.0 || rounded.iter().all(|us| *us > 0.0) {
+            return (step, rounded);
+        }
+    }
+    (1.0, exact.to_vec())
+}
+
+/// The raw times said: rounded at one step, the coarsest that keeps every share, adding up to their total rounded to
+/// it, and written at it, so the times as read add up too; percents of that total, largest remainder, adding up to
+/// 100%.
 fn said(raw: Raw, of: String, windows: Option<Windows>) -> Split {
     let entries: Vec<(&'static str, f64)> =
         raw.times.into_iter().filter(|(_, us)| *us > 0.0).collect();
-    let smallest = entries
-        .iter()
-        .fold(f64::INFINITY, |least, (_, us)| least.min(*us));
-    let step = shares::display_step(smallest);
     let exact: Vec<f64> = entries.iter().map(|(_, us)| *us).collect();
-    let target = (exact.iter().fold(0.0, |sum, us| sum + us) / step).round() as i64;
-    let rounded = shares::apportion(&exact, step, target);
+    let (step, rounded) = rounded_at(&exact);
     let mut shares: Vec<SaidShare> = entries
         .iter()
         .zip(rounded)
@@ -266,11 +322,14 @@ fn said(raw: Raw, of: String, windows: Option<Windows>) -> Split {
             share,
             label: shares::label(share),
             us,
-            time: duration(us),
+            time: String::new(),
             percent: String::new(),
         })
         .collect();
     let total = shares.iter().fold(0.0, |sum, share| sum + share.us);
+    for share in &mut shares {
+        share.time = written_at(share.us, step, total);
+    }
     // Waiting last, the rest largest first, those as long in the order the trace first had them (a stable sort).
     shares.sort_by(|a, b| {
         (a.share == WAITING)
@@ -292,8 +351,10 @@ fn said(raw: Raw, of: String, windows: Option<Windows>) -> Split {
         of,
         windows,
         total,
+        time: written_at(total, step, total),
         shares,
         profiled: total - unprofiled,
+        covered: written_at(total - unprofiled, step, total),
         samples: raw.samples.as_ref().map_or(0, |samples| samples.all),
         sampled: raw.samples.as_ref().map(sampled_line),
         step,
@@ -622,6 +683,27 @@ pub(crate) mod tests {
         }
     }
 
+    /// A time as written (`1,204.5 ms`, `27 µs`, `1.6 s`) back in whole µs.
+    fn read(text: &str) -> i64 {
+        let text = text.replace(',', "");
+        let (value, unit) = text.split_once(' ').unwrap_or((&text, "µs"));
+        let scale = match unit {
+            "s" => 1_000_000.0,
+            "ms" => 1000.0,
+            _ => 1.0,
+        };
+        (value.parse::<f64>().unwrap() * scale).round() as i64
+    }
+
+    /// A time's unit and how many decimals it is written with: `ms.1` for `0.8 ms`.
+    fn decimals(text: &str) -> String {
+        let (value, unit) = text.split_once(' ').unwrap_or((text, ""));
+        let places = value
+            .split_once('.')
+            .map_or(0, |(_, fraction)| fraction.len());
+        format!("{unit}.{places}")
+    }
+
     /// What every split says, whatever it is of: what it breaks, if anything.
     pub(crate) fn broken(split: &Split) -> Vec<String> {
         let mut problems = Vec::new();
@@ -648,6 +730,25 @@ pub(crate) mod tests {
                     .sum::<i64>()
                     == 100,
             "percents add up to 100%",
+        );
+        // As read: the shares' times written add up to the total written, in one precision.
+        let written: i64 = split.shares.iter().map(|share| read(&share.time)).sum();
+        check(written == read(&split.time), "times as read add up");
+        let not_profiled = split
+            .shares
+            .iter()
+            .find(|share| share.share == NOT_PROFILED)
+            .map_or(0, |share| read(&share.time));
+        check(
+            read(&split.covered) == read(&split.time) - not_profiled,
+            "covered as read",
+        );
+        check(
+            split
+                .shares
+                .iter()
+                .all(|share| decimals(&share.time) == decimals(&split.time)),
+            "one precision for the shares and the total",
         );
         let unprofiled = split
             .shares

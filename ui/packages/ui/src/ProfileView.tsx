@@ -526,7 +526,7 @@ function SplitCover({ split, about: estimate }: { split: Split; about: string })
   return (
     <span className="text-2xl font-semibold tracking-tight tabular-nums" data-cover="">
       {estimate}
-      {duration(split.profiled)}
+      {split.covered}
       <span className="ml-2 text-sm font-normal text-muted-foreground">{coverLine(split)}</span>
     </span>
   );
@@ -1444,7 +1444,7 @@ function ProfileSumRow({ app, view }: { app: AppProfile; view: Scope | undefined
         <AppChip name={app.app} runtime={appRuntime(app)} compact />
       </td>
       {/* As its section's head and bar say them: its split's (lib/split). */}
-      <td>{duration(view.split.profiled)}</td>
+      <td>{view.split.covered}</td>
       <td>{shareIn(view.split, WAITING)?.time ?? "—"}</td>
       <td>{top ? <code title={top}>{top}</code> : "—"}</td>
     </tr>

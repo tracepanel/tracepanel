@@ -1206,7 +1206,7 @@ async fn a_profile_too_short_for_a_sample() {
         tool(&server, "get_profile", json!({"id": QUICK})).await,
         (
             "01M4PR0F11E0000000000000Q0  GET /reports/sales → 200 · 2.9 ms
-CPU profile: 0 µs profiled of the trace's 3 ms · 0 samples, one every 1 ms
+CPU profile: 0 ms profiled of the trace's 3 ms · 0 samples, one every 1 ms
 time by share (as the time strip says it): Not profiled 3 ms (100%)
 note: a sample every 1 ms: a function that ran for less may be missed or miscounted.
 
@@ -1464,8 +1464,8 @@ this trace: no cpu profile; those of its chain follow.
 chain: cpu profiles of 2 traces down its calls, each app's apart (never one profile across apps):
 
 library-api · 2 traces added up · {api1}, {api2}
-CPU profile: 0.2 ms profiled of the traces' 0.2 ms · 40 samples, one every 1 ms
-time by share (as the time strip says it): Database 0.2 ms (91%) · Your code 20 µs (9%)
+CPU profile: 220 µs profiled of the traces' 220 µs · 40 samples, one every 1 ms
+time by share (as the time strip says it): Database 200 µs (91%) · Your code 20 µs (9%)
 note: a sample every 1 ms: a function that ran for less may be missed or miscounted. Its memory was counted too, which slows the code down: these times are higher than without it.
 
 functions by self time (your code: library calls counted to the function of yours that made them):
