@@ -139,14 +139,19 @@ jobs:
           merge-multiple: true
 
       # PEP 740 attestations, signed with this job's identity, the one PyPI's trusted publisher names: PyPI shows each
-      # file's provenance and pip can check it. uv publish uploads them beside their files.
+      # file's provenance and pip can check it. Each is FILE.publish.attestation; nothing is published without one.
       - name: Sign for PyPI
-        run: uvx --from pypi-attestations==0.0.30 pypi-attestations sign dist/*.whl dist/*.tar.gz
+        run: |
+          uvx --from pypi-attestations==0.0.30 pypi-attestations sign dist/*.whl dist/*.tar.gz
+          for file in dist/*.whl dist/*.tar.gz; do
+            [ -s "$file.publish.attestation" ] || { echo "::error::no attestation for $file" && exit 1; }
+          done
 
       - name: Publish
         # Wheels and the sdist only: the run also holds the npm packages (.tgz), which npm.yml stages once this run
-        # succeeds, the same build on both registries.
-        run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz
+        # succeeds, the same build on both registries. uv publish uploads an attestation only when it is among the
+        # files it is given, beside the file it names.
+        run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz dist/*.publish.attestation
 
   # The release on GitHub, after the registry took it: its notes are the changelog's entry for the version.
   github:
