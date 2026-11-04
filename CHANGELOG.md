@@ -9,12 +9,13 @@
   card, the Profile tab's head and bar, a code row and the stretch it
   opens, an app's sums in a chain, and the MCP server's get_profile. The
   Profile tab's bar read 36% where the strip read 37%, its percents added
-  up to 87–99%, a stretch's bar to 93%. Now each share's time is rounded
-  once, to the coarsest step that drops none of them (a chain's
-  "Framework & middleware 28 ms" no longer rounds away in 3.6 s), and
-  every time of it is written at that step, so the times as read add up
+  up to 87–99%, a stretch's bar to 93%. Now the total is written as the
+  page's header writes a time (123 ms, 1.6 s), and each share is rounded
+  once to that step, by largest remainder, so the shares as read add up
   to the total as read ("3 ms · 1 ms · 1 ms" of 5 ms, not "3 ms · 0.8 ms
-  · 1 ms") and the percents to 100%. A Go request
+  · 1 ms") and the percents to 100%. A share too short for the step
+  still shows, as "<1 ms" or "<0.1 s" with its percent, where it was
+  rounded away (a chain's "Framework & middleware" in 3.6 s). A Go request
   over before its profiler's first sample opens its Profile tab on the
   strip's shares, its own code Not profiled, and its code rows open their
   stretches. What a profile covers is the time less its Not profiled
