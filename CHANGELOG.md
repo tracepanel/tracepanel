@@ -30,6 +30,18 @@
   ms row's profile lists 7 ms and 3 ms, not 7 ms and 4 ms. The MCP
   server's get_profile splits a timed profile the same way and says its
   time by share, a query's time as the database's.
+- Go's and Node's profiles are split the same way as Python's and the
+  JVM's: a query's time is Database, not "waiting · SQL postgresql", and
+  the strip's legend and the Profile tab's bar give the same numbers. Go's
+  CPU profiler keeps no sample's time, so the agent places a Go profile
+  on the trace's clock as it stores it: its samples spread evenly over
+  the trace's own code, the rest of that time waiting off the CPU
+  ("waiting · off CPU"). Its Profile tab says so ("30 samples of CPU
+  time, one every 1 ms, spread evenly over your code's time"), and so
+  does get_profile. A Node profile from an SDK that doesn't say when it
+  saw each stack is placed the same way. A request's root span counts
+  its framework's time once: a stretch of it read twice the framework's
+  share and no waiting.
 - The Profile tab's All frames list says which of its functions waited,
   as Your code's list does ("waiting ·
   AsyncIOBackend.run_sync_in_worker_thread", muted): their time is the
