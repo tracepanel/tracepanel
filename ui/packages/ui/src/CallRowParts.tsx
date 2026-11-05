@@ -44,6 +44,8 @@ export interface RowContext {
   selected: string | null;
   onSelect: (key: string) => void;
   collapsed: ReadonlySet<string>;
+  /** The rows on the way to a kind shown that were folded by hand: open by themselves, not these. */
+  pathFolded?: ReadonlySet<string> | undefined;
   onToggle: (key: string) => void;
   /** Set while filters are on: only marked rows show. */
   marks?: ReadonlyMap<string, Mark> | undefined;

@@ -644,6 +644,17 @@ export function CallMap({
         : scopedMarks(tree, pickedOf(current, trace, categories), external ? selected : null),
     [tree, current, trace, categories, external, selected, kinds],
   );
+  // Folded by hand on the way to the rows shown; another pick of what is shown opens the way again.
+  const [pathFolded, setPathFolded] = useState<ReadonlySet<string>>(() => new Set());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new set of rows shown, not each render's map.
+  useEffect(() => setPathFolded(new Set()), [marks]);
+  const toggleRow = (key: string) => {
+    if (marks?.get(key) !== "path") return toggle(key);
+    const next = new Set(pathFolded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setPathFolded(next);
+  };
   // A share picked is of the row it was picked on: another row picked lets it go.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not the slice it changes.
   useEffect(() => {
@@ -687,7 +698,8 @@ export function CallMap({
                 rootMark: wiring.rootMark,
                 rootTime: wiring.rootTime,
                 collapsed,
-                onToggle: toggle,
+                pathFolded,
+                onToggle: toggleRow,
                 marks,
                 details: inline,
                 hiddenLogs: hidden,

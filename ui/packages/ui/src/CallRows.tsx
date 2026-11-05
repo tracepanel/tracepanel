@@ -575,10 +575,15 @@ function childSpans(node: Extract<Node, { type: "span" }>): Span[] {
   return ownChildren(node).flatMap((child) => (child.type === "span" ? [child.span] : []));
 }
 
-/** A span's fold: none without rows under it; open unless folded, always on the way to a filtered row. */
+/** On the way to a row shown: open by itself, unless folded by hand since. Undefined off the way. */
+function onPath(mark: Mark | undefined, key: string, ctx: RowContext): boolean | undefined {
+  return mark === "path" ? !ctx.pathFolded?.has(key) : undefined;
+}
+
+/** A span's fold: none without rows under it; open unless folded, on the way to a filtered row unless folded there. */
 function spanFold(node: Extract<Node, { type: "span" }>, mark: Mark | undefined, ctx: RowContext): boolean | undefined {
   const hasChildren = node.children.length > 0;
-  return foldOf(hasChildren, hasChildren && (mark === "path" || !ctx.collapsed.has(node.key)));
+  return foldOf(hasChildren, hasChildren && (onPath(mark, node.key, ctx) ?? !ctx.collapsed.has(node.key)));
 }
 
 /** A span: its kind, its name and what goes with it, its bar and its time; its rows under it, open or folded. */
@@ -697,7 +702,7 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
   const { ctx, indent, depth, mark, parent } = place;
   const { span } = node;
   const has = node.children.length > 0;
-  const fold = foldOf(has, has && (mark === "path" || served.opened !== ctx.collapsed.has(node.key)));
+  const fold = foldOf(has, has && (onPath(mark, node.key, ctx) ?? served.opened !== ctx.collapsed.has(node.key)));
   useChainLoad(served, fold, ctx.onChain);
   const inner = useLinkedContext(served, ctx);
   const root = served.whole?.spans.find((each) => each.parent_id === null);
