@@ -23,6 +23,7 @@ import { cutNote, NO_ANSWER } from "./lib/live";
 import { pageParts, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
+import { cn } from "./lib/utils";
 import { RowFlame } from "./ProfileHint";
 import {
   AppChip,
@@ -178,7 +179,7 @@ function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
 }
 
 /** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
-function withChain(trace: TraceSummary, counts: RowCounts | undefined): TraceSummary {
+export function withChain(trace: TraceSummary, counts: RowCounts | undefined): TraceSummary {
   if (!counts || counts.traces < 2) return trace;
   const { db_time: dbTime = trace.db_time, errors = trace.errors } = counts;
   return {
@@ -353,6 +354,7 @@ function ListItem({
           fresh={fresh}
           onSelect={onSelect}
           share={Math.min(trace.duration / (longest ?? trace.duration), 1)}
+          pending={recordPending(row)}
           // Asked for its chain and none came: its traces have left the local store.
           gone={chains?.counts !== undefined && counts === undefined && !row.open && !row.awaiting && !row.arriving}
         />
@@ -413,17 +415,60 @@ function RowOpens({
 
 const GONE_NOTE = "Not in the local store anymore: newer traces took its place.";
 
+/** A record still waiting for its calls' traces: a view still open, or one whose calls' numbers are on their way. */
+export function recordPending(row: TraceRow): boolean {
+  return Boolean(row.open || row.awaiting);
+}
+
+/**
+ * What a record found, a column each, the same on every row: its marks line up down the list, empty or not. Its
+ * closed row and its open tree's first row say the same; "…" while its calls' traces are on their way.
+ */
+export function RecordMarks({
+  trace,
+  pending,
+  className,
+}: {
+  trace: TraceSummary;
+  pending: boolean;
+  className?: string | undefined;
+}) {
+  return (
+    <span className={cn("tp-record-marks", className)}>
+      <span className="tp-record-errors">
+        <Errors count={trace.errors} />
+      </span>
+      <span className="tp-record-issues">
+        {pending ? null : <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />}
+      </span>
+      <span className="tp-record-queries" data-opens="sql">
+        {pending ? (
+          <Pending what="Its queries, while its calls' traces are on their way" />
+        ) : (
+          <Queries count={trace.queries} time={trace.db_time} />
+        )}
+      </span>
+    </span>
+  );
+}
+
 export function RecordRow({
-  row: { trace, open, until, target: _target, opens: target },
+  row: { trace, open, until, target: _target, opens: target, failed },
   fresh,
   onSelect,
   live = false,
   share,
   depth = 0,
   gone = false,
+  pending = false,
+  current = false,
 }: {
+  /** The record open: its row the list's current one, live or not. */
+  current?: boolean | undefined;
   /** Its traces are no longer in the local store: said, the row quiet. */
   gone?: boolean | undefined;
+  /** Its calls' traces still on their way: no numbers yet, never a part of them. */
+  pending?: boolean | undefined;
   /** How far in it sits: a call of a view still open shows under it. */
   depth?: number | undefined;
   /** Closed: its time against the list's typical longest, linear; a far longer one reaches the end. */
@@ -444,7 +489,7 @@ export function RecordRow({
         title={gone ? GONE_NOTE : undefined}
         data-kind={trace.kind}
         data-live={live ? "" : undefined}
-        aria-current={live ? "true" : undefined}
+        aria-current={live || current ? "true" : undefined}
         data-new={fresh ? "" : undefined}
         aria-disabled={gone || undefined}
         // Gone from the store, there is nothing to open: it stays a quiet line, its note on hover.
@@ -461,21 +506,15 @@ export function RecordRow({
               className="tp-map-kind"
             />
             <span className="tp-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
-            {live ? null : <span className="tp-record-ago">{ago(trace.start)}</span>}
+            {/* A record says when; a call under the open one is a row of its tree, as its stored tree will say it. */}
+            {live || depth > 0 ? null : <span className="tp-record-ago">{ago(trace.start)}</span>}
           </span>
-          <StatusSlot status={page ? null : trace.http_status} />
-          {/* A column each, the same on every row: its marks line up down the list, empty or not. */}
-          <span className="tp-map-chips tp-record-marks">
-            <span className="tp-record-errors">
-              <Errors count={trace.errors} />
-            </span>
-            <span className="tp-record-issues">
-              <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
-            </span>
-            <span className="tp-record-queries">
-              <Queries count={trace.queries} time={trace.db_time} />
-            </span>
-          </span>
+          {failed === undefined ? (
+            <StatusSlot status={page ? null : trace.http_status} />
+          ) : (
+            <FailedStatus failure={failed} />
+          )}
+          <RecordMarks trace={trace} pending={pending} className="tp-map-chips" />
         </span>
         <span className="tp-map-track">
           {live ? <span className="tp-map-bar tp-record-live" /> : null}

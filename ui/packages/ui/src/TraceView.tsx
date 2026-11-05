@@ -635,6 +635,8 @@ export interface TraceViewProps {
   actionsHost?: HTMLElement | null | undefined;
   /** `waterfall`: the record's time as its closed row says it (the time the page waited): its root row's too. */
   recordTime?: number | undefined;
+  /** `waterfall`: the record's marks as its closed row says them (TraceList's RecordMarks): its root row's too. */
+  recordMarks?: ReactNode;
   /** The Explore menu; hidden when empty. */
   explore?: readonly ExploreItem[] | undefined;
   /** Called when the reader picks another tab (its bar, its keys, a tile that leads to one). */
@@ -1060,6 +1062,7 @@ export function TraceView({
   detailsHost,
   actionsHost,
   recordTime,
+  recordMarks,
   // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
   ...held
 }: TraceViewProps) {
@@ -1132,18 +1135,20 @@ export function TraceView({
       onProfileTab={waterfall ? () => setActive("profile") : undefined}
       rootTime={waterfall ? recordTime : undefined}
       rootMark={
-        waterfall ? (
-          // In the closed records' columns (TraceList): the open one's marks under theirs.
-          <span className="tp-record-marks">
-            <span className="tp-record-errors" />
-            <span className="tp-record-issues">
-              <RecordIssues issues={chainFindings(chain, findings)} />
-            </span>
-            <span className="tp-record-queries" data-opens="sql">
-              <Queries count={scopedSpans(chain.members, null, callsOfTab("sql")).length} />
-            </span>
-          </span>
-        ) : undefined
+        waterfall
+          ? (recordMarks ?? (
+              // In the closed records' columns (TraceList): the open one's marks under theirs.
+              <span className="tp-record-marks">
+                <span className="tp-record-errors" />
+                <span className="tp-record-issues">
+                  <RecordIssues issues={chainFindings(chain, findings)} />
+                </span>
+                <span className="tp-record-queries" data-opens="sql">
+                  <Queries count={scopedSpans(chain.members, null, callsOfTab("sql")).length} />
+                </span>
+              </span>
+            ))
+          : undefined
       }
       issuesIn={
         waterfall

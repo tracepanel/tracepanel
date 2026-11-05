@@ -9,15 +9,18 @@ import {
   LogoMark,
   memoryFromParams,
   parseSlice,
+  RecordMarks,
   RecordRow,
   RowFilter,
   RowKinds,
+  recordPending,
   type Slice,
   sliceParams,
   type TabId,
   TraceList,
   type TraceRow,
   type ViewMemory,
+  withChain,
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -297,6 +300,25 @@ function callsUnder(rows: readonly TraceRow[], record: TraceRow): readonly Trace
   return ordered.slice(at + 1, next < 0 ? undefined : next);
 }
 
+/**
+ * Whether a record's calls have traces still on their way: its numbers now would be a part of what they will be,
+ * so it says none yet. A call its view's chain waits for, or one whose answer named a trace not stored yet; never a
+ * call no trace answers ("~…", the id it flew under), nor one that got no answer.
+ */
+function callsArriving(rows: readonly TraceRow[], record: TraceRow, stored: ReadonlySet<string>): boolean {
+  return callsUnder(rows, record).some(
+    (call) =>
+      // The page's own load is a record's row, not one of its calls: its numbers are its own.
+      call.loadHost === undefined &&
+      (call.call === "waiting" ||
+        (call.call === undefined &&
+          call.failed === undefined &&
+          !call.trace.id.startsWith("~") &&
+          !stored.has(call.trace.id) &&
+          arrivingIn(rows, stored, call.trace.id) === true)),
+  );
+}
+
 /** The records a filter finds by their names; the one open stays, its rows are filtered in place. */
 function filteredRecords(rows: readonly TraceRow[], filter: string, selectedId: string | null): readonly TraceRow[] {
   const wanted = filter.trim().toLowerCase();
@@ -403,6 +425,8 @@ function PanelWaterfall({
     (row) => !knowsKinds || showsKinds(chains.counts?.get(row.trace.id)?.span_kinds, kinds),
   );
   const opened = rows.find((row) => row.trace.id === rootId);
+  // As the list has it: whether its calls' numbers are still on their way.
+  const record = listRows.find((row) => row.trace.id === rootId) ?? opened;
   // Narrowed to nothing but the open record: said so, with the way back, not a list that silently shrank.
   const narrowed = filter.trim() !== "" || kinds.length > 0;
   const nothingElse = narrowed && records.every((row) => row.trace.id === rootId);
@@ -479,10 +503,24 @@ function PanelWaterfall({
                           running={runningIn(rows, rootId)}
                           variant="waterfall"
                           recordTime={opened?.trace.duration}
+                          recordMarks={
+                            record ? (
+                              <RecordMarks
+                                trace={withChain(record.trace, chains.counts?.get(record.trace.id))}
+                                pending={recordPending(record)}
+                              />
+                            ) : undefined
+                          }
                           waiting={
                             opened ? (
                               <>
-                                <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
+                                <RecordRow
+                                  row={opened}
+                                  fresh={false}
+                                  onSelect={() => undefined}
+                                  live={Boolean(opened.open)}
+                                  current={true}
+                                />
                                 {callsUnder(rows, opened).map((call) => (
                                   <RecordRow
                                     key={call.key ?? call.trace.id}
@@ -634,7 +672,11 @@ function PanelApp({ route }: { route: Route }) {
         rows={rows}
         listRows={recordsOf(inOrder(true, shown.rows), selectedId)
           .reverse()
-          .map((row) => (arrivingIn(rows, stored, row.trace.id) ? { ...row, arriving: true } : row))}
+          .map((row) => {
+            const arriving = arrivingIn(rows, stored, row.trace.id) === true;
+            const awaiting = !row.awaiting && callsArriving(rows, row, stored);
+            return arriving || awaiting ? { ...row, arriving, awaiting: row.awaiting || awaiting } : row;
+          })}
         onMore={more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined}
         stored={stored}
         chains={chains}

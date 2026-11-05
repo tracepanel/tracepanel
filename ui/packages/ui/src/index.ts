@@ -85,10 +85,13 @@ export {
   type CallGroup,
   type ListChains,
   PageName,
+  RecordMarks,
   RecordRow,
+  recordPending,
   TraceList,
   type TraceRow,
   traceLabel,
+  withChain,
 } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";
