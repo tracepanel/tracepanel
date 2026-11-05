@@ -468,6 +468,11 @@ function tabsOfRow<T extends { id: string; label: string; icon?: unknown }>(
     return tabs.filter((tab) => tab.id === "tree" || (profiled && tab.id === "profile"));
   }
   if (isLeafRow(chain, scope)) return tabs.filter((tab) => tab.id === "tree");
+  // One call with nothing under it (a query): its own Details, and its findings, error and logs where it has them; a list of
+  // it alone, or a profile of its few ms, says nothing more.
+  if (scopedSpans(chain.members, scope, () => true).length <= 1) {
+    return tabs.filter((tab) => ["tree", "issues", "error", "logs"].includes(tab.id));
+  }
   return tabs.filter((tab) => tab.id !== "request" && tab.id !== "app");
 }
 
