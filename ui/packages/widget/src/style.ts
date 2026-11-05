@@ -109,7 +109,7 @@ export const STYLE = `
   }
   .panel {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147483646;
-    width: min(var(--tracepanel-width, 600px), 100vw); border-left: 1px solid var(--dt-float-edge);
+    width: min(var(--tracepanel-width, 600px), max(70vw, 20rem), 100vw); border-left: 1px solid var(--dt-float-edge);
     background: var(--dt-panel);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     box-shadow: var(--dt-float-panel-shadow);
@@ -117,7 +117,7 @@ export const STYLE = `
     transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out, visibility 0s 200ms;
   }
   .panel[data-open] { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out; }
-  .panel[data-open] ~ .badge { right: calc(min(var(--tracepanel-width, 600px), 100vw) + 16px); }
+  .panel[data-open] ~ .badge { right: calc(min(var(--tracepanel-width, 600px), max(70vw, 20rem), 100vw) + 16px); }
   /* No room beside the panel (a narrow window): the panel shows the request, the badge folds to its logo,
      its ring still the verdict. */
   :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 40px; padding: 0; justify-content: center; }
@@ -135,14 +135,14 @@ export const STYLE = `
   .resize:hover::after, .panel[data-resizing] .resize::after { background: var(--dt-divider-active); }
   /* Docked at the bottom, like browser devtools: full width, the height is dragged from the top edge. */
   :host([data-dock="bottom"]) .panel {
-    top: auto; left: 0; width: 100vw; height: min(var(--tracepanel-height, 360px), 100vh);
+    top: auto; left: 0; width: 100vw; height: min(var(--tracepanel-height, 360px), max(75vh, 16rem), 100vh);
     border-left: 0; border-top: 1px solid var(--dt-float-edge);
     box-shadow: var(--dt-float-panel-shadow-bottom);
     transform: translateY(100%);
     transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms ease-out, visibility 0s 200ms;
   }
   :host([data-dock="bottom"]) .panel[data-open] { transform: none; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms ease-out; }
-  :host([data-dock="bottom"]) .panel[data-open] ~ .badge { right: 16px; bottom: calc(min(var(--tracepanel-height, 360px), 100vh) + 12px); }
+  :host([data-dock="bottom"]) .panel[data-open] ~ .badge { right: 16px; bottom: calc(min(var(--tracepanel-height, 360px), max(75vh, 16rem), 100vh) + 12px); }
   :host([data-dock="bottom"]) .resize { top: -6px; bottom: auto; left: 0; right: 0; width: auto; height: 10px; cursor: ns-resize; }
   :host([data-dock="bottom"]) .resize::after { top: 5px; bottom: auto; left: 0; right: 0; width: auto; height: 1px; }
   /* While dragging, the size follows the pointer: no transition (these selectors outrank the dock rules). */
