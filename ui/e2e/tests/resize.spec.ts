@@ -88,6 +88,9 @@ test("docked right, a shorter window: the details pane scrolls to its end, the l
   // Docked (the panel slides in), then wide enough for the details beside the tree.
   await expect.poll(async () => (await page.locator("iframe").boundingBox())?.x).toBe(1000);
   await dragTo(page, { x: 300 });
+  // As wide as it goes (seven tenths of the window), settled: the wheel goes over the details, not the panel on its
+  // way.
+  await expect.poll(async () => (await page.locator("iframe").boundingBox())?.x).toBe(480);
   await expect(panel(page).getByRole("complementary", { name: "Details" })).toBeVisible();
   await expect.poll(async () => (await ends(page)).frame).toBe(1000);
   await page.setViewportSize({ width: 1600, height: 500 });
@@ -103,24 +106,19 @@ test("docked right, a shorter window: the details pane scrolls to its end, the l
 });
 
 /**
- * The details pane wheeled to its end, the view itself left where it is (the tree's head still above the pane): the
- * last attribute's row is whole in the pane's box and in the panel's frame.
+ * The details wheeled to their end, the tree left where it is: the pane scrolled to its last line, and that line in
+ * the panel's frame.
  */
 async function lastAttributeInView(page: Page): Promise<boolean> {
   const pane = panel(page).getByRole("complementary", { name: "Details" });
   const box = await pane.boundingBox();
   if (!box) throw new Error("no details pane");
-  await page.mouse.move(box.x + box.width / 2, box.y + 30);
+  // Over the middle of the details, off their title (its hint, once shown, would take the wheel).
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, 5000);
-  const frame = page.frames().find((one) => one !== page.mainFrame());
-  if (!frame) throw new Error("no panel frame");
-  return frame.evaluate(() => {
-    const side = document.querySelector<HTMLElement>(".panel-wf-details");
-    const rows = side?.querySelectorAll("dl > div");
-    const last = rows?.[rows.length - 1]?.getBoundingClientRect();
-    const shown = side?.getBoundingClientRect();
-    if (!(last && shown)) return false;
-    return last.top >= shown.top - 1 && last.bottom <= Math.min(shown.bottom, window.innerHeight) + 1;
+  return pane.evaluate((side) => {
+    const end = side.scrollTop + side.clientHeight >= side.scrollHeight - 1;
+    return end && side.getBoundingClientRect().bottom <= window.innerHeight + 1;
   });
 }
 
@@ -152,6 +150,9 @@ test("docked right, the window made shorter: the details pane wheels to its last
   await panel(page).getByRole("button", { name: "Dock to right" }).click();
   await expect.poll(async () => (await page.locator("iframe").boundingBox())?.x).toBe(1000);
   await dragTo(page, { x: 300 });
+  // As wide as it goes (seven tenths of the window), settled: the wheel goes over the details, not the panel on its
+  // way.
+  await expect.poll(async () => (await page.locator("iframe").boundingBox())?.x).toBe(480);
   await expect(panel(page).getByRole("complementary", { name: "Details" })).toBeVisible();
 
   await expect.poll(() => lastAttributeInView(page)).toBe(true);
