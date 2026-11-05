@@ -152,14 +152,14 @@ test("a Python handler's waits say what was in flight: its query, its HTTP call,
   await expect.poll(() => boxes(page)).toContain("SQL postgresql");
   await expect(
     page.getByRole("region", { name: "Flame graph" }).getByRole("button", { name: /^SQL postgresql/ }),
-  ).toHaveClass(/dt-k-sql/);
+  ).toHaveClass(/tp-k-sql/);
 
   // A row opens its call in the call tree.
   await summaries(page).getByRole("button", { name: "SQL postgresql" }).click();
   await expect(page.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
   await expect(
     page.locator(
-      '.dt-map-row[data-kind="sql"][aria-selected="true"], .dt-map-row[data-kind="sql"][aria-current="true"]',
+      '.tp-map-row[data-kind="sql"][aria-selected="true"], .tp-map-row[data-kind="sql"][aria-current="true"]',
     ),
   ).toHaveCount(1);
 

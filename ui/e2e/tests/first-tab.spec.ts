@@ -36,9 +36,9 @@ for (const name of [SALES_REPORT, "POST /api/reports/sales", "manage.py rebuild_
     page,
   }) => {
     const frame = await openInPanel(page, name);
-    const head = frame.locator(".dt-hero");
+    const head = frame.locator(".tp-hero");
 
-    await expect(head.locator(".dt-kind, .dt-method").first()).toBeVisible();
+    await expect(head.locator(".tp-kind, .tp-method").first()).toBeVisible();
     await expect(head).toContainText(/\d+ ms/);
     const names = await terms(frame);
 
@@ -58,17 +58,17 @@ test("a request and the task it enqueued link each other with the call tree's ro
   const enqueued = request.getByRole("region", { name: "Related traces" });
 
   await expect(enqueued.getByRole("term")).toHaveText("Enqueued task");
-  await expect(enqueued.locator(".dt-kind[data-muted]")).toHaveText("task");
+  await expect(enqueued.locator(".tp-kind[data-muted]")).toHaveText("task");
   await expect(enqueued).toContainText(/\d+ ms/);
 
   await page.goto(`/#/t/${await traceId(SALES_REPORT)}?tab=request`);
   const by = page.getByRole("region", { name: "Related traces" });
 
   await expect(by.getByRole("term")).toHaveText("Enqueued by");
-  await expect(by.locator(".dt-kind[data-muted]")).toHaveText("request");
+  await expect(by.locator(".tp-kind[data-muted]")).toHaveText("request");
   // As every request row says it: its method and path, its status.
   await expect(by.getByRole("definition")).toContainText("POST /api/reports/sales");
-  await expect(by.locator(".dt-status")).toHaveText("202");
+  await expect(by.locator(".tp-status")).toHaveText("202");
 });
 
 test("on the console's page the header is the head: the facts don't say its URL, status or duration again", async ({

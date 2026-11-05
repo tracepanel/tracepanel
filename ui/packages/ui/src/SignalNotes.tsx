@@ -7,7 +7,7 @@ import type { Span } from "./types";
 
 function Sender({ sender }: { sender: unknown }) {
   return typeof sender === "string" && sender ? (
-    <span className="dt-map-sub" title={sender}>
+    <span className="tp-map-sub" title={sender}>
       {sender}
     </span>
   ) : null;
@@ -19,7 +19,7 @@ function SendNotes({ span, receivers }: { span: Span; receivers: readonly Span[]
   return (
     <>
       <Sender sender={span.attrs["signal.sender"]} />
-      <span className="dt-map-sub" data-count="">
+      <span className="tp-map-sub" data-count="">
         {count} {count === 1 ? "receiver" : "receivers"}
       </span>
       {failed ? (
@@ -36,13 +36,13 @@ function ReceiverNotes({ span }: { span: Span }) {
   const error = raisedLine(span.attrs);
   if (error) {
     return (
-      <span className="dt-map-sub" data-error="" title={where ? `${error}\n${where}` : error}>
+      <span className="tp-map-sub" data-error="" title={where ? `${error}\n${where}` : error}>
         {error}
       </span>
     );
   }
   return where ? (
-    <span className="dt-map-sub" title={where}>
+    <span className="tp-map-sub" title={where}>
       {where}
     </span>
   ) : null;

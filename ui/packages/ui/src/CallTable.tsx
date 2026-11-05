@@ -20,7 +20,7 @@ const ROW = cn(
   "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
   "data-focused:bg-brand-soft/60",
   "data-[tone=error]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
-  "data-[tone=warn]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--dt-warn-strong)]",
+  "data-[tone=warn]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--tp-warn-strong)]",
 );
 
 /** Whether a click in a row opens it: anywhere but a link or a button in it, and not the end of selecting its text. */
@@ -179,7 +179,7 @@ export function timeColumns<T>(
       fixed: true,
       num: true,
       cell: (item) => (
-        <span className="dt-row-time" title={timeTitle(time(item), noun)}>
+        <span className="tp-row-time" title={timeTitle(time(item), noun)}>
           {clock(time(item))}
         </span>
       ),
@@ -233,7 +233,7 @@ export function calledFrom(count: number, origin: string | null): string {
 
 /** What an open row's details start with, as the call tree's do: what it is, how many, how long. */
 export function DetailsTitle({ children }: { children: ReactNode }) {
-  return <p className="dt-map-details-title">{children}</p>;
+  return <p className="tp-map-details-title">{children}</p>;
 }
 
 /** One line of an open row's list of calls (where each was made, its time): the hairline rows of a call's fields. */

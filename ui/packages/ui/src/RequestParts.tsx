@@ -251,7 +251,7 @@ function BodyText({ body, text, name }: { body: BodyOf; text: string; name: stri
       // On the page a body is the one boxed thing: code, as code is shown everywhere.
       className={cn(!card && "overflow-hidden rounded-lg border bg-card")}
     >
-      <pre className="dt-syntax m-0 max-h-96 overflow-auto p-3 pr-11 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <pre className="tp-syntax m-0 max-h-96 overflow-auto p-3 pr-11 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
         <Readable body={body} text={text} />
       </pre>
     </CopyBlock>

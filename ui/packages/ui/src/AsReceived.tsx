@@ -29,7 +29,7 @@ export function AsReceived({ span }: { span: Span }) {
   const received = span.received;
   if (!received) return null;
   return (
-    <details className="dt-received" aria-label="As received over OTLP">
+    <details className="tp-received" aria-label="As received over OTLP">
       <summary>
         <ChevronRightIcon />
         As received over OTLP

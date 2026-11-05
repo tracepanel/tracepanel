@@ -88,13 +88,13 @@ test("a call's trace opened under the call shows its warnings, its info counted 
 }) => {
   await seed();
   await page.goto(`/#/t/${CALLER}?tab=tree`);
-  const handler = page.locator('.dt-map-row[data-kind="function"]').filter({ hasText: "create_order" });
+  const handler = page.locator('.tp-map-row[data-kind="function"]').filter({ hasText: "create_order" });
 
   await expect(page.getByText("stock running low")).toBeVisible();
   await expect(page.getByText("order received")).toHaveCount(0);
-  await expect(handler.locator(".dt-map-logs")).toHaveText("1 log");
+  await expect(handler.locator(".tp-map-logs")).toHaveText("1 log");
 
-  await handler.locator(".dt-map-logs").click();
+  await handler.locator(".tp-map-logs").click();
 
   await expect(page.getByText("order received")).toBeVisible();
   await expect(page.getByText("stock running low")).toBeVisible();

@@ -91,7 +91,7 @@ function json(value: unknown): string {
 /** Text as written; a model's reasoning dimmed. */
 function TextPart({ part }: { part: Part }) {
   return (
-    <p className="dt-llm-text" data-part={String(part.type)}>
+    <p className="tp-llm-text" data-part={String(part.type)}>
       {String(part.content ?? "")}
     </p>
   );
@@ -102,7 +102,7 @@ function ToolCallPart({ part }: { part: Part }) {
   const args = json(part.arguments ?? {});
   return (
     <CopyBlock text={args} label="Copy the arguments">
-      <pre className="dt-llm-code">
+      <pre className="tp-llm-code">
         <b>→ {String(part.name ?? "tool")}</b>({args})
       </pre>
     </CopyBlock>
@@ -114,7 +114,7 @@ function ToolResponsePart({ part }: { part: Part }) {
   const answer = json(part.response ?? part.result ?? "");
   return (
     <CopyBlock text={answer} label="Copy the answer">
-      <pre className="dt-llm-code">
+      <pre className="tp-llm-code">
         <b>← {String(part.id ?? "tool")}</b> {answer}
       </pre>
     </CopyBlock>
@@ -126,7 +126,7 @@ function OtherPart({ part }: { part: Part }) {
   const text = json(part);
   return (
     <CopyBlock text={text} label="Copy the part">
-      <pre className="dt-llm-code">{text}</pre>
+      <pre className="tp-llm-code">{text}</pre>
     </CopyBlock>
   );
 }
@@ -156,16 +156,16 @@ function preview(turn: Turn): string {
 
 function TurnView({ turn, open }: { turn: Turn; open: boolean }) {
   return (
-    <details className="dt-llm-turn" data-role={turn.role} open={open}>
+    <details className="tp-llm-turn" data-role={turn.role} open={open}>
       <summary>
-        <span className="dt-llm-role">{ROLES[turn.role] ?? turn.role}</span>
-        <span className="dt-llm-preview">{preview(turn)}</span>
+        <span className="tp-llm-role">{ROLES[turn.role] ?? turn.role}</span>
+        <span className="tp-llm-preview">{preview(turn)}</span>
       </summary>
-      <div className="dt-llm-parts">
+      <div className="tp-llm-parts">
         {turn.cut !== undefined ? (
           <>
             <CopyBlock text={turn.cut} label="Copy the turn as kept (it was cut)">
-              <pre className="dt-llm-code">{turn.cut}</pre>
+              <pre className="tp-llm-code">{turn.cut}</pre>
             </CopyBlock>
             <p className="text-xs text-muted-foreground">Cut at the SDK's limit (max_body_kb): not whole JSON.</p>
           </>
@@ -191,7 +191,7 @@ export function LlmConversation({ attrs }: { attrs: Attrs }): ReactNode {
         Conversation{" "}
         <span className="text-xs font-normal text-muted-foreground tabular-nums">{sent.length + answer.length}</span>
       </SectionHeading>
-      <div className="dt-llm-turns">
+      <div className="tp-llm-turns">
         {sent.map((turn) => (
           <TurnView key={turn.id} turn={turn} open={turn === sent.at(-1)} />
         ))}

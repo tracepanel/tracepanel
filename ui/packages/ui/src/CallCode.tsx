@@ -125,13 +125,13 @@ function CodeBars({
   // A call's trace's pieces are of its own time: on this trace's from where it starts on this one's clock.
   const offset = owner.start - trace.start;
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span className="tp-map-track" aria-hidden="true">
       {part.pieces
         .filter((piece) => piece.to - piece.from >= total * 0.004)
         .map((piece) => (
           <span
             key={piece.from}
-            className="dt-map-bar"
+            className="tp-map-bar"
             data-quiet=""
             data-waiting={piece.waiting ? "" : undefined}
             data-category={category}
@@ -217,7 +217,7 @@ export function CodeDetails({ info, onProfile }: { info: CodeInfo; onProfile?: (
     { label: "When", value: info.stretches > 1 ? `${when}, in ${info.stretches} stretches` : when },
   ];
   return (
-    <div className="dt-code-details">
+    <div className="tp-code-details">
       <p className="m-0 text-sm text-muted-foreground">{info.note}</p>
       <FactGrid rows={rows} />
       {info.profiled && onProfile ? (
@@ -270,7 +270,7 @@ function partProfile(part: CodePart, code: CodeOwner, span: string): Profile | u
 function WaitPlace({ part, code, span }: { part: CodePart; code: CodeOwner; span: string }) {
   const profile = partProfile(part, code, span);
   const place = part.waiting && profile ? waitPlace(profile) : null;
-  return place ? <span className="dt-map-sub">{place}</span> : null;
+  return place ? <span className="tp-map-sub">{place}</span> : null;
 }
 
 /**
@@ -299,21 +299,21 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
   const { name, yours } = partName(part, ctx.code, span.id);
   return (
     <>
-      <span className="dt-map-name" style={indentOf(depth)}>
-        <span className="dt-map-caret" />
+      <span className="tp-map-name" style={indentOf(depth)}>
+        <span className="tp-map-caret" />
         <KindBadge
           kind={part.waiting ? "wait" : "code"}
           muted={true}
-          className={part.waiting ? "dt-map-kind dt-map-wait" : "dt-map-kind"}
+          className={part.waiting ? "tp-map-kind tp-map-wait" : "tp-map-kind"}
         />
         <UntracedHint name={name} code={ctx.code}>
-          <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
+          <TaskName name={name} className={yours ? "tp-map-text" : "tp-map-text tp-map-lib"} />
         </UntracedHint>
         <WaitPlace part={part} code={ctx.code} span={span.id} />
         <RowFlame trace={owner} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} owner={owner} />
-      <span className="dt-map-time">{part.time}</span>
+      <span className="tp-map-time">{part.time}</span>
     </>
   );
 }
@@ -372,7 +372,7 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
   return open || pick ? (
     <button
       type="button"
-      className="dt-map-row"
+      className="tp-map-row"
       data-kind="code"
       data-category={codeCategory(span, ctx)}
       aria-current={ctx.codeRow === row ? "true" : undefined}
@@ -401,7 +401,7 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
       {inside}
     </button>
   ) : (
-    <div className="dt-map-row" data-kind="code" data-category={codeCategory(span, ctx)}>
+    <div className="tp-map-row" data-kind="code" data-category={codeCategory(span, ctx)}>
       {inside}
     </div>
   );
@@ -420,5 +420,5 @@ function hasCodeRow(span: Span, ctx: RowContext): boolean {
 
 /** How far in a row's name starts, and how many guides of the rows it hangs under it draws (styles.css). */
 export function indentOf(depth: number): CSSProperties {
-  return { paddingLeft: `${12 + depth * 16}px`, "--dt-depth": depth } as CSSProperties;
+  return { paddingLeft: `${12 + depth * 16}px`, "--tp-depth": depth } as CSSProperties;
 }

@@ -70,7 +70,7 @@ test.describe("copied", () => {
 
 test("the call tree's request row shows the same bodies behind the same switch", async ({ page }) => {
   await page.goto(`/#/t/${await traceId(ORDER)}?tab=calls`);
-  await page.locator(".dt-map-row").first().click();
+  await page.locator(".tp-map-row").first().click();
 
   await expectBodies(page.getByRole("complementary", { name: "Details" }));
 });

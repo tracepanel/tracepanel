@@ -42,7 +42,7 @@ test("in the panel, a task opens in the panel itself, and Back or Esc returns to
   await page.getByRole("button", { name: "Load reports" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.locator(".dt-map-timed").getByRole("button", { name: TASK_ROW }).click();
+  await frame.locator(".tp-map-timed").getByRole("button", { name: TASK_ROW }).click();
   await frame.getByRole("link", { name: "Open the task's trace →" }).click();
   const back = frame.getByRole("button", { name: "Back" });
 
@@ -56,7 +56,7 @@ test("in the panel, a task opens in the panel itself, and Back or Esc returns to
 
   await expect(back).toBeHidden();
   // Back to the call tree as it was: the task's row still selected, its details open.
-  await expect(frame.locator(".dt-map-timed").getByRole("button", { name: TASK_ROW })).toHaveAttribute(
+  await expect(frame.locator(".tp-map-timed").getByRole("button", { name: TASK_ROW })).toHaveAttribute(
     "aria-current",
     "true",
   );

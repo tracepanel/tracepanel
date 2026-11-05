@@ -30,7 +30,7 @@ import type { ColumnSpec, Columns } from "./hooks/useColumns";
 
 /** A column's name in a table's header, every table's and the lists drawn as one (a profile's functions). */
 export const HEAD_TEXT =
-  "text-xs font-semibold tracking-wide text-(--dt-table-head-text) uppercase light:text-2xs light:font-medium light:tracking-[0.06em]";
+  "text-xs font-semibold tracking-wide text-(--tp-table-head-text) uppercase light:text-2xs light:font-medium light:tracking-[0.06em]";
 /**
  * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
  * `text-base`. On white, lower and lighter type on a quiet band, the rows carry the weight.
@@ -466,7 +466,7 @@ function headClass(side: Side, moves: boolean, over: boolean, className: string 
     side === "start" && "text-right",
     // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name. Opaque:
     // a sticky header's rows scroll under it.
-    moves && "hover:bg-[color-mix(in_oklab,var(--dt-table-head),var(--color-foreground)_4%)]",
+    moves && "hover:bg-[color-mix(in_oklab,var(--tp-table-head),var(--color-foreground)_4%)]",
     over && "bg-brand-soft",
     className,
   );
@@ -725,7 +725,7 @@ export function ColumnsHeader({
   return (
     // A band a step off the rows, opaque (a sticky header's rows scroll under it), a hairline under each cell: a
     // collapsed table's own borders stay behind with the rows a sticky header leaves.
-    <TableHeader className="bg-(--dt-table-head) [&_th]:shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] [&_tr]:border-b-0">
+    <TableHeader className="bg-(--tp-table-head) [&_th]:shadow-[inset_0_-1px_0_var(--tp-table-head-rule)] [&_tr]:border-b-0">
       <TableRow className="hover:bg-transparent">
         {columns.shown.map((spec, index) => (
           <ColumnHead

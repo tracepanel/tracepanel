@@ -83,7 +83,7 @@ function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
   }, [shown]);
   if (!shown || !ctx.details) return null;
   return (
-    <div className="dt-map-inline" ref={box}>
+    <div className="tp-map-inline" ref={box}>
       {ctx.details}
     </div>
   );
@@ -110,9 +110,9 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace, within: Wi
     text: (
       <>
         {node.kind === "task" ? (
-          <TaskName name={node.run.name} className="dt-map-text" />
+          <TaskName name={node.run.name} className="tp-map-text" />
         ) : (
-          <span className="dt-map-text">{node.run.name}</span>
+          <span className="tp-map-text">{node.run.name}</span>
         )}
         <TaskState state={node.run.task_state} />
         {node.kind === "call" ? <CallApp node={node} /> : null}
@@ -144,8 +144,8 @@ function waitingView(node: Extract<Node, { type: "waiting" }>, trace: Trace): Li
   return {
     status: undefined,
     kind: "task",
-    text: <span className="dt-map-text dt-map-waiting">waiting for a worker…</span>,
-    track: <span className="dt-map-track" aria-hidden="true" />,
+    text: <span className="tp-map-text tp-map-waiting">waiting for a worker…</span>,
+    track: <span className="tp-map-track" aria-hidden="true" />,
     time: `+${duration(Math.max(node.span.start - trace.start, 0))}`,
   };
 }
@@ -240,7 +240,7 @@ function LinkedButton({
   return (
     <button
       type="button"
-      className="dt-map-row"
+      className="tp-map-row"
       data-dim={dim ? "" : undefined}
       data-kind="task"
       data-status={view.status}
@@ -252,14 +252,14 @@ function LinkedButton({
       }}
       onKeyDown={foldKeys(open, () => ctx.onToggle(node.key))}
     >
-      <span className="dt-map-name" style={indent}>
+      <span className="tp-map-name" style={indent}>
         <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
-        <KindBadge kind={view.kind} muted={true} className="dt-map-kind" />
+        <KindBadge kind={view.kind} muted={true} className="tp-map-kind" />
         {view.text}
         <LinkedFlame node={node} ctx={ctx} />
       </span>
       {view.track}
-      <span className="dt-map-time" title={view.timeTitle}>
+      <span className="tp-map-time" title={view.timeTitle}>
         {view.time}
       </span>
     </button>
@@ -347,14 +347,14 @@ function leafView(node: Extract<Node, { type: "log" | "error" }>) {
 
 /** A leaf's badge: its level, muted, or a dump's own. */
 function LeafBadge({ kind, level }: { kind: string; level: string }) {
-  if (kind === "dump") return <DumpBadge className="dt-map-kind" />;
-  return <KindBadge kind={level} muted={true} className="dt-map-kind" />;
+  if (kind === "dump") return <DumpBadge className="tp-map-kind" />;
+  return <KindBadge kind={level} muted={true} className="tp-map-kind" />;
 }
 
 /** A leaf's text: a dump's call site and first value, coloured; any other's message or error. */
 function LeafText({ node, text }: { node: Extract<Node, { type: "log" | "error" }>; text: string }) {
-  if (node.type === "log" && isDump(node.log)) return <DumpLine log={node.log} className="dt-map-text" />;
-  return <span className="dt-map-text">{text}</span>;
+  if (node.type === "log" && isDump(node.log)) return <DumpLine log={node.log} className="tp-map-text" />;
+  return <span className="tp-map-text">{text}</span>;
 }
 
 /** A log record or an error: a point on the timeline, at its time since the request started. */
@@ -370,19 +370,19 @@ function LeafRow({
     <>
       <button
         type="button"
-        className="dt-map-row"
+        className="tp-map-row"
         {...rowState(ctx, node.key, mark)}
         data-kind={view.kind}
         data-level={view.level}
         onClick={() => ctx.onSelect(node.key)}
       >
-        <span className="dt-map-name" style={indent}>
-          <span className="dt-map-caret" />
+        <span className="tp-map-name" style={indent}>
+          <span className="tp-map-caret" />
           <LeafBadge kind={view.kind} level={view.level} />
           <LeafText node={node} text={view.text} />
         </span>
         <Bar trace={ctx.trace} start={view.time} length={0} point={true} within={ctx.within} />
-        <span className="dt-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
+        <span className="tp-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
           +{duration(Math.max(view.time - ctx.trace.start, 0))}
         </span>
       </button>
@@ -421,7 +421,7 @@ function GroupName({
   const first = node.spans[0];
   return (
     <>
-      <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
+      <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="tp-map-kind" />
       <OpText text={callTemplate(first)} kind={first?.kind} />
       {/* How many, right after what: never pushed away from its name. */}
       <Times count={node.spans.length} />
@@ -465,7 +465,7 @@ function withoutGroupIssue(
 
 /**
  * A row's chips after its name: its issue, then what a call's trace found. Short of room they go whole, the last
- * first, onto a line that doesn't show (.dt-map-chips): never a chip cut down to an empty pill.
+ * first, onto a line that doesn't show (.tp-map-chips): never a chip cut down to an empty pill.
  */
 /** A row's findings as a count, its kind on hover: a click opens them. Beside the tree, in place of their names. */
 function IssuesMark({
@@ -498,7 +498,7 @@ function IssuesMark({
 }
 
 function RowChips({ children }: { children: ReactNode }) {
-  return <span className="dt-map-chips">{children}</span>;
+  return <span className="tp-map-chips">{children}</span>;
 }
 
 /** Repeats of one call folded into one row (×N), its calls as ticks on the timeline; open, each call a row. */
@@ -508,10 +508,10 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
   const issueBySpan = useMemo(() => withoutGroupIssue(node, ctx.issueBySpan), [node, ctx.issueBySpan]);
   const answer = useMemo(() => groupAnswerOf(node), [node]);
   return (
-    <div className="dt-map-group">
+    <div className="tp-map-group">
       <button
         type="button"
-        className="dt-map-row"
+        className="tp-map-row"
         {...rowState(ctx, node.key, mark)}
         data-kind={node.spans[0]?.kind}
         data-category={ctx.categories.get(node.spans[0]?.id ?? "")}
@@ -523,7 +523,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
         }}
         onKeyDown={foldKeys(open, () => ctx.onToggle(`open:${node.key}`))}
       >
-        <span className="dt-map-name" style={indent}>
+        <span className="tp-map-name" style={indent}>
           <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
           <GroupName node={node} ctx={ctx} parent={parent} answer={answer} />
         </span>
@@ -560,11 +560,11 @@ function groupTimes(node: Extract<Node, { type: "group" }>): string {
 /** Where each call of a group started, on the request's timeline. */
 function GroupTicks({ spans, trace, within }: { spans: readonly Span[]; trace: Trace; within: Within | undefined }) {
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span className="tp-map-track" aria-hidden="true">
       {spans.map((span) => {
         const [at] = clipped(span.start, 0, within);
         const left = Math.min(Math.max(((at - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100);
-        return <span key={span.id} className="dt-map-bar" data-tick="" style={{ left: `${left}%` }} />;
+        return <span key={span.id} className="tp-map-bar" data-tick="" style={{ left: `${left}%` }} />;
       })}
     </span>
   );
@@ -593,7 +593,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
   return (
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-root={span.parent_id === null ? "" : undefined}>
-        <span className="dt-map-name" style={indent}>
+        <span className="tp-map-name" style={indent}>
           <CallLead call={answers(span)} span={span}>
             <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
             <SpanName span={span} />
@@ -659,7 +659,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
 function ServedName({ text, name }: { text: string; name: string }) {
   const shown = sameRoute(text, name) ? "" : name;
   return (
-    <span className="dt-map-text dt-map-hop-name" title={shown || undefined}>
+    <span className="tp-map-text tp-map-hop-name" title={shown || undefined}>
       {shown}
     </span>
   );
@@ -682,9 +682,9 @@ function HopBar({
   const [at, length] = clipped(run.start, run.duration, narrowed(within, span));
   const server = barPlace(trace, at, length);
   return (
-    <span className="dt-map-track" aria-hidden="true">
-      <span className="dt-map-bar" data-call="" data-past={call.past} style={call.style} />
-      <span className="dt-map-bar" data-server="" style={server.style} />
+    <span className="tp-map-track" aria-hidden="true">
+      <span className="tp-map-bar" data-call="" data-past={call.past} style={call.style} />
+      <span className="tp-map-bar" data-server="" style={server.style} />
     </span>
   );
 }
@@ -706,11 +706,11 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
   return (
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-hop="">
-        <span className="dt-map-name" style={indent}>
+        <span className="tp-map-name" style={indent}>
           <CallLead span={span}>
             <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
-            <OpText text={text} kind={span.kind} className="dt-map-hop-path" />
-            <span className="dt-map-hop" aria-hidden="true">
+            <OpText text={text} kind={span.kind} className="tp-map-hop-path" />
+            <span className="tp-map-hop" aria-hidden="true">
               →
             </span>
             <span className="sr-only">served by</span>
@@ -771,7 +771,7 @@ function CallLead({ call = true, span, children }: { call?: boolean; span: Span;
   if (!call) return children;
   return (
     <span
-      className="dt-map-lead"
+      className="tp-map-lead"
       data-http={span.kind === "http.client" ? "" : undefined}
       data-untraced={untraced ? "" : undefined}
     >
@@ -798,7 +798,7 @@ export function OpenRun({
 }) {
   if (remote) {
     return (
-      <a className="dt-map-open" href={`${remote.console}#/t/${run.id}`} target="_blank" rel="noopener">
+      <a className="tp-map-open" href={`${remote.console}#/t/${run.id}`} target="_blank" rel="noopener">
         Open in {remote.project}'s console
       </a>
     );
@@ -806,7 +806,7 @@ export function OpenRun({
   // A row of the call tree leads to the run's own call tree, on the row that stands for all of it.
   const open = traceLinkProps(links, run.id, { tab: "tree", span: whole ? rootOf(whole) || undefined : undefined });
   return open ? (
-    <a className="dt-map-open" {...open}>
+    <a className="tp-map-open" {...open}>
       {words.open}
     </a>
   ) : null;

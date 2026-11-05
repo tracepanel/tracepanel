@@ -29,10 +29,10 @@ async function ends(page: Page): Promise<{ pane: boolean; divider: number; frame
       /auto|scroll/.test(getComputedStyle(element).overflowY),
     );
     for (const element of scrollers) element.scrollTop = element.scrollHeight;
-    const pane = document.querySelector<HTMLElement>(".dt-map-side");
-    const tree = document.querySelector<HTMLElement>(".dt-map-body[data-side] .dt-map-tree");
+    const pane = document.querySelector<HTMLElement>(".tp-map-side");
+    const tree = document.querySelector<HTMLElement>(".tp-map-body[data-side] .tp-map-tree");
     const box = pane?.getBoundingClientRect();
-    const tabs = document.querySelector(".dt-trace")?.querySelector(".dt-trace-strip, .dt-tabs");
+    const tabs = document.querySelector(".tp-trace")?.querySelector(".tp-trace-strip, .tp-tabs");
     const under = tabs?.getBoundingClientRect().bottom ?? 0;
     return {
       pane: box !== undefined && box.top >= under - 1 && box.bottom <= window.innerHeight + 1,
@@ -50,7 +50,7 @@ async function openDetails(page: Page): Promise<void> {
   await pill(page).click();
   const frame = panel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await frame.locator('.dt-map-row[data-kind="sql"]').first().click();
+  await frame.locator('.tp-map-row[data-kind="sql"]').first().click();
   await expect(frame.getByRole("complementary", { name: "Details" })).toBeVisible();
 }
 
@@ -116,7 +116,7 @@ async function lastAttributeInView(page: Page): Promise<boolean> {
   const frame = page.frames().find((one) => one !== page.mainFrame());
   if (!frame) throw new Error("no panel frame");
   return frame.evaluate(() => {
-    const side = document.querySelector<HTMLElement>(".dt-map-side");
+    const side = document.querySelector<HTMLElement>(".tp-map-side");
     const rows = side?.querySelectorAll('[aria-label="All attributes"] dl > div');
     const last = rows?.[rows.length - 1]?.getBoundingClientRect();
     const shown = side?.getBoundingClientRect();
@@ -179,7 +179,7 @@ test("in hand, every resize edge stays a thin neutral line, its hit area wider",
   const frame = panel(page);
   const neutral = await frame.locator("html").evaluate((html) => {
     const probe = html.ownerDocument.createElement("i");
-    probe.style.color = "var(--dt-divider-active)";
+    probe.style.color = "var(--tp-divider-active)";
     html.ownerDocument.body.append(probe);
     const colour = getComputedStyle(probe).color;
     probe.remove();
@@ -207,14 +207,14 @@ test("in hand, every resize edge stays a thin neutral line, its hit area wider",
   await page.mouse.up();
 
   // The details pane's edge, mid-drag: what shows is the line between the tree and the pane, the tree's edge.
-  const side = frame.locator(".dt-map-resize");
+  const side = frame.locator(".tp-map-resize");
   const sideBox = await side.boundingBox();
   if (!sideBox) throw new Error("no details pane edge");
   await page.mouse.move(sideBox.x + sideBox.width / 2, sideBox.y + 100);
   await page.mouse.down();
   await page.mouse.move(sideBox.x - 40, sideBox.y + 100, { steps: 3 });
   const paneEdge = await side.evaluate((element) => {
-    const tree = getComputedStyle(element.parentElement?.querySelector(".dt-map-tree") as Element);
+    const tree = getComputedStyle(element.parentElement?.querySelector(".tp-map-tree") as Element);
     return {
       thickness: Number.parseFloat(tree.borderRightWidth),
       colour: tree.borderRightColor,
@@ -236,8 +236,8 @@ test("in the panel, the line between the tree and the details drags anywhere alo
   const pane = frame.getByRole("complementary", { name: "Details" });
   const width = async () => Math.round((await pane.boundingBox())?.width ?? 0);
   const before = await width();
-  const edge = await frame.locator(".dt-map-resize").boundingBox();
-  const tree = await frame.locator(".dt-map-body[data-side] .dt-map-tree").boundingBox();
+  const edge = await frame.locator(".tp-map-resize").boundingBox();
+  const tree = await frame.locator(".tp-map-body[data-side] .tp-map-tree").boundingBox();
   if (!(edge && tree)) throw new Error("no details pane edge");
 
   // As tall as the tree beside it: the whole line is the edge.

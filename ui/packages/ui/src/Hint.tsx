@@ -36,7 +36,7 @@ export function Hint({
         side={side}
         sideOffset={8}
         arrow={false}
-        className="grid max-w-72 gap-1 rounded-lg border bg-popover px-3 py-2 text-left text-popover-foreground shadow-[var(--dt-popover-shadow)]"
+        className="grid max-w-72 gap-1 rounded-lg border bg-popover px-3 py-2 text-left text-popover-foreground shadow-[var(--tp-popover-shadow)]"
       >
         <span className="flex items-center justify-between gap-4 text-sm font-medium">
           {title}

@@ -54,7 +54,7 @@ export function outcomeOf(trace: Trace): ReactNode {
   if (typeof status === "number") return <StatusBadge status={status} />;
   if (typeof state === "string") return <StateBadge state={state} />;
   return trace.status === "error" ? (
-    <span className="dt-status" data-tone="error">
+    <span className="tp-status" data-tone="error">
       failed
     </span>
   ) : null;

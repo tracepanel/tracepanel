@@ -86,16 +86,16 @@ function shareMs(legend: string, name: string): number {
 
 test("a leaf span's wait is painted as the legend counts it: hatched, said for how long", async ({ page }) => {
   await page.goto(`/#/t/${TASK}?tab=tree`);
-  const legend = (await page.locator(".dt-breakdown-legend").first().innerText()).replace(/\s+/g, " ");
-  const track = page.locator(".dt-lane[data-own] .dt-lane-track");
+  const legend = (await page.locator(".tp-breakdown-legend").first().innerText()).replace(/\s+/g, " ");
+  const track = page.locator(".tp-lane[data-own] .tp-lane-track");
   // Each piece's share of the track, waiting's and Your code's, in ms of the trace.
   const painted = await track.evaluate((element) => {
     const width = element.getBoundingClientRect().width;
     const ms = (piece: Element) => (piece.getBoundingClientRect().width / width) * 137;
     const sum = (selector: string) => [...element.querySelectorAll(selector)].reduce((all, each) => all + ms(each), 0);
     return {
-      waiting: sum(".dt-stretch[data-waiting]"),
-      code: sum('.dt-stretch[data-category="code"]:not([data-waiting])'),
+      waiting: sum(".tp-stretch[data-waiting]"),
+      code: sum('.tp-stretch[data-category="code"]:not([data-waiting])'),
     };
   });
 
@@ -103,7 +103,7 @@ test("a leaf span's wait is painted as the legend counts it: hatched, said for h
   expect(Math.abs(painted.waiting - shareMs(legend, "Waiting"))).toBeLessThan(2);
   expect(Math.abs(painted.code - shareMs(legend, "Your code"))).toBeLessThan(2);
   // Said over each span's longest wait (the task's own, its function's): how long each waited, adding up to Waiting.
-  const said = (await track.locator(".dt-quiet-label").allInnerTexts()).map((text) =>
+  const said = (await track.locator(".tp-quiet-label").allInnerTexts()).map((text) =>
     /^waiting · (\d+) ms$/.exec(text),
   );
   expect(said).toHaveLength(2);
@@ -113,10 +113,10 @@ test("a leaf span's wait is painted as the legend counts it: hatched, said for h
 
 test("its Profile tab opens on Your code, its bar the strip's legend", async ({ page }) => {
   await page.goto(`/#/t/${TASK}?tab=tree`);
-  const strip = (await page.locator(".dt-breakdown-legend").first().innerText()).replace(/\s+/g, " ");
+  const strip = (await page.locator(".tp-breakdown-legend").first().innerText()).replace(/\s+/g, " ");
   await page.getByRole("tab", { name: /^Profile/ }).click();
 
   await expect(page.getByRole("tab", { name: "Your code" })).toHaveAttribute("aria-selected", "true");
-  const bar = page.locator(".dt-breakdown-legend").filter({ visible: true }).first();
+  const bar = page.locator(".tp-breakdown-legend").filter({ visible: true }).first();
   await expect.poll(async () => (await bar.innerText()).replace(/\s+/g, " ")).toBe(strip.replace(/ Functions 1$/, ""));
 });

@@ -316,7 +316,7 @@ function Hero({ trace }: { trace: Trace }) {
   const head = heading(trace);
   const code = codeOf(trace);
   return (
-    <header className="dt-hero grid gap-1.5">
+    <header className="tp-hero grid gap-1.5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
         <span className="flex min-w-0 font-mono text-base font-medium [overflow-wrap:anywhere]">

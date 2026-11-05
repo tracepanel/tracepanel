@@ -15,7 +15,7 @@ test("the panel's Request tab has no tiles and no lanes, its Call tree tab the s
 
   // No tiles: the tabs carry the duration and the queries; the time is the Call tree tab's.
   await expect(tab).toContainText("GET");
-  await expect(tab.locator(".dt-metric-label")).toHaveCount(0);
+  await expect(tab.locator(".tp-metric-label")).toHaveCount(0);
   await expect(tab.getByRole("figure", { name: "Timeline" })).toHaveCount(0);
 
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
@@ -43,6 +43,6 @@ test("in the panel too, the first tab has no lanes and the call tree has its own
 
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
-  await expect(frame.locator(".dt-map-head")).toBeVisible();
-  await expect(frame.getByRole("figure", { name: "Timeline" }).locator(".dt-lane-label")).toHaveText(["task"]);
+  await expect(frame.locator(".tp-map-head")).toBeVisible();
+  await expect(frame.getByRole("figure", { name: "Timeline" }).locator(".tp-lane-label")).toHaveText(["task"]);
 });

@@ -11,7 +11,7 @@ import { expect, test } from "../fixtures.ts";
 async function openTrace(page: Page, name: string, tab = ""): Promise<void> {
   await page.goto(`/#/t/${await traceId(name)}${tab}`);
   // Its heading ends with the name's last word: a method is a badge of its own, a task's name may be cut at its start.
-  await expect(page.locator(".dt-trace-title h2").first()).toContainText(name.split(/[ .]/).at(-1) ?? name);
+  await expect(page.locator(".tp-trace-title h2").first()).toContainText(name.split(/[ .]/).at(-1) ?? name);
 }
 
 test("an error's row names where it happened: an endpoint by its method's badge, a task by its kind's", async ({
@@ -22,10 +22,10 @@ test("an error's row names where it happened: an endpoint by its method's badge,
   const task = rows.getByRole("link").filter({ hasText: "ConnectionError" });
   const request = rows.getByRole("link").filter({ hasText: "ZeroDivisionError" });
 
-  await expect(task.locator(".dt-kind")).toHaveText("task");
+  await expect(task.locator(".tp-kind")).toHaveText("task");
   // A long task name is cut at its start to fit the column (by the font's widths): its full name is its title.
   await expect(task.locator('[title$="thumbnails_notify"]')).toHaveCount(1);
-  await expect(request.locator(".dt-method")).toHaveText("GET");
+  await expect(request.locator(".tp-method")).toHaveText("GET");
   await expect(request).toContainText("GET /error/");
 });
 
@@ -41,10 +41,10 @@ test("an issue reads its kind in its chip, then its title without it, in the lis
   await row.click();
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^13 similar queries/);
-  await expect(page.getByRole("main").locator(".dt-method").first()).toHaveText("GET");
+  await expect(page.getByRole("main").locator(".tp-method").first()).toHaveText("GET");
 
   await page.goto(`/#/t/${await traceId("GET /api/posts")}?tab=issues`);
-  const title = page.locator(".dt-issue-title").first();
+  const title = page.locator(".tp-issue-title").first();
 
   await expect(title.locator('[data-slot="badge"]')).toHaveText("N+1");
   await expect(title).toHaveText(/^N\+1\s*13 similar queries/);
@@ -54,9 +54,9 @@ test("a page's action reads in the list as in its header, and its failure shows 
   await page.goto("/#/pages");
   const row = page.getByRole("region", { name: "Pages" }).getByRole("link").filter({ hasText: '"Delete"' });
 
-  await expect(row.locator(".dt-method")).toHaveText("CLICK");
+  await expect(row.locator(".tp-method")).toHaveText("CLICK");
   await expect(row).toContainText('"Delete" · /books');
-  await expect(row.locator(".dt-status")).toHaveText("failed");
+  await expect(row.locator(".tp-status")).toHaveText("failed");
 });
 
 test("a failed HTTP call has a failed row's red edge and its method's badge", async ({ page }) => {
@@ -64,7 +64,7 @@ test("a failed HTTP call has a failed row's red edge and its method's badge", as
   const call = page.locator("tr[data-tone]").filter({ hasText: "127.0.0.1/api/books" });
 
   await expect(call).toHaveAttribute("data-tone", "error");
-  await expect(call.locator(".dt-method")).toHaveText("GET");
+  await expect(call.locator(".tp-method")).toHaveText("GET");
 });
 
 test("a job's first tab is named as its badge and the sidebar name it: Job", async ({ page }) => {
@@ -93,10 +93,10 @@ test("an issue that isn't stored says so as an empty section does: an icon, a ti
   page,
 }) => {
   await page.goto("/#/issue/0000000000000000");
-  const empty = page.getByRole("main").locator(".dt-empty");
+  const empty = page.getByRole("main").locator(".tp-empty");
 
-  await expect(empty.locator(".dt-empty-icon")).toBeVisible();
-  await expect(empty.locator(".dt-empty-title")).toHaveText("Issue not found");
+  await expect(empty.locator(".tp-empty-icon")).toBeVisible();
+  await expect(empty.locator(".tp-empty-title")).toHaveText("Issue not found");
   await expect(empty.getByRole("link", { name: "Back to issues" })).toHaveCSS("border-top-style", "solid");
 });
 
@@ -168,7 +168,7 @@ for (const [name, url] of [
   }) => {
     await page.goto(url);
     await page.getByRole("main").locator("tbody tr").first().click();
-    const footer = page.getByRole("main").locator(".dt-details-footer");
+    const footer = page.getByRole("main").locator(".tp-details-footer");
     const open = footer.getByRole("link").last();
 
     await expect(footer).toHaveCount(1);
@@ -183,8 +183,8 @@ for (const [name, url] of [
 test("a trace that called nothing has no lone Duration tile: its header says how long it took", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}`);
 
-  await expect(page.locator(".dt-trace-title, h1").first()).toContainText("42 ms");
-  await expect(page.locator(".dt-metrics")).toHaveCount(0);
+  await expect(page.locator(".tp-trace-title, h1").first()).toContainText("42 ms");
+  await expect(page.locator(".tp-metrics")).toHaveCount(0);
 });
 
 test("a group's summary has the tiles an entry point's Overview has, in the same order", async ({ page }) => {
@@ -252,7 +252,7 @@ test("every call tree has its time over it: its own lane alone, or with a lane p
 }) => {
   await page.goto(`/#/t/${await traceId("shop.tasks.parse_feed")}?tab=tree`);
 
-  await expect(page.getByRole("figure", { name: "Timeline" }).locator(".dt-lane-label")).toHaveText(["task"]);
+  await expect(page.getByRole("figure", { name: "Timeline" }).locator(".tp-lane-label")).toHaveText(["task"]);
 
   await page.goto(`/#/t/${await traceId("GET /api/posts")}`);
   const lanes = page.getByRole("figure", { name: "Timeline" });

@@ -20,7 +20,7 @@ import { Meter, Mono, Tr } from "./ui";
 function Name({ icon, name, detail }: { icon: ReactNode; name: string; detail: string | null }) {
   return (
     <span className="flex min-w-0 items-center gap-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted/60 text-text-2 [&_svg]:size-[1.125rem] [&_.dt-monogram]:size-[1.125rem]">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg border bg-muted/60 text-text-2 [&_svg]:size-[1.125rem] [&_.tp-monogram]:size-[1.125rem]">
         {icon}
       </span>
       <span className="min-w-0">

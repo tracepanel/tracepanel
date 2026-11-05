@@ -20,5 +20,5 @@ export function SqlCode({ sql, vendor, raw, values, names }: SqlCodeProps) {
     return raw ? placeholders(run) : formatSql(run, vendor);
   }, [sql, vendor, raw, values, names]);
   const tokens = useMemo(() => tokenizeSql(text), [text]);
-  return <TokenBlock text={text} tokens={tokens} prefix="dt-sql-" label="Copy SQL" className="[tab-size:2]" />;
+  return <TokenBlock text={text} tokens={tokens} prefix="tp-sql-" label="Copy SQL" className="[tab-size:2]" />;
 }

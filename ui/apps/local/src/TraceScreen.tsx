@@ -472,7 +472,7 @@ function StillRunning({ running }: { running: Running }) {
   const { view, start, until } = running;
   return (
     <Empty title={view ? "View still open" : "Request in flight"} icon={RunningIcon} page={true}>
-      <RunningTime start={start} until={until} className="dt-arriving-time" />
+      <RunningTime start={start} until={until} className="tp-arriving-time" />
       {view ? VIEW_RUNS : REQUEST_RUNS}
     </Empty>
   );
@@ -494,7 +494,7 @@ function OnItsWay() {
 
 /** The empty state's icon for a trace still running: the ring every running thing turns. */
 function RunningIcon({ className }: { className?: string }) {
-  return <span className={cn("dt-running dt-running-big", className)} role="img" aria-label="running" />;
+  return <span className={cn("tp-running tp-running-big", className)} role="img" aria-label="running" />;
 }
 
 export function TraceScreen(props: TraceScreenProps) {

@@ -215,17 +215,17 @@ async function heads(page) {
   return page.locator("[data-split-head]").evaluateAll((all) =>
     all.map((head) => {
       const view = head.closest("header")?.parentElement ?? head;
-      const section = head.closest("section.dt-app-profile");
-      const bar = view.querySelector('section[aria-label="Time by package"] .dt-breakdown-legend');
+      const section = head.closest("section.tp-app-profile");
+      const bar = view.querySelector('section[aria-label="Time by package"] .tp-breakdown-legend');
       const legend = bar
-        ? [...bar.querySelectorAll(".dt-share")].map((share) => ({
+        ? [...bar.querySelectorAll(".tp-share")].map((share) => ({
             name: [...share.childNodes]
               .filter((node) => node.nodeType === 3)
               .map((node) => node.textContent)
               .join("")
               .trim(),
             value: share.querySelector("b")?.textContent?.trim() ?? "",
-            percent: share.querySelector(".dt-breakdown-share")?.textContent?.trim() ?? "",
+            percent: share.querySelector(".tp-breakdown-share")?.textContent?.trim() ?? "",
           }))
         : [];
       return {
@@ -250,7 +250,7 @@ async function heads(page) {
 }
 
 const STRIP = '[aria-label="Where the time went, and what to show"]';
-const ROW = 'button.dt-map-row[data-kind="code"]';
+const ROW = 'button.tp-map-row[data-kind="code"]';
 
 const said = (shares) => JSON.stringify(shares.map((share) => [share.name, share.value, share.percent]));
 
@@ -305,7 +305,7 @@ function cachesRedis(trace) {
 async function headerBroken(page, trace, strip) {
   const facts = (
     (await page
-      .locator(".dt-trace-facts")
+      .locator(".tp-trace-facts")
       .first()
       .textContent({ timeout: 2000 })
       .catch(() => "")) ?? ""
@@ -332,7 +332,7 @@ async function headerBroken(page, trace, strip) {
  * time and its queries' as the header writes them, to the letter. What's wrong, if anything.
  */
 async function mcpLinesBroken(page, lines, header) {
-  const facts = ((await page.locator(".dt-trace-facts").first().textContent({ timeout: 2000 }).catch(() => "")) ?? "")
+  const facts = ((await page.locator(".tp-trace-facts").first().textContent({ timeout: 2000 }).catch(() => "")) ?? "")
     .split("·")
     .map((fact) => fact.trim());
   const queries = facts.find((fact) => /^\d+ quer(?:y|ies) /.test(fact));
@@ -428,14 +428,14 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
     return problems;
   }
   const strip = await page.locator(STRIP).evaluate((root) =>
-    [...root.querySelectorAll(":scope > li > .dt-share")].map((share) => ({
+    [...root.querySelectorAll(":scope > li > .tp-share")].map((share) => ({
       name: [...share.childNodes]
         .filter((node) => node.nodeType === 3)
         .map((node) => node.textContent)
         .join("")
         .trim(),
       value: share.querySelector("b")?.textContent?.trim() ?? "",
-      percent: share.querySelector(".dt-breakdown-share")?.textContent?.trim() ?? "",
+      percent: share.querySelector(".tp-breakdown-share")?.textContent?.trim() ?? "",
     })),
   );
   const wrong = hundred(strip);
@@ -444,7 +444,7 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   const database = await databaseBroken(page, doc, strip);
   if (database) problem(database);
   for (const each of await headerBroken(page, doc, strip)) problem(each);
-  const header = (await page.locator(".dt-trace-time").first().textContent())?.trim() ?? "";
+  const header = (await page.locator(".tp-trace-time").first().textContent())?.trim() ?? "";
   for (const each of await mcpLinesBroken(page, mcp.lines.get(id), header)) problem(each);
   if (strip.length > 0 && doc.kind !== "page") {
     for (const each of await cardBroken(page, base, { id, spanned }, strip, header)) problem(each);
@@ -454,7 +454,7 @@ async function sweep(page, base, { id, profiled, readable, spanned }, mcp) {
   const rows = readable
     ? await page
         .locator(ROW)
-        .evaluateAll((all) => all.map((row) => row.querySelector(".dt-map-time")?.textContent?.trim() ?? ""))
+        .evaluateAll((all) => all.map((row) => row.querySelector(".tp-map-time")?.textContent?.trim() ?? ""))
     : [];
 
   const tab = page.getByRole("tab", { name: /^Profile/ });

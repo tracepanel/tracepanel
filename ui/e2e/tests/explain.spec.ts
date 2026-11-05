@@ -40,23 +40,23 @@ test("a plan's lines are in colour: operations, names, numbers; a full scan's op
   await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=sql`);
   await page.getByText("SELECT campaign_stats_1").first().click();
   await page.getByRole("button", { name: "Explain", exact: true }).click();
-  const lines = page.locator(".dt-plan-line");
+  const lines = page.locator(".tp-plan-line");
 
   await expect(lines).toHaveCount(3);
-  await expect(lines.nth(0).locator(".dt-plan-op")).toHaveText("Index Scan");
-  await expect(lines.nth(0).locator(".dt-sql-identifier")).toHaveText(["campaign_pkey", "campaign"]);
-  await expect(lines.nth(0).locator(".dt-sql-number")).toHaveText(["0.15..8.17", "1", "4"]);
-  await expect(lines.nth(1).locator(".dt-plan-label")).toHaveText("Index Cond:");
+  await expect(lines.nth(0).locator(".tp-plan-op")).toHaveText("Index Scan");
+  await expect(lines.nth(0).locator(".tp-sql-identifier")).toHaveText(["campaign_pkey", "campaign"]);
+  await expect(lines.nth(0).locator(".tp-sql-number")).toHaveText(["0.15..8.17", "1", "4"]);
+  await expect(lines.nth(1).locator(".tp-plan-label")).toHaveText("Index Cond:");
 
   await expect(lines.nth(2)).toHaveAttribute("data-warning", "");
-  await expect(lines.nth(2).locator(".dt-plan-op")).toHaveText("Seq Scan");
+  await expect(lines.nth(2).locator(".tp-plan-op")).toHaveText("Seq Scan");
   const warn = await lines
     .nth(2)
-    .locator(".dt-plan-op")
+    .locator(".tp-plan-op")
     .evaluate((op) => getComputedStyle(op).color);
   const ok = await lines
     .nth(0)
-    .locator(".dt-plan-op")
+    .locator(".tp-plan-op")
     .evaluate((op) => getComputedStyle(op).color);
   expect(warn).not.toBe(ok);
 });
@@ -64,14 +64,14 @@ test("a plan's lines are in colour: operations, names, numbers; a full scan's op
 test("a query opened in the call tree has the DB tab's Query plan", async ({ page }) => {
   await explainable(page);
   await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=tree`);
-  await page.locator(".dt-map-row").filter({ hasText: "SELECT campaign_stats_1" }).first().click();
+  await page.locator(".tp-map-row").filter({ hasText: "SELECT campaign_stats_1" }).first().click();
   const details = page.getByRole("complementary", { name: "Details" });
 
   await expect(details.getByRole("heading", { name: "Query plan" })).toBeVisible();
 
   await details.getByRole("button", { name: "Explain", exact: true }).click();
 
-  await expect(details.locator(".dt-plan-line")).toHaveCount(3);
+  await expect(details.locator(".tp-plan-line")).toHaveCount(3);
 });
 
 test("a query's details scrolled to their end stay where they are as Explain runs and its plan comes", async ({
@@ -90,10 +90,10 @@ test("a query's details scrolled to their end stay where they are as Explain run
   // Low enough that the details scroll.
   await page.setViewportSize({ width: 1440, height: 560 });
   await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=tree`);
-  await page.locator(".dt-map-row").filter({ hasText: "SELECT campaign_stats_1" }).first().click();
+  await page.locator(".tp-map-row").filter({ hasText: "SELECT campaign_stats_1" }).first().click();
   const details = page.getByRole("complementary", { name: "Details" });
   await expect(details.getByRole("heading", { name: "Query plan" })).toBeVisible();
-  const pane = page.locator("aside.dt-map-side");
+  const pane = page.locator("aside.tp-map-side");
   expect(await pane.evaluate((side) => side.scrollHeight > side.clientHeight)).toBe(true);
   await pane.evaluate((side) => side.scrollTo(0, side.scrollHeight));
   // Where the statement and its database's rows are, against the pane.
@@ -112,7 +112,7 @@ test("a query's details scrolled to their end stay where they are as Explain run
   expect(await at()).toEqual(before);
 
   letThrough();
-  await expect(details.locator(".dt-plan-line")).toHaveCount(3);
+  await expect(details.locator(".tp-plan-line")).toHaveCount(3);
   expect(await at()).toEqual(before);
 });
 
@@ -139,7 +139,7 @@ test("a WITH that only reads is explained", async ({ page }) => {
   await page.getByText("SELECT campaign_stats_1").first().click();
   await page.getByRole("button", { name: "Explain", exact: true }).click();
 
-  await expect(page.locator(".dt-plan-line")).toHaveCount(3);
+  await expect(page.locator(".tp-plan-line")).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Explain analyze" })).toBeVisible();
 });
 

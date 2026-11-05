@@ -146,7 +146,7 @@ function hop(scope: Page | ReturnType<typeof panel>, call: string) {
 }
 
 function codeRows(scope: Page | ReturnType<typeof panel>) {
-  return scope.locator('.dt-map-row[data-kind="code"]');
+  return scope.locator('.tp-map-row[data-kind="code"]');
 }
 
 test("a call's trace with a profile has the flame; its code rows say what ran from its own profile", async ({
@@ -158,17 +158,17 @@ test("a call's trace with a profile has the flame; its code rows say what ran fr
   const service = hop(page, "GET /books");
 
   await expect(bff).toHaveAttribute("aria-expanded", "true");
-  await expect(bff.locator(".dt-map-flame[data-on]")).toBeVisible();
-  await expect(bff.locator(".dt-map-flame")).toHaveAttribute("title", "Open its profile");
+  await expect(bff.locator(".tp-map-flame[data-on]")).toBeVisible();
+  await expect(bff.locator(".tp-map-flame")).toHaveAttribute("title", "Open its profile");
   await expect(service).toBeVisible();
-  await expect(service.locator(".dt-map-flame")).toHaveCount(0);
+  await expect(service.locator(".tp-map-flame")).toHaveCount(0);
 
   // The BFF's own code after its call, named by the BFF's profile, with the same flame.
   const code = codeRows(page).filter({ hasText: "resolve_books" });
   await expect(code).toHaveCount(1);
-  await expect(code.locator(".dt-map-kind")).toHaveText("code");
-  await expect(code.locator(".dt-map-flame[data-on]")).toBeVisible();
-  await expect(code.locator(".dt-map-time")).toHaveText(/^2\d ms$/);
+  await expect(code.locator(".tp-map-kind")).toHaveText("code");
+  await expect(code.locator(".tp-map-flame[data-on]")).toBeVisible();
+  await expect(code.locator(".tp-map-time")).toHaveText(/^2\d ms$/);
 });
 
 test("the flame on a call's trace opens that trace at its Profile tab, the way back to the click kept", async ({
@@ -177,7 +177,7 @@ test("the flame on a call's trace opens that trace at its Profile tab, the way b
   const { click, bff } = await chain(page);
   await page.goto(`/#/t/${click}?tab=tree`);
 
-  await hop(page, "GET /api/books").locator(".dt-map-flame").click();
+  await hop(page, "GET /api/books").locator(".tp-map-flame").click();
 
   await expect(page).toHaveURL(new RegExp(`#/t/${bff}\\?.*tab=profile`));
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
@@ -218,7 +218,7 @@ test("in the panel, the flame opens the call's trace at its Profile tab in place
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await expect(codeRows(frame).filter({ hasText: "resolve_books" })).toHaveCount(1);
 
-  await hop(frame, "GET /api/books").locator(".dt-map-flame").click();
+  await hop(frame, "GET /api/books").locator(".tp-map-flame").click();
 
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
   await expect(frame.getByText("Profile of the whole trace")).toBeVisible();

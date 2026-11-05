@@ -22,7 +22,7 @@ export function ShareFace({
       {swatch}
       {name}
       <b>{value}</b>
-      <span className="dt-breakdown-share">{share}</span>
+      <span className="tp-breakdown-share">{share}</span>
     </>
   );
 }
@@ -44,7 +44,7 @@ export interface BarPart {
 /** The shares on one bar, side by side, 2px apart; hatched only where its colour says waiting. */
 export function ShareBar({ parts, total }: { parts: readonly BarPart[]; total: number }) {
   return (
-    <div className="dt-share-bar">
+    <div className="tp-share-bar">
       {parts.map((part) => (
         <span
           key={part.key}

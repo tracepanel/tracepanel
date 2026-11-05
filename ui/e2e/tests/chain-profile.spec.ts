@@ -56,18 +56,18 @@ test("Inside this span: a step's profile is the BFF's stretch of its time and th
   const view = await bffApart(page);
   await page.goto(`/#/t/${view}?tab=calls`);
   const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
-  await group.locator(".dt-map-caret[data-toggle]").click();
+  await group.locator(".tp-map-caret[data-toggle]").click();
   await page
     .getByRole("button", { name: /^function Book\.author \d+(\.\d+)? ms$/i })
     .first()
     .click();
-  const under = page.locator(".dt-under-this");
+  const under = page.locator(".tp-under-this");
 
   await expect(under).toContainText("2 profiles");
   await under.getByRole("button", { name: "2 profiles" }).click();
 
   await expect(page.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator(".dt-scope-chip")).toContainText("Under Book.author");
+  await expect(page.locator(".tp-scope-chip")).toContainText("Under Book.author");
   await expect(section(page, "shop-bff")).toContainText(/Profile of 1 ms – 3 ms/);
   await expect(section(page, "shop-bff")).toContainText("2 ms");
   await expect(section(page, "shop")).toContainText("Profile of the whole trace");

@@ -96,7 +96,7 @@ function TextBlock({
 function JsonBlock({ json }: { json: string }) {
   return (
     <div className="rounded-md border bg-background">
-      <pre className="dt-syntax m-0 px-3 py-2 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <pre className="tp-syntax m-0 px-3 py-2 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
         <CodeLines text={json} language="javascript" />
       </pre>
     </div>
@@ -236,7 +236,7 @@ export function LogRecordDetails({ log, titled = false }: { log: Log; titled?: b
   return (
     <div className={cn("grid gap-3", titled ? "p-4" : "px-5 py-4")}>
       {titled ? (
-        <p className="dt-map-details-title">
+        <p className="tp-map-details-title">
           {isDump(log)
             ? `Dump · ${dumpSite(log) ?? withoutAnsi(log.logger)}`
             : `Log · ${log.level} · ${withoutAnsi(log.logger)}`}

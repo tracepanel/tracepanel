@@ -349,7 +349,7 @@ export function SidebarToggle({ collapsed, collapse }: { collapsed: boolean; col
         aria-label={label}
         aria-expanded={!collapsed}
         onClick={() => collapse(!collapsed)}
-        className="absolute top-7 -right-3 z-20 grid size-6 place-items-center rounded-full border bg-sidebar text-muted-foreground shadow-sm transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="absolute top-7 -right-3 z-20 grid size-6 place-items-center rounded-full border bg-sidebar text-muted-foreground shadow-sm transition-colors hover:border-[var(--tp-border-strong)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <Icon className="size-3.5" />
       </button>
@@ -366,7 +366,7 @@ function SearchButton({ rail, onSearch }: { rail: boolean; onSearch: () => void 
           type="button"
           onClick={onSearch}
           aria-label="Search traces"
-          className="grid size-10 place-items-center rounded-lg border bg-[var(--dt-field)] text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
+          className="grid size-10 place-items-center rounded-lg border bg-[var(--tp-field)] text-muted-foreground transition-colors hover:border-[var(--tp-border-strong)] hover:text-foreground"
         >
           <SearchIcon className="size-[1.125rem]" />
         </button>
@@ -377,7 +377,7 @@ function SearchButton({ rail, onSearch }: { rail: boolean; onSearch: () => void 
     <button
       type="button"
       onClick={onSearch}
-      className="flex h-10 items-center gap-2.5 rounded-lg border bg-[var(--dt-field)] px-3 text-left whitespace-nowrap text-md text-muted-foreground transition-colors hover:border-[var(--dt-border-strong)] hover:text-foreground"
+      className="flex h-10 items-center gap-2.5 rounded-lg border bg-[var(--tp-field)] px-3 text-left whitespace-nowrap text-md text-muted-foreground transition-colors hover:border-[var(--tp-border-strong)] hover:text-foreground"
     >
       <SearchIcon className="size-4" />
       Search traces
@@ -695,7 +695,7 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
       aria-label={`App: ${label}`}
       aria-busy={busy}
       className={cn(
-        "grid size-11 place-items-center rounded-lg border text-text-2 hover:border-[var(--dt-border-strong)] hover:text-foreground [&_svg]:size-[1.125rem] [&_.dt-monogram]:size-[1.125rem]",
+        "grid size-11 place-items-center rounded-lg border text-text-2 hover:border-[var(--tp-border-strong)] hover:text-foreground [&_svg]:size-[1.125rem] [&_.tp-monogram]:size-[1.125rem]",
         chosen && "border-brand/40 bg-brand-soft text-brand",
         switching,
       )}
@@ -707,7 +707,7 @@ function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
       type="button"
       aria-busy={busy}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-md font-medium transition-colors hover:border-[var(--dt-border-strong)] [&_svg]:size-4 [&_.dt-monogram]:size-4",
+        "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-md font-medium transition-colors hover:border-[var(--tp-border-strong)] [&_svg]:size-4 [&_.tp-monogram]:size-4",
         chosen && "border-brand/40 bg-brand-soft",
         switching,
       )}
@@ -765,7 +765,7 @@ function RailTip({
         side="right"
         sideOffset={12}
         arrow={false}
-        className="flex items-center gap-2 rounded-lg border bg-popover px-3 py-1.5 text-sm font-medium text-popover-foreground shadow-[var(--dt-popover-shadow)]"
+        className="flex items-center gap-2 rounded-lg border bg-popover px-3 py-1.5 text-sm font-medium text-popover-foreground shadow-[var(--tp-popover-shadow)]"
       >
         {label}
         {detail ? (
@@ -891,7 +891,7 @@ export function SidebarHandle({ width, resize }: { width: number; resize: (width
       tabIndex={0}
       title="Drag to resize · double-click to reset"
       // 10px to grab, centred on the sidebar's 1px border; what shows is that border, a step stronger in hand.
-      className="absolute top-0 -right-[5px] z-10 h-full w-2.5 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[4px] after:w-px after:bg-transparent after:transition-colors motion-reduce:after:transition-none hover:after:bg-(--dt-divider-active) focus-visible:after:bg-(--dt-divider-active) data-dragging:after:bg-(--dt-divider-active)"
+      className="absolute top-0 -right-[5px] z-10 h-full w-2.5 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[4px] after:w-px after:bg-transparent after:transition-colors motion-reduce:after:transition-none hover:after:bg-(--tp-divider-active) focus-visible:after:bg-(--tp-divider-active) data-dragging:after:bg-(--tp-divider-active)"
       onPointerDown={start}
       onDoubleClick={() => resize(DEFAULT_WIDTH())}
       onKeyDown={(event) => {

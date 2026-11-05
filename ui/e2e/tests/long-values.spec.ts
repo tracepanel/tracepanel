@@ -94,7 +94,7 @@ test.beforeEach(seed);
 test("in the docked panel a dump's long value wraps inside its box, its indentation kept", async ({ page }) => {
   const frame = await openPanel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await frame.locator('.dt-map-row[data-kind="dump"]').click();
+  await frame.locator('.tp-map-row[data-kind="dump"]').click();
   const value = frame.getByRole("region", { name: "Dump arguments" }).getByRole("region", { name: "order" });
   const pre = value.locator("pre");
 
@@ -112,7 +112,7 @@ test("in the docked panel a dump's long value wraps inside its box, its indentat
 test("in the docked panel a long query and a long request body wrap inside their boxes", async ({ page }) => {
   const frame = await openPanel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await frame.locator('.dt-map-row[data-kind="sql"]').first().click();
+  await frame.locator('.tp-map-row[data-kind="sql"]').first().click();
   const sql = frame.getByRole("complementary", { name: "Details" }).locator("pre").filter({ hasText: "END'" }).first();
 
   await expectWhole(sql);
@@ -127,7 +127,7 @@ test("in the docked panel a long query and a long request body wrap inside their
 
 test("on the console's page too, a dump's long value wraps inside its box", async ({ page }) => {
   await page.goto(`/#/t/${TRACE}?tab=tree`);
-  await page.locator('.dt-map-row[data-kind="dump"]').click();
+  await page.locator('.tp-map-row[data-kind="dump"]').click();
   const pre = page.getByRole("region", { name: "Dump arguments" }).locator("pre");
 
   await expect(pre).toHaveText(ORDER);

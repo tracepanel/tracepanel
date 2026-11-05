@@ -68,8 +68,8 @@ test("a call to a GraphQL server is named by its operation in the call tree, the
 
   await page.goto(`/#/t/${ID}?tab=tree`);
 
-  const calls = page.locator('.dt-map-row[data-kind="http.client"]');
-  await expect(calls.locator(".dt-map-text")).toHaveText([
+  const calls = page.locator('.tp-map-row[data-kind="http.client"]');
+  await expect(calls.locator(".tp-map-text")).toHaveText([
     "GraphQL query Authors",
     "GraphQL query Authors",
     "GraphQL mutation Save",
@@ -82,7 +82,7 @@ test("a call to a GraphQL server is named by its operation in the call tree, the
     .getByRole("row")
     .filter({ hasText: /GraphQL/ });
   await expect(groups).toHaveText([/GraphQL query Authors\s*×2/, /GraphQL mutation Save/]);
-  await expect(page.locator(".dt-scope-summary-text")).toHaveText(/^3 HTTP calls · 2 unique/);
+  await expect(page.locator(".tp-scope-summary-text")).toHaveText(/^3 HTTP calls · 2 unique/);
 
   await page.goto(`/#/calls/http?q=${encodeURIComponent(`target:${HOST}`)}`);
 

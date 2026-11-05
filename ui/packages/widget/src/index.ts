@@ -320,7 +320,7 @@ let logoIds = 0;
 function runtimeElement(mark: RuntimeMark): Element {
   if (mark.type === "browser") return svgOf(BROWSER_ICON_SVG);
   if (mark.type === "monogram") {
-    // The console's .dt-monogram: CSS draws the letters.
+    // The console's .tp-monogram: CSS draws the letters.
     const monogram = document.createElement("span");
     monogram.className = "monogram";
     monogram.dataset["mark"] = "monogram";
@@ -332,7 +332,7 @@ function runtimeElement(mark: RuntimeMark): Element {
   svg.dataset["mark"] = mark.type;
   const { logo } = mark;
   logoIds += 1;
-  const id = `dt-logo-${logoIds}`;
+  const id = `tp-logo-${logoIds}`;
   const { cx, cy, r, stops } = logo.gradient;
   const gradient = svgElement("radialGradient", { id, cx, cy, r, gradientUnits: "userSpaceOnUse" });
   gradient.append(...stops.map(([offset, color]) => svgElement("stop", { offset, "stop-color": color })));

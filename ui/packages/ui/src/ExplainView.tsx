@@ -82,7 +82,7 @@ function PlanFacts({ plan }: { plan: ExplainPlan }) {
   const warnings = plan.lines.filter((line) => line.warning).length;
   return (
     <>
-      <span className="dt-plan-where text-sm text-muted-foreground">
+      <span className="tp-plan-where text-sm text-muted-foreground">
         {plan.vendor} · {plan.alias}
         {plan.analyzed ? " · analyzed" : ""}
       </span>
@@ -170,13 +170,13 @@ export function StatementPlan({ statement, ...props }: StatementPlanProps) {
 }
 
 const PLAN_CLASSES: Record<PlanToken["type"], string | undefined> = {
-  op: "dt-plan-op",
-  label: "dt-plan-label",
-  keyword: "dt-sql-keyword",
-  name: "dt-sql-identifier",
-  key: "dt-plan-key",
-  number: "dt-sql-number",
-  string: "dt-sql-string",
+  op: "tp-plan-op",
+  label: "tp-plan-label",
+  keyword: "tp-sql-keyword",
+  name: "tp-sql-identifier",
+  key: "tp-plan-key",
+  number: "tp-sql-number",
+  string: "tp-sql-string",
   text: undefined,
 };
 
@@ -185,7 +185,7 @@ function PlanText({ text, warning }: { text: string; warning: boolean }) {
   const tokens = useMemo(() => tokenizePlan(text), [text]);
   return (
     <code
-      className="dt-plan-line font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
+      className="tp-plan-line font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
       data-warning={warning ? "" : undefined}
     >
       {tokens.map((token, index) => (

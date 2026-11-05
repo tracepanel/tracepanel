@@ -16,22 +16,22 @@ async function listed(page: Page, view: string) {
   await openApp(page, {}, { recording: true, view });
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const calls = list.locator('.dt-request-row[data-call="trace"]');
+  const calls = list.locator('.tp-request-row[data-call="trace"]');
   await expect(calls.first()).toBeVisible();
   // What the last operation called, opened down to the service (the others' remote calls, not traced, stay folded).
   await calls.last().locator("[data-toggle]").click();
-  const subgraph = list.locator('.dt-request-row[data-chain="trace"][aria-expanded="false"]');
+  const subgraph = list.locator('.tp-request-row[data-chain="trace"][aria-expanded="false"]');
   await expect(subgraph).toHaveCount(1);
   await subgraph.locator("[data-toggle]").click();
   await expect(subgraph).toHaveCount(0);
   return {
     list,
-    view: list.locator('.dt-request-row[data-kind="page"]').first(),
+    view: list.locator('.tp-request-row[data-kind="page"]').first(),
     calls,
-    group: list.locator('.dt-request-row[data-call="group"]'),
-    apps: list.locator('.dt-request-row[data-chain="app"]'),
-    runs: list.locator('.dt-request-row[data-chain="run"]'),
-    traces: list.locator('.dt-request-row[data-chain="trace"]'),
+    group: list.locator('.tp-request-row[data-call="group"]'),
+    apps: list.locator('.tp-request-row[data-chain="app"]'),
+    runs: list.locator('.tp-request-row[data-chain="run"]'),
+    traces: list.locator('.tp-request-row[data-chain="trace"]'),
   };
 }
 
@@ -42,15 +42,15 @@ test("different operations through one gateway are rows of their own, each named
   const { calls, group, apps, runs, traces } = await listed(page, seeded.view);
 
   // The gateway's five, a row each under the gateway's row.
-  await expect(group.locator(".dt-app-chip")).toHaveText("gateway");
-  await expect(group.locator(".dt-map-times")).toHaveText("×5");
-  await expect(calls.locator(".dt-request-path")).toHaveText(FIVE);
-  for (const row of await calls.all()) await expect(row.locator(".dt-kind")).toHaveText(/^gql$/i);
+  await expect(group.locator(".tp-app-chip")).toHaveText("gateway");
+  await expect(group.locator(".tp-map-times")).toHaveText("×5");
+  await expect(calls.locator(".tp-request-path")).toHaveText(FIVE);
+  for (const row of await calls.all()) await expect(row.locator(".tp-kind")).toHaveText(/^gql$/i);
   for (const row of await calls.all()) await expect(row).toHaveAttribute("data-depth", "2");
   await expect(runs).toHaveCount(0);
   // The subgraph's and the service's under the last.
-  await expect(apps.locator(".dt-app-chip")).toHaveText(["subgraph", "shop"]);
-  await expect(traces.locator(".dt-request-path")).toHaveText(["query Items", "/items"]);
+  await expect(apps.locator(".tp-app-chip")).toHaveText(["subgraph", "shop"]);
+  await expect(traces.locator(".tp-request-path")).toHaveText(["query Items", "/items"]);
 });
 
 test("one operation three times in a row is three rows, each as the view made it, all alike", async ({ page }) => {
@@ -65,7 +65,7 @@ test("one operation three times in a row is three rows, each as the view made it
   const { calls, runs } = await listed(page, seeded.view);
 
   await expect(runs).toHaveCount(0);
-  await expect(calls.locator(".dt-request-path")).toHaveText([
+  await expect(calls.locator(".tp-request-path")).toHaveText([
     "query Roles",
     "query Roles",
     "query Roles",
@@ -78,9 +78,9 @@ test("one operation three times in a row is three rows, each as the view made it
   const inRun = calls.nth(0);
   const outside = calls.nth(4);
   const look = async (row: typeof inRun) => ({
-    badge: await row.locator(".dt-kind").textContent(),
-    name: await row.locator(".dt-request-path").textContent(),
-    meta: await row.locator(".dt-request-meta").innerText(),
+    badge: await row.locator(".tp-kind").textContent(),
+    name: await row.locator(".tp-request-path").textContent(),
+    meta: await row.locator(".tp-request-meta").innerText(),
   });
 
   expect(await look(inRun)).toEqual(await look(outside));
@@ -97,8 +97,8 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
 }) => {
   const seeded = await gatewayView(3, FIVE);
   const { view, group, calls, apps, traces } = await listed(page, seeded.view);
-  const queries = (row: typeof view) => row.locator(".dt-request-queries-n");
-  const issues = (row: typeof view) => row.locator(".dt-request-chips");
+  const queries = (row: typeof view) => row.locator(".tp-request-queries-n");
+  const issues = (row: typeof view) => row.locator(".tp-request-chips");
 
   // The service's three queries; four issues: the same slow call in four gateway traces is one, as the tabs say.
   await expect(pill(page).locator(".seg").nth(2)).toHaveText("3");
@@ -135,7 +135,7 @@ test("the view's row counts its chain as the pill and the tabs do; a row with ro
     .getByRole("tab", { name: /^Issues/ })
     .click();
 
-  await expect(panel(page).locator(".dt-scope-chip")).toContainText("Under gateway");
+  await expect(panel(page).locator(".tp-scope-chip")).toContainText("Under gateway");
   await expect(panel(page).getByRole("tab", { name: /^Issues/ })).toContainText("4");
   await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
 });
@@ -167,7 +167,7 @@ test("a view's calls fold under its row and open again; its call tree and first 
   const frame = panel(page);
   await expect(frame.getByRole("tab", { name: /^View/ })).toBeVisible();
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await expect(frame.locator(".dt-map-row[data-root] .dt-kind").first()).toHaveText(/^view$/i);
+  await expect(frame.locator(".tp-map-row[data-root] .tp-kind").first()).toHaveText(/^view$/i);
 });
 
 test("in a narrow call tree a call's status is never cut, nested rows too: its name gives way first, then its app", async ({
@@ -180,18 +180,18 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
   for (const width of [520, 420, 360]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/#/t/${seeded.view}?tab=tree`);
-    const hops = page.locator('.dt-map-row[data-hop=""]');
+    const hops = page.locator('.tp-map-row[data-hop=""]');
     // The view's two calls, the gateway's to the subgraph, the subgraph's to the service.
     await expect(hops).toHaveCount(4);
     const untraced = page
-      .locator('.dt-map-row[data-kind="http.client"]')
-      .filter({ has: page.locator(".dt-not-traced"), hasText: "openapi.json" });
+      .locator('.tp-map-row[data-kind="http.client"]')
+      .filter({ has: page.locator(".tp-not-traced"), hasText: "openapi.json" });
     await expect(untraced).toHaveCount(1);
     await laidOut(page);
     const clipped = await hops.evaluateAll((rows) =>
       rows.map((row) => {
-        const name = row.querySelector(":scope > .dt-map-name");
-        const badge = name?.querySelector(":scope > .dt-status");
+        const name = row.querySelector(":scope > .tp-map-name");
+        const badge = name?.querySelector(":scope > .tp-status");
         const [box, edge] = [name?.getBoundingClientRect(), badge?.getBoundingClientRect()];
         const whole = badge ? badge.scrollWidth <= badge.clientWidth : false;
         return {
@@ -209,7 +209,7 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
     // A call no trace answered keeps its status and "not traced" whole the same way; what is before them gives way,
     // cut with an ellipsis: its kind, its name.
     const kept = await untraced.evaluate((row) => {
-      const name = row.querySelector(":scope > .dt-map-name");
+      const name = row.querySelector(":scope > .tp-map-name");
       const box = name?.getBoundingClientRect();
       const whole = (selector: string) => {
         const part = name?.querySelector(`:scope > ${selector}`);
@@ -220,10 +220,10 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
           past: box && edge ? Math.max(0, Math.round(edge.right - box.right)) : -1,
         };
       };
-      const cut = [...(name?.querySelectorAll(".dt-map-lead *") ?? [])]
+      const cut = [...(name?.querySelectorAll(".tp-map-lead *") ?? [])]
         .filter((part) => part.children.length === 0 && part.scrollWidth > part.clientWidth)
         .map((part) => getComputedStyle(part).textOverflow);
-      return { status: whole(".dt-status"), mark: whole(".dt-not-traced"), cut: [...new Set(cut)] };
+      return { status: whole(".tp-status"), mark: whole(".tp-not-traced"), cut: [...new Set(cut)] };
     });
     expect({ width, kept }).toEqual({
       width,

@@ -106,8 +106,8 @@ test("a call to a host that sends no traces says not traced, on its row and in i
 }) => {
   await storeRouter();
   await page.goto(`/#/t/${ROUTER}?tab=tree`);
-  const untraced = page.locator(".dt-map-row").filter({ hasText: "reviews.example.test" });
-  const traced = page.locator(".dt-map-row").filter({ hasText: "books" });
+  const untraced = page.locator(".tp-map-row").filter({ hasText: "reviews.example.test" });
+  const traced = page.locator(".tp-map-row").filter({ hasText: "books" });
 
   await expect(untraced.locator('[data-state="untraced"]')).toHaveText("not traced");
   await expect(untraced.locator('[data-state="untraced"]')).toHaveAttribute("title", new RegExp(`^${NOTE}`));
@@ -119,7 +119,7 @@ test("a call to a host that sends no traces says not traced, on its row and in i
 
   await untraced.click();
 
-  await expect(page.getByRole("complementary", { name: "Details" }).locator(".dt-not-traced-note")).toContainText(NOTE);
+  await expect(page.getByRole("complementary", { name: "Details" }).locator(".tp-not-traced-note")).toContainText(NOTE);
 
   await page.getByRole("tab", { name: /^HTTP calls/ }).click();
 
@@ -143,12 +143,12 @@ test("a call that just ended is waited for first: not traced only once no trace 
   expect(response.status).toBe(202);
   await pollExpect.poll(async () => (await fetch(`${CONSOLE}api/traces/${JUST_NOW}`)).status).toBe(200);
   await page.goto(`/#/t/${JUST_NOW}?tab=tree`);
-  const row = page.locator(".dt-map-row").filter({ hasText: "reviews.example.test" });
+  const row = page.locator(".tp-map-row").filter({ hasText: "reviews.example.test" });
 
-  await expect(page.locator(".dt-on-its-way")).toBeVisible();
+  await expect(page.locator(".tp-on-its-way")).toBeVisible();
   await expect(row.locator('[data-state="untraced"]')).toHaveCount(0);
 
   // Waited for 10 s after it ended: no trace came.
   await expect(row.locator('[data-state="untraced"]')).toHaveText("not traced", { timeout: 15_000 });
-  await expect(page.locator(".dt-on-its-way")).toHaveCount(0);
+  await expect(page.locator(".tp-on-its-way")).toHaveCount(0);
 });

@@ -104,7 +104,7 @@ function hop(scope: Scope, call: string): Locator {
 
 /** The call tree's selected row. */
 function selectedRow(scope: Scope): Locator {
-  return scope.locator('.dt-map-rows [aria-current="true"]');
+  return scope.locator('.tp-map-rows [aria-current="true"]');
 }
 
 /** The browser's view, open in the panel on its call tree: its call to the BFF, which called the service. */
@@ -142,11 +142,11 @@ test("in the panel, Back from a linked trace returns to the call tree, its row s
   const frame = await viewInPanel(page);
   // Every log record shown (the Logs chip), a row selected, a row folded, scrolled down.
   await frame.getByRole("button", { name: "1 log", exact: true }).click();
-  await expect(frame.locator(".dt-map-rows")).toContainText("view loading");
+  await expect(frame.locator(".tp-map-rows")).toContainText("view loading");
   await hop(frame, "POST /graphql").click();
   // A row folded: Back brings the tree back as it was.
   await hop(frame, "POST /graphql").locator("[data-toggle]").click();
-  const folded = await frame.locator('.dt-map-rows [aria-expanded="false"]').count();
+  const folded = await frame.locator('.tp-map-rows [aria-expanded="false"]').count();
   const scroll = await scrollToEnd(page);
   expect(scroll).toBeGreaterThan(0);
   await frame.getByRole("link", { name: "Open the trace it served →" }).click();
@@ -165,8 +165,8 @@ test("in the panel, Back from a linked trace returns to the call tree, its row s
   await expect(back).toBeHidden();
   await expect(opened(frame)).toHaveText(/^Call tree/);
   await expect(hop(frame, "POST /graphql")).toHaveAttribute("aria-current", "true");
-  await expect(frame.locator('.dt-map-rows [aria-expanded="false"]')).toHaveCount(folded);
-  await expect(frame.locator(".dt-map-rows")).toContainText("view loading");
+  await expect(frame.locator('.tp-map-rows [aria-expanded="false"]')).toHaveCount(folded);
+  await expect(frame.locator(".tp-map-rows")).toContainText("view loading");
   await expect.poll(() => scrolled(page)).toBe(scroll);
 });
 
@@ -223,7 +223,7 @@ test("in the panel, the flame of a call lands on that trace's Profile, and Back 
   const frame = await viewInPanel(page);
   await hop(frame, "POST /graphql").click();
 
-  await hop(frame, "POST /graphql").locator(".dt-map-flame").click();
+  await hop(frame, "POST /graphql").locator(".tp-map-flame").click();
 
   await expect(opened(frame)).toHaveText(/^Profile/);
   await expect(frame.getByRole("button", { name: /^Back to / })).toHaveAccessibleName("Back to Call tree · GET /shelf");
@@ -272,8 +272,8 @@ test("a row of the panel's list says the tab it opens on; an app's row opens the
   const list = frame.getByRole("region", { name: "Pages and requests in this browser tab" });
   const graphql = list.getByRole("button", { name: /^POST \/graphql, / });
   const reports = list.getByRole("button", { name: /^POST \/api\/reports\/sales, 202, / });
-  const app = list.locator('.dt-request-row[data-chain="app"]');
-  const authors = list.locator('.dt-request-row[data-chain="trace"]').first();
+  const app = list.locator('.tp-request-row[data-chain="app"]');
+  const authors = list.locator('.tp-request-row[data-chain="trace"]').first();
   const opensOnDb = "Opens on DB, the tab you used last (the call tree where it has none)";
   // Nothing picked yet: a row opens on the call tree, and says nothing of it.
   await expect(reports).not.toHaveAttribute("title");
@@ -290,7 +290,7 @@ test("a row of the panel's list says the tab it opens on; an app's row opens the
 
   // The app's part: the call tree, the call shop served selected; DB stays the tab picked last.
   await expect(opened(frame)).toHaveText(/^Call tree/);
-  await expect(frame.locator('.dt-map-row[aria-current="true"]')).toContainText("shop");
+  await expect(frame.locator('.tp-map-row[aria-current="true"]')).toContainText("shop");
 
   await authors.click();
 

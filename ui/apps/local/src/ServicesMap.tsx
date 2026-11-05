@@ -455,7 +455,7 @@ function Card({
       onFocus={(event) => hovering.onTip({ id, x: 0, y: 0 }, event.currentTarget)}
       onBlur={() => hovering.onTip(null)}
     >
-      <span className="grid size-6 shrink-0 place-items-center rounded border bg-muted/60 text-text-2 [&_svg]:size-3.5 [&_.dt-monogram]:size-3.5">
+      <span className="grid size-6 shrink-0 place-items-center rounded border bg-muted/60 text-text-2 [&_svg]:size-3.5 [&_.tp-monogram]:size-3.5">
         {icon}
       </span>
       <span className="min-w-0 flex-1">

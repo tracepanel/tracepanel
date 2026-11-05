@@ -82,7 +82,7 @@ export function HeadFacts({ trace }: { trace: Trace }) {
   const facts = headFacts(trace);
   if (facts.length === 0) return null;
   return (
-    <span className="dt-trace-facts" title={totals(calls)}>
+    <span className="tp-trace-facts" title={totals(calls)}>
       {facts.map((fact) => `· ${fact}`).join(" ")}
     </span>
   );

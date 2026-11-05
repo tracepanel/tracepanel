@@ -140,13 +140,13 @@ test.beforeEach(seed);
 
 test("a dump shows in the call tree with the Logs chip off, its details lay out each argument", async ({ page }) => {
   await page.goto(`/#/t/${TRACE}?tab=tree`);
-  const row = page.locator('.dt-map-row[data-kind="dump"]');
+  const row = page.locator('.tp-map-row[data-kind="dump"]');
 
   await expect(row).toHaveCount(1);
-  await expect(row.locator(".dt-dump-badge")).toHaveText("dump");
-  await expect(row.locator(".dt-dump-site")).toHaveText("shop/views.py:41");
-  await expect(row.locator(".dt-dump-value")).toHaveText("order = Order( id=7, total=Decimal('12.50'), paid=False, )");
-  await expect(row.locator(".dt-dump-more")).toHaveText("+1");
+  await expect(row.locator(".tp-dump-badge")).toHaveText("dump");
+  await expect(row.locator(".tp-dump-site")).toHaveText("shop/views.py:41");
+  await expect(row.locator(".tp-dump-value")).toHaveText("order = Order( id=7, total=Decimal('12.50'), paid=False, )");
+  await expect(row.locator(".tp-dump-more")).toHaveText("+1");
   // The info record waits for the Logs chip.
   await expect(page.getByText("cart priced quietly")).toHaveCount(0);
 
@@ -156,14 +156,14 @@ test("a dump shows in the call tree with the Logs chip off, its details lay out 
   await expect(dump.getByText("shop/views.py:41 in checkout")).toBeVisible();
   const order = dump.getByRole("region", { name: "order" });
   await expect(order.locator("code").first()).toHaveText("order");
-  await expect(order.locator(".dt-dump-type")).toHaveText("Order");
+  await expect(order.locator(".tp-dump-type")).toHaveText("Order");
   // The value as printed, its lines kept, coloured as Python.
   await expect(order.locator("pre")).toHaveText(ORDER);
   await expect(order.locator("pre .token.function").first()).toHaveText("Order");
   await expect(order.locator("pre .token.string")).toHaveText("'12.50'");
   await expect(order.locator("pre .token.boolean")).toHaveText("False");
   const second = dump.getByRole("region", { name: "Argument 2" });
-  await expect(second.locator(".dt-dump-type")).toHaveText("str · len 5");
+  await expect(second.locator(".tp-dump-type")).toHaveText("str · len 5");
 });
 
 test("the Logs page lists a dump in its look, and its Kind menu finds dumps", async ({ page }) => {
@@ -178,9 +178,9 @@ test("the Logs page lists a dump in its look, and its Kind menu finds dumps", as
   await expect(page).toHaveURL(/has(%3A|:)dump/);
   await expect(rows).toHaveCount(1);
   const dump = rows.first();
-  await expect(dump.locator(".dt-dump-badge")).toHaveText("dump");
-  await expect(dump.locator(".dt-dump-site")).toHaveText("shop/views.py:41");
-  await expect(dump.locator(".dt-dump-value .token.function").first()).toHaveText("Order");
+  await expect(dump.locator(".tp-dump-badge")).toHaveText("dump");
+  await expect(dump.locator(".tp-dump-site")).toHaveText("shop/views.py:41");
+  await expect(dump.locator(".tp-dump-value .token.function").first()).toHaveText("Order");
   // Its level as sent, for the Level menu.
   await expect(dump.locator("td").nth(1)).toHaveText("debug");
 
@@ -211,13 +211,13 @@ test("a dump's values are in the language it says, else its dumper's, else its f
 test("a Go dump and a JavaScript dump are coloured in their languages", async ({ page }) => {
   await seedPolyglot();
   await page.goto(`/#/t/${POLYGLOT}?tab=tree`);
-  const rows = page.locator('.dt-map-row[data-kind="dump"]');
+  const rows = page.locator('.tp-map-row[data-kind="dump"]');
 
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0).locator(".dt-dump-site")).toHaveText("cmd/shop/main.go:22");
-  await expect(rows.nth(0).locator(".dt-dump-value .token.class-name").first()).toHaveText("Order");
-  await expect(rows.nth(1).locator(".dt-dump-site")).toHaveText("src/checkout.ts:12");
-  await expect(rows.nth(1).locator(".dt-dump-value .token.string").first()).toHaveText("'book'");
+  await expect(rows.nth(0).locator(".tp-dump-site")).toHaveText("cmd/shop/main.go:22");
+  await expect(rows.nth(0).locator(".tp-dump-value .token.class-name").first()).toHaveText("Order");
+  await expect(rows.nth(1).locator(".tp-dump-site")).toHaveText("src/checkout.ts:12");
+  await expect(rows.nth(1).locator(".tp-dump-value .token.string").first()).toHaveText("'book'");
 
   await rows.nth(0).click();
   const go = page.getByRole("region", { name: "Dump arguments" }).locator("pre");

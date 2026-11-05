@@ -125,7 +125,7 @@ export function AppWarnings({
     <section className="grid gap-2" aria-label="Warnings">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
         Warnings
-        <span className="dt-tab-count" data-tone={warningsTone(warnings)}>
+        <span className="tp-tab-count" data-tone={warningsTone(warnings)}>
           {warnings.length}
         </span>
       </h2>

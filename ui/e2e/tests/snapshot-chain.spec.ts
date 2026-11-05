@@ -35,7 +35,7 @@ test("a snapshot's tabs add up its whole chain: the service's queries two calls 
   await offline.getByRole("tab", { name: /^DB/ }).click();
 
   await expect(offline.getByText(/SELECT author\s*×3/)).toBeVisible();
-  await expect(offline.locator(".dt-scope-summary-text")).toContainText("3 queries");
+  await expect(offline.locator(".tp-scope-summary-text")).toContainText("3 queries");
 
   await offline.getByRole("tab", { name: /^Profile/ }).click();
 

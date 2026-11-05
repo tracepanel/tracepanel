@@ -17,9 +17,9 @@ async function listed(page: Page, bff: string, now: number) {
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
   return {
     list,
-    rows: list.locator(".dt-request-row"),
-    waiting: list.locator('.dt-request-row[data-chain="waiting"]'),
-    loading: list.locator('.dt-request-row[data-chain="loading"]'),
+    rows: list.locator(".tp-request-row"),
+    waiting: list.locator('.tp-request-row[data-chain="waiting"]'),
+    loading: list.locator('.tp-request-row[data-chain="loading"]'),
   };
 }
 
@@ -30,8 +30,8 @@ function under(rows: Locator) {
       const kind = row.getAttribute("data-chain");
       const name =
         kind === "app"
-          ? row.querySelector(".dt-app-chip")?.textContent
-          : [row.querySelector(".dt-method")?.textContent, row.querySelector(".dt-request-path")?.textContent]
+          ? row.querySelector(".tp-app-chip")?.textContent
+          : [row.querySelector(".tp-method")?.textContent, row.querySelector(".tp-request-path")?.textContent]
               .filter(Boolean)
               .join(" ");
       return `${kind} ${name}`;
@@ -54,7 +54,7 @@ test("calls whose traces haven't arrived wait under the request, their numbers p
   await expect.poll(() => under(rows)).toEqual(["waiting GET /library/books", "waiting GET /library/authors/batch"]);
   await expect(waiting.first()).toHaveAttribute("aria-disabled", "true");
   // As its trace's row will be: its time, its numbers on their way.
-  await expect(waiting.first().locator(".dt-pending")).toHaveText("…");
+  await expect(waiting.first().locator(".tp-pending")).toHaveText("…");
   await expect(waiting.first()).toHaveAttribute("title", /^GET \/library\/books: waiting for its trace/);
 
   await serve(0);
@@ -101,7 +101,7 @@ test("a call to a service that sends no trace waits a few seconds after it ended
   await expect(row.locator('[data-state="untraced"]')).toHaveText("not traced");
   await expect(row).toHaveAttribute("title", /^GET \/rates: Not traced: api\.example\.com /);
   // No numbers to wait for.
-  await expect(row.locator(".dt-pending")).toHaveCount(0);
+  await expect(row.locator(".tp-pending")).toHaveCount(0);
 });
 
 test("a gateway's early call waits as long as its last one: its trace comes with theirs, never not traced first", async ({

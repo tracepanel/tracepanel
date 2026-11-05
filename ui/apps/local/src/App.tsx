@@ -116,7 +116,7 @@ function restoreScroll(id: string, scroll: number): () => void {
   let timer = 0;
   const attempt = () => {
     const pane = traceScroller();
-    const drawn = pane?.querySelector(`.dt-trace[data-trace="${id}"]`);
+    const drawn = pane?.querySelector(`.tp-trace[data-trace="${id}"]`);
     if (pane && drawn && pane.scrollHeight - pane.clientHeight >= scroll) {
       pane.scrollTop = scroll;
       return;
@@ -370,7 +370,7 @@ function PanelWaterfall({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the record opened, not each thing it draws.
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      const row = list.current?.querySelector(".dt-requests-open .dt-map-row");
+      const row = list.current?.querySelector(".tp-requests-open .tp-map-row");
       const before = clicked.current;
       clicked.current = null;
       if (row && before !== null && list.current) list.current.scrollTop += row.getBoundingClientRect().top - before;
@@ -445,7 +445,7 @@ function PanelWaterfall({
             // Closed details open again with a row picked (not with a fold opened or closed).
             onClickCapture={(event) => {
               const target = event.target as Element;
-              if (!detailsShown && target.closest(".dt-map-row") && !target.closest("[data-toggle]")) showDetails(true);
+              if (!detailsShown && target.closest(".tp-map-row") && !target.closest("[data-toggle]")) showDetails(true);
             }}
           >
             {empty ? (
@@ -517,7 +517,7 @@ function PanelWaterfall({
                         : "No other requests have these kinds."}
                       <button
                         type="button"
-                        className="dt-link-button"
+                        className="tp-link-button"
                         onClick={() => {
                           setFilter("");
                           setKinds([]);

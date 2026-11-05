@@ -5,8 +5,8 @@ import type { Page } from "@playwright/test";
 import { chain } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
 
-const sums = (page: Page) => page.locator(".dt-scope-summary-text");
-const chip = (page: Page) => page.locator(".dt-scope-chip");
+const sums = (page: Page) => page.locator(".tp-scope-summary-text");
+const chip = (page: Page) => page.locator(".tp-scope-chip");
 
 test("the DB tab adds up the chain's queries: the service's, one per call, as one statement", async ({ page }) => {
   const view = await chain();
@@ -63,11 +63,11 @@ test("the Issues tab has the chain's N+1 across apps, on the BFF's calls; it lea
 }) => {
   const view = await chain();
   await page.goto(`/#/t/${view}?tab=issues`);
-  const issue = page.locator(".dt-issue-card").filter({ hasText: "N+1 across apps" });
+  const issue = page.locator(".tp-issue-card").filter({ hasText: "N+1 across apps" });
 
   await expect(issue).toContainText("3 similar queries in shop · SELECT author · one per call from each `Book.author`");
   await expect(issue).toContainText("across apps");
-  await expect(issue.locator(".dt-app-chip")).toHaveText("shop");
+  await expect(issue.locator(".tp-app-chip")).toHaveText("shop");
   await expect(issue.getByRole("link", { name: /All occurrences/ })).toHaveCount(0);
 
   await issue.getByRole("button", { name: "In the call tree" }).click();
@@ -87,20 +87,20 @@ test("every tab over the chain opens on one header: the apps, then one line of w
   let withApps = 0;
   for (const tab of [/^Issues/, /^DB/, /^HTTP calls/, /^Logs/, /^Profile/]) {
     await page.getByRole("tab", { name: tab }).click();
-    const head = page.getByRole("tabpanel").locator(".dt-scope-head");
+    const head = page.getByRole("tabpanel").locator(".tp-scope-head");
     const apps = head.getByRole("list", { name: "Scope" }).getByRole("button");
 
     await expect(head).toHaveCount(1);
     // Its one line says what the list adds up to in words: no app's chip in it.
-    await expect(head.locator(".dt-scope-summary")).toHaveCount(1);
-    await expect(head.locator(".dt-scope-summary .dt-app-chip")).toHaveCount(0);
+    await expect(head.locator(".tp-scope-summary")).toHaveCount(1);
+    await expect(head.locator(".tp-scope-summary .tp-app-chip")).toHaveCount(0);
     // Where the list has more than one app's: "All apps", pressed, then each app with its mark and how many.
     if ((await apps.count()) === 0) continue;
     withApps += 1;
     await expect(apps.first()).toHaveText(/^All apps\s*\d+$/);
     await expect(apps.first()).toHaveAttribute("aria-pressed", "true");
     expect(await apps.count()).toBeGreaterThan(2);
-    for (const app of (await apps.all()).slice(1)) await expect(app.locator(".dt-icon")).toHaveCount(1);
+    for (const app of (await apps.all()).slice(1)) await expect(app.locator(".tp-icon")).toHaveCount(1);
   }
   expect(withApps).toBeGreaterThan(1);
 });
@@ -118,6 +118,6 @@ test("an N+1 over the calls is a filter in the UI's words: its badge, what it is
 
   await expect(issue.locator('[data-slot="badge"]')).toHaveText("N+1");
   await expect(issue).toHaveAttribute("title", /^N\+1/);
-  const font = await issue.locator(".dt-issue-pick-title").evaluate((title) => getComputedStyle(title).fontFamily);
+  const font = await issue.locator(".tp-issue-pick-title").evaluate((title) => getComputedStyle(title).fontFamily);
   expect(font).not.toMatch(/mono/i);
 });

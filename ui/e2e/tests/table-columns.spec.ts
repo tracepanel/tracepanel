@@ -341,7 +341,7 @@ test("at 1024 px the sidebar is a rail and the HTTP list cuts no header, badge o
   await expect(page.getByRole("button", { name: "Expand the sidebar" })).toBeVisible();
 
   expect(await cut("th span.truncate")).toEqual([]);
-  expect(await cut(".dt-method, .dt-kind, .dt-status, [data-slot=badge]")).toEqual([]);
+  expect(await cut(".tp-method, .tp-kind, .tp-status, [data-slot=badge]")).toEqual([]);
   expect(await cut("td.text-right")).toEqual([]);
 });
 
@@ -386,12 +386,12 @@ for (const scheme of ["dark", "light"] as const) {
     await chooseTheme(page, scheme);
     await open(page, "/#/endpoints");
     const starts = await main(page)
-      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .locator("tbody td:first-child > span > :is(.tp-method, .tp-kind):first-child")
       .evaluateAll((badges) =>
         badges.map((badge) => Math.round(badge.nextElementSibling?.getBoundingClientRect().left ?? 0)),
       );
     const words = await main(page)
-      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .locator("tbody td:first-child > span > :is(.tp-method, .tp-kind):first-child")
       .allTextContents();
 
     expect(new Set(words).size).toBeGreaterThan(2);

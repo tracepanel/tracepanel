@@ -14,7 +14,7 @@ async function openMigrate(page: Page, tab?: string): Promise<void> {
 }
 
 function row(page: Page, kind: string, name: string | RegExp) {
-  return page.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name });
+  return page.locator(`.tp-map-row[data-kind="${kind}"]`).filter({ hasText: name });
 }
 
 test("the job's tab: what it did, each migration with its operations, the risky ones marked", async ({ page }) => {
@@ -58,15 +58,15 @@ test("the call tree: migrations and operations have their kinds, colour and the 
   const migration = row(page, "migration", "shop 0007_order_gift");
   const index = row(page, "migration.operation", "AddIndex Order.shop_order_gift_idx");
 
-  await expect(migration.locator(".dt-map-kind")).toHaveText("migration");
-  await expect(migration.locator(".dt-map-text")).toHaveText("shop 0007_order_gift");
-  await expect(index.locator(".dt-map-kind")).toHaveText("operation");
+  await expect(migration.locator(".tp-map-kind")).toHaveText("migration");
+  await expect(migration.locator(".tp-map-text")).toHaveText("shop 0007_order_gift");
+  await expect(index.locator(".tp-map-kind")).toHaveText("operation");
   await expect(index.locator('[data-slot="badge"]')).toHaveText("Migration risk");
   await expect(row(page, "migration", "giftcards 0001_initial")).toContainText("faked");
   await expect(row(page, "migration.operation", "RunPython backfill_gift")).toContainText("12 rows");
 
   const colour = (locator: typeof migration) =>
-    locator.evaluate((element) => getComputedStyle(element).getPropertyValue("--dt-k").trim());
+    locator.evaluate((element) => getComputedStyle(element).getPropertyValue("--tp-k").trim());
 
   expect(await colour(migration)).not.toBe("");
   expect(await colour(index)).toBe(await colour(migration));

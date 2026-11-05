@@ -79,12 +79,12 @@ function FilterChip({ id, filters, children }: { id: FilterId; filters: SliceSta
   return (
     <button
       type="button"
-      className="dt-map-filter"
+      className="tp-map-filter"
       aria-pressed={filters.slice.parts.includes(id)}
       onClick={() => filters.onChange(togglePart(filters.slice, id))}
     >
       {children}
-      <span className="dt-map-filter-count">{filters.counts.get(id)}</span>
+      <span className="tp-map-filter-count">{filters.counts.get(id)}</span>
     </button>
   );
 }
@@ -96,7 +96,7 @@ function keyboardOnly(event: FocusEvent<HTMLElement>): void {
 
 /** A share's swatch: its colour; waiting's hatched, as the strip draws the waits. */
 function swatchClass(share: ShareOf): string {
-  return share.category === WAITING ? "dt-swatch dt-hatched" : "dt-swatch";
+  return share.category === WAITING ? "tp-swatch tp-hatched" : "tp-swatch";
 }
 
 /** The numbers of a share, over it: its name, how long, of the whole, how many calls. */
@@ -112,7 +112,7 @@ export function ShareTip({ share }: { share: ShareOf }) {
 
 /** The look of the strip's tooltips: the console's popover, one line. */
 export const TIP_CLASS =
-  "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--dt-popover-shadow)]";
+  "flex items-center gap-2 rounded-lg border bg-popover px-3 py-2 text-sm whitespace-nowrap text-popover-foreground shadow-[var(--tp-popover-shadow)]";
 
 /**
  * The collector's share, or waiting's: its colour, its numbers on hover; nothing to pick, the call tree has no rows
@@ -123,7 +123,7 @@ function FixedShare({ share }: { share: ShareOf }) {
     <li data-category={share.category}>
       <Tooltip delayDuration={150} disableHoverableContent={true}>
         <TooltipTrigger asChild>
-          <span className="dt-share" data-fixed="" {...litKey(share.category, true)}>
+          <span className="tp-share" data-fixed="" {...litKey(share.category, true)}>
             <ShareFace
               swatch={<span className={swatchClass(share)} />}
               name={share.label}
@@ -149,13 +149,13 @@ function Share({ share, filters }: { share: SpanShare; filters: SliceState }) {
         <TooltipTrigger asChild onFocus={keyboardOnly}>
           <button
             type="button"
-            className="dt-share"
+            className="tp-share"
             {...litKey(share.category, true)}
             aria-pressed={filters.slice.parts.includes(part)}
             onClick={() => filters.onChange(togglePart(filters.slice, part))}
           >
             <ShareFace
-              swatch={<span className="dt-swatch" />}
+              swatch={<span className="tp-swatch" />}
               name={share.label}
               value={share.time}
               share={share.percent}
@@ -180,13 +180,13 @@ function LogsChip({ trace, filters }: { trace: Trace; filters: SliceState }) {
     <li>
       <button
         type="button"
-        className="dt-map-filter"
+        className="tp-map-filter"
         aria-pressed={filters.slice.logs}
         title={filters.slice.logs ? "Show warnings and worse only" : "Show info and debug records too"}
         onClick={() => filters.onChange({ ...filters.slice, logs: !filters.slice.logs })}
       >
         Logs
-        <span className="dt-map-filter-count">{trace.logs.length}</span>
+        <span className="tp-map-filter-count">{trace.logs.length}</span>
       </button>
     </li>
   );
@@ -200,14 +200,14 @@ function RangeChip({ filters }: { filters: SliceState }) {
     <li>
       <button
         type="button"
-        className="dt-map-filter"
+        className="tp-map-filter"
         aria-pressed={true}
         aria-label={`Time ${rangeLabel(range)}`}
         title="Only calls in this time range; × shows all"
         onClick={() => filters.onChange({ ...filters.slice, range: null })}
       >
         Time {rangeLabel(range)}
-        <span className="dt-map-filter-x">
+        <span className="tp-map-filter-x">
           <CloseIcon />
         </span>
       </button>
@@ -245,7 +245,7 @@ export function TimeLegend({
     ? []
     : FILTERS.filter((filter) => !claimed.has(filter.id) && (counts.get(filter.id) ?? 0) > 0);
   return (
-    <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
+    <ul className="tp-breakdown-legend" aria-label="Where the time went, and what to show">
       {shares.map((share) =>
         ofSpans(share) ? (
           <Share key={share.category} share={share} filters={filters} />
@@ -264,7 +264,7 @@ export function TimeLegend({
       <RangeChip filters={filters} />
       {picks(slice) < 2 ? null : (
         <li>
-          <button type="button" className="dt-map-filter-clear" onClick={() => change(cleared(slice))}>
+          <button type="button" className="tp-map-filter-clear" onClick={() => change(cleared(slice))}>
             Show all
           </button>
         </li>

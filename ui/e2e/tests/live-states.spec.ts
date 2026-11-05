@@ -74,16 +74,16 @@ test("a request in flight shows on the pill, in its card and in the list, its ti
   await expect(pill(page).locator(".pending")).toHaveText("…");
 
   // The list: its row under the page, running, its time ticking as the pill's.
-  const row = list(page).locator('.dt-request-row[data-state="running"]');
+  const row = list(page).locator('.tp-request-row[data-state="running"]');
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("/app/api/slow");
-  await expect(row.locator(".dt-running")).toHaveCount(1);
+  await expect(row.locator(".tp-running")).toHaveCount(1);
 
   release();
 
   await expect(pill(page)).toHaveAccessibleName(/^tracepanel: GET \/app\/api\/slow → 200/);
   await expect(pill(page).locator('.seg[data-state="running"]')).toHaveCount(0);
-  await expect(list(page).locator('.dt-request-row[data-state="running"]')).toHaveCount(0);
+  await expect(list(page).locator('.tp-request-row[data-state="running"]')).toHaveCount(0);
 });
 
 test("the hover card of a request in flight says it waits, and follows it as it answers", async ({ page }) => {
@@ -190,8 +190,8 @@ test("a view on its first frame reads … where its time will tick, never 0 µs:
   const card = page.getByRole("dialog", { name: "This request at a glance" });
   await expect(card.locator(".card-running")).toHaveText("…");
   await pill(page).click();
-  const row = list(page).locator('.dt-request-row[data-state="running"]');
-  await expect(row.locator(".dt-running-time")).toHaveText("…");
+  const row = list(page).locator('.tp-request-row[data-state="running"]');
+  await expect(row.locator(".tp-running-time")).toHaveText("…");
   await expect(row).not.toContainText("µs");
 });
 
@@ -203,8 +203,8 @@ test("an open view whose calls have all answered stops its time at the last answ
   const id = "01M4E2ELIVE000000000000004";
   const start = Date.now() * 1000 - 1_000_000;
   await announce(page, id, "/app/quiet", true, start);
-  const row = list(page).locator(".dt-request-row", { hasText: "/app/quiet" });
-  const time = row.locator(".dt-running-time");
+  const row = list(page).locator(".tp-request-row", { hasText: "/app/quiet" });
+  const time = row.locator(".tp-running-time");
   // Before its call: its time runs.
   const first = await time.innerText();
   await expect(time).not.toHaveText(first);
@@ -219,7 +219,7 @@ test("an open view whose calls have all answered stops its time at the last answ
     };
   }, id);
   await page.getByRole("button", { name: "Load posts" }).click();
-  await expect(list(page).locator(".dt-request-row", { hasText: "/api/posts" })).toHaveCount(1);
+  await expect(list(page).locator(".tp-request-row", { hasText: "/api/posts" })).toHaveCount(1);
 
   // Answered, the view still open (it waits a moment for more): its time stays at the answer, ring and all.
   await expect(row).toHaveAttribute("data-state", "running");
@@ -299,7 +299,7 @@ async function storeCutView(): Promise<void> {
 function shownWords(mark: Locator): Promise<"all" | "none" | "cut"> {
   return mark.evaluate((element) => {
     const box = element.getBoundingClientRect();
-    const words = element.querySelector(".dt-no-answer-text")?.getBoundingClientRect();
+    const words = element.querySelector(".tp-no-answer-text")?.getBoundingClientRect();
     const name = element.parentElement?.getBoundingClientRect();
     if (!(words && name)) return "cut";
     if (words.top >= box.bottom) return "none";
@@ -322,15 +322,15 @@ test("a call with no answer yet says so in the call tree, its time neutral, and 
   await storeCutView();
   await page.goto(`/#/t/${CUT_VIEW}?tab=tree`);
 
-  const row = page.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "/graphql" });
+  const row = page.locator('.tp-map-row[data-kind="http.client"]').filter({ hasText: "/graphql" });
   await expect(row.locator('[data-state="cut"]')).toHaveText("no answer yet");
   // Room enough: its words all shown.
   await laidOut(page);
   expect(await shownWords(row.locator('[data-state="cut"]'))).toBe("all");
-  await expect(row.locator(".dt-map-time")).toHaveText("15.0 s");
+  await expect(row.locator(".tp-map-time")).toHaveText("15.0 s");
   // Not slow: it hadn't ended.
-  await expect(row.locator(".dt-map-time")).not.toHaveAttribute("data-slow", /.+/);
-  await expect(page.locator(".dt-on-its-way")).toHaveText(
+  await expect(row.locator(".tp-map-time")).not.toHaveAttribute("data-slow", /.+/);
+  await expect(page.locator(".tp-on-its-way")).toHaveText(
     "1 call with no answer yet: the tree fills in if its trace arrives",
   );
 });
@@ -346,11 +346,11 @@ test("a view cut with a call unanswered says no answer, in its row and on the pi
   // Its time is where it was cut, never a slow time's red.
   await expect(pill(page).locator(".seg[data-speed]")).toHaveCount(0);
 
-  const row = list(page).locator('.dt-request-row[data-kind="page"]').first();
+  const row = list(page).locator('.tp-request-row[data-kind="page"]').first();
   await expect(row).toHaveAttribute("data-state", "cut");
   await expect(row.locator('[data-state="cut"]')).toHaveText("no answer");
   // Its call, still waiting: said so under it, as its own row is, and kept while it is.
-  const call = list(page).locator('.dt-request-row[data-call="waiting"]');
+  const call = list(page).locator('.tp-request-row[data-call="waiting"]');
   await expect(call.locator('[data-state="cut"]')).toHaveText("no answer");
   await page.waitForTimeout(5_500);
   await expect(call.locator('[data-state="cut"]')).toHaveText("no answer");
@@ -405,11 +405,11 @@ for (const dock of ["right", "bottom"] as const) {
     // A click on the cut view's page: its request listed with it, so the dock lists the page's rows.
     await page.getByRole("button", { name: "Do posts" }).click();
     const rows = panel(page).locator(".page-requests");
-    const cut = rows.locator('.dt-request-row[data-kind="page"]').filter({ hasText: "/cut/view" });
-    const request = rows.locator(".dt-request-row").filter({ hasText: "/posts" });
-    const time = (row: typeof cut) => row.locator(".dt-request-meta > :nth-child(2)");
+    const cut = rows.locator('.tp-request-row[data-kind="page"]').filter({ hasText: "/cut/view" });
+    const request = rows.locator(".tp-request-row").filter({ hasText: "/posts" });
+    const time = (row: typeof cut) => row.locator(".tp-request-meta > :nth-child(2)");
 
-    await expect(cut.locator('.dt-request-main > [data-state="cut"]')).toHaveText("no answer");
+    await expect(cut.locator('.tp-request-main > [data-state="cut"]')).toHaveText("no answer");
     await expect(time(cut)).toHaveText("15.0 s");
     // The time the page waited for it: a few milliseconds.
     await expect(time(request)).toHaveText(/^\d+ ms$/);
@@ -418,7 +418,7 @@ for (const dock of ["right", "bottom"] as const) {
     await laidOut(page);
     // The list's columns: name, status, time, queries, findings.
     const column = await rows
-      .locator(".dt-requests")
+      .locator(".tp-requests")
       .evaluate((grid) => Number.parseFloat(getComputedStyle(grid).gridTemplateColumns.split(" ")[2] ?? ""));
     const text = await time(cut).evaluate((cell) => {
       const range = document.createRange();
@@ -430,7 +430,7 @@ for (const dock of ["right", "bottom"] as const) {
     expect(await shownWords(cut.locator('[data-state="cut"]'))).not.toBe("cut");
     for (const row of [cut, request]) {
       const clipped = await row
-        .locator(".dt-request-path")
+        .locator(".tp-request-path")
         .evaluate((name) => [name, ...name.querySelectorAll("*")].some((part) => part.scrollWidth > part.clientWidth));
       expect(clipped).toBe(false);
     }
@@ -448,7 +448,7 @@ test('docked at the right, as narrow as it goes, the call tree\'s "no answer yet
   const frame = panel(page);
   // The view opens on its call tree.
   await expect(frame.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
-  const row = frame.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "/graphql" });
+  const row = frame.locator('.tp-map-row[data-kind="http.client"]').filter({ hasText: "/graphql" });
   const mark = row.locator('[data-state="cut"]');
   await expect(mark).toHaveText("no answer yet");
   await expect(mark).toHaveAttribute("title", /.+/);

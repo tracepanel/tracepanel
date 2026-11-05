@@ -23,15 +23,15 @@ export function MethodBadge({
 }) {
   const value = (method ?? "GET").toUpperCase();
   const badge = (
-    <span className="dt-method" data-method={value}>
+    <span className="tp-method" data-method={value}>
       {value}
     </span>
   );
   if (!htmx) return badge;
   return (
-    <span className="dt-method-group" title={htmx === "boosted" ? "Sent by htmx (a boosted page)" : "Sent by htmx"}>
+    <span className="tp-method-group" title={htmx === "boosted" ? "Sent by htmx (a boosted page)" : "Sent by htmx"}>
       {badge}
-      <span className="dt-htmx">hx</span>
+      <span className="tp-htmx">hx</span>
     </span>
   );
 }
@@ -42,7 +42,7 @@ export function MethodBadge({
  */
 export function FailedStatus({ failure }: { failure?: string | undefined }) {
   return (
-    <span className="dt-status" data-tone="error" title={failure ?? "No answer"}>
+    <span className="tp-status" data-tone="error" title={failure ?? "No answer"}>
       failed
     </span>
   );
@@ -56,7 +56,7 @@ export function StatusBadge({ status, dot = false }: { status: number | null | u
   if (dotted && tone === "ok") {
     return (
       <span
-        className="dt-status"
+        className="tp-status"
         data-tone={tone}
         data-dot=""
         title={String(status)}
@@ -66,7 +66,7 @@ export function StatusBadge({ status, dot = false }: { status: number | null | u
     );
   }
   return (
-    <span className="dt-status" data-tone={tone}>
+    <span className="tp-status" data-tone={tone}>
       {status}
     </span>
   );
@@ -102,7 +102,7 @@ export function IssueChip({
  */
 export function Times({ count }: { count: number }) {
   if (count <= 1) return null;
-  return <span className="dt-map-times">×{count}</span>;
+  return <span className="tp-map-times">×{count}</span>;
 }
 
 /**
@@ -115,12 +115,12 @@ export function GroupStatus({ answer }: { answer: GroupAnswer }) {
   return (
     <>
       {failed > 0 ? (
-        <span className="dt-status" data-tone="error" title={`${failed} of these calls failed`}>
+        <span className="tp-status" data-tone="error" title={`${failed} of these calls failed`}>
           {failed} failed
         </span>
       ) : null}
       {warned > 0 ? (
-        <span className="dt-status" data-tone="warn" title={`${warned} of these calls were answered ${code ?? "4xx"}`}>
+        <span className="tp-status" data-tone="warn" title={`${warned} of these calls were answered ${code ?? "4xx"}`}>
           {warned} × {code ?? "4xx"}
         </span>
       ) : null}
@@ -132,7 +132,7 @@ export function GroupStatus({ answer }: { answer: GroupAnswer }) {
 export function AliasChip({ value }: { value: unknown }) {
   if (value === undefined || value === null || value === "" || value === "default") return null;
   return (
-    <span className="dt-alias" title={String(value)}>
+    <span className="tp-alias" title={String(value)}>
       {String(value)}
     </span>
   );
@@ -146,8 +146,8 @@ export function TemplateChip({ attrs }: { attrs: Readonly<Record<string, unknown
   const place = templatePlace(attrs);
   if (!place) return null;
   return (
-    <span className="dt-from-template" title={`From the template ${place}: it ran as the template rendered`}>
-      <span className="dt-from-template-label">template</span> {place}
+    <span className="tp-from-template" title={`From the template ${place}: it ran as the template rendered`}>
+      <span className="tp-from-template-label">template</span> {place}
     </span>
   );
 }
@@ -156,11 +156,11 @@ export function TemplateChip({ attrs }: { attrs: Readonly<Record<string, unknown
 export function RoutePath({ path }: { path: string }) {
   const parts = path.split(/(<[^>]+>)/g).filter(Boolean);
   return (
-    <span className="dt-path">
+    <span className="tp-path">
       {parts.map((part, index) =>
         part.startsWith("<") ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: parts of one string never reorder.
-          <span key={index} className="dt-path-param">
+          <span key={index} className="tp-path-param">
             {part}
           </span>
         ) : (
@@ -191,9 +191,9 @@ export function TailPath({
   const [head, tail] = splitPath(path);
   const text = (part: string) => (params ? <RoutePath path={part} /> : part);
   return (
-    <span className="dt-request-path" data-split="" title={title}>
-      {head ? <span className="dt-path-head">{text(head)}</span> : null}
-      <span className="dt-path-tail">{text(tail)}</span>
+    <span className="tp-request-path" data-split="" title={title}>
+      {head ? <span className="tp-path-head">{text(head)}</span> : null}
+      <span className="tp-path-tail">{text(tail)}</span>
       {children}
     </span>
   );
@@ -248,11 +248,11 @@ export function Empty({
   page?: boolean;
 }) {
   return (
-    <div className="dt-empty" data-page={page ? "" : undefined}>
+    <div className="tp-empty" data-page={page ? "" : undefined}>
       <EmptyIcon icon={Icon} />
-      <p className="dt-empty-title">{title}</p>
-      {children ? <p className="dt-empty-text">{children}</p> : null}
-      {action ? <p className="dt-empty-action">{action}</p> : null}
+      <p className="tp-empty-title">{title}</p>
+      {children ? <p className="tp-empty-text">{children}</p> : null}
+      {action ? <p className="tp-empty-action">{action}</p> : null}
     </div>
   );
 }
@@ -262,14 +262,14 @@ export function Empty({
  * turns over and over while it waits, one wherever that is said. Still with reduced motion.
  */
 export function WaitingIcon({ className }: { className?: string }) {
-  return <HourglassIcon className={cn("dt-waiting-icon", className)} aria-hidden="true" />;
+  return <HourglassIcon className={cn("tp-waiting-icon", className)} aria-hidden="true" />;
 }
 
 /** An empty state's icon in its tile, when it has one. */
 function EmptyIcon({ icon: Icon }: { icon: ComponentType<{ className?: string }> | undefined }) {
   if (!Icon) return null;
   return (
-    <span className="dt-empty-icon">
+    <span className="tp-empty-icon">
       <Icon className="size-6" />
     </span>
   );
@@ -291,7 +291,7 @@ export function DetailsFooter({
   rule?: boolean;
 }) {
   return (
-    <div className="dt-details-footer" data-rule={rule ? "" : undefined}>
+    <div className="tp-details-footer" data-rule={rule ? "" : undefined}>
       {children}
       {open ? (
         <Button variant="outline" size="sm" className="ml-auto" asChild>
@@ -318,7 +318,7 @@ export function Skeleton({
   height?: string;
   className?: string;
 }) {
-  return <span className={cn("dt-skeleton", className)} style={{ width, height }} aria-hidden="true" />;
+  return <span className={cn("tp-skeleton", className)} style={{ width, height }} aria-hidden="true" />;
 }
 
 /** A section's heading wherever a trace's details are shown: its info tab and the call tree's pane. */
@@ -364,7 +364,7 @@ export function KindBadge({
   const own = muted ? kind : shortKind(kind);
   const word = useContext(KindWords)?.[own.toLowerCase()] ?? own;
   return (
-    <span className={cn("dt-kind", className)} data-muted={muted ? "" : undefined}>
+    <span className={cn("tp-kind", className)} data-muted={muted ? "" : undefined}>
       {word}
     </span>
   );
@@ -384,7 +384,7 @@ export function NeutralTag({
   className?: string | undefined;
 }) {
   return (
-    <span className={cn("dt-kind normal-case", className)} data-muted="" title={title}>
+    <span className={cn("tp-kind normal-case", className)} data-muted="" title={title}>
       {children}
     </span>
   );
@@ -421,7 +421,7 @@ const STATE_TONES: Record<string, string> = {
 export function StateBadge({ state }: { state: string }) {
   const shown = state.toLowerCase();
   return (
-    <span className="dt-status" data-tone={STATE_TONES[shown] ?? "neutral"}>
+    <span className="tp-status" data-tone={STATE_TONES[shown] ?? "neutral"}>
       {shown}
     </span>
   );
@@ -436,9 +436,9 @@ export function AppMark({ runtime, labelled = false }: { runtime?: string | null
   const kind = runtime ? runtimeKind(runtime) : null;
   if (kind) return <RuntimeIcon kind={kind} />;
   return labelled ? (
-    <AppWindowIcon className="dt-icon size-3.5" role="img" aria-label="App" />
+    <AppWindowIcon className="tp-icon size-3.5" role="img" aria-label="App" />
   ) : (
-    <AppWindowIcon className="dt-icon size-3.5" aria-hidden="true" />
+    <AppWindowIcon className="tp-icon size-3.5" aria-hidden="true" />
   );
 }
 
@@ -469,10 +469,10 @@ export function AppChip({
 }) {
   const size = compact ? "compact" : undefined;
   const mark = <AppMark runtime={runtime} />;
-  const label = <span className="dt-app-name">{name}</span>;
+  const label = <span className="tp-app-name">{name}</span>;
   if (!pick) {
     return (
-      <span className="dt-app-chip" data-size={size} title={runtime ? `${name} · ${runtime}` : name}>
+      <span className="tp-app-chip" data-size={size} title={runtime ? `${name} · ${runtime}` : name}>
         {mark}
         {label}
       </span>
@@ -481,7 +481,7 @@ export function AppChip({
   return (
     <button
       type="button"
-      className="dt-app-chip dt-map-filter"
+      className="tp-app-chip tp-map-filter"
       data-size={size}
       aria-pressed={pick.pressed}
       title={pick.title}
@@ -489,7 +489,7 @@ export function AppChip({
     >
       {mark}
       {label}
-      <span className="dt-map-filter-count">{pick.count}</span>
+      <span className="tp-map-filter-count">{pick.count}</span>
     </button>
   );
 }
@@ -564,6 +564,6 @@ function fits(element: HTMLElement, text: string): boolean {
 
 /** Where a status goes, kept when there is none (a task, a job, a view), so the columns after it line up. */
 export function StatusSlot({ status }: { status: number | null | undefined }) {
-  if (status === null || status === undefined) return <span className="dt-status dt-status-empty" aria-hidden="true" />;
+  if (status === null || status === undefined) return <span className="tp-status tp-status-empty" aria-hidden="true" />;
   return <StatusBadge status={status} />;
 }

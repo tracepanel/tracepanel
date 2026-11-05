@@ -354,7 +354,7 @@ function callStatsColumns<T extends CallStats>(
       required: true,
       cell: (item) => (
         <span className="flex flex-col gap-0.5">
-          <Mono className="flex min-w-0 items-center gap-2 font-semibold [&_.dt-alias]:max-w-[50%] [&_.dt-alias]:truncate">
+          <Mono className="flex min-w-0 items-center gap-2 font-semibold [&_.tp-alias]:max-w-[50%] [&_.tp-alias]:truncate">
             {name(item)}
           </Mono>
           <Mono className="truncate text-base text-muted-foreground">{item.origin}</Mono>
@@ -1284,7 +1284,7 @@ function MailPreview({ mail, source }: { mail: MailRow; source: DataSource }) {
     return <p className="text-sm text-muted-foreground">The request that sent it is no longer stored.</p>;
   return (
     // On the cell's edges, as every open row's details: the trace's Emails tab pads the list, a row's cell does here.
-    <div className="grid gap-3 [&_.dt-mails]:p-0">
+    <div className="grid gap-3 [&_.tp-mails]:p-0">
       <MailList spans={[span]} />
       <DetailsFooter open={{ label: "Open request", link: { href: traceHref(mail.trace_id, "tree", mail.span_id) } }} />
     </div>
@@ -1319,7 +1319,7 @@ function SourceCell({
       className={cn(
         "flex max-w-[21.25rem] min-w-0 items-center gap-2",
         compact &&
-          "gap-1.5 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4 light:[&_.dt-method]:px-0",
+          "gap-1.5 [&_.tp-method]:px-1 [&_.tp-method]:text-2xs [&_[data-slot=badge]]:h-4 light:[&_.tp-method]:px-0",
         className,
       )}
     >

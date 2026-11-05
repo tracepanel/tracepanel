@@ -13,27 +13,27 @@ test("a row that called another app has that app's traces under it, open, in ord
   await page.getByRole("button", { name: "Load graphql" }).click();
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const app = list.locator('.dt-request-row[data-chain="app"]');
-  const run = list.locator('.dt-request-row[data-chain="run"]');
-  const traces = list.locator('.dt-request-row[data-chain="trace"]');
+  const app = list.locator('.tp-request-row[data-chain="app"]');
+  const run = list.locator('.tp-request-row[data-chain="run"]');
+  const traces = list.locator('.tp-request-row[data-chain="trace"]');
 
   await expect(app).toHaveCount(1);
   // The app's chip with its mark; how many, as a run counts its traces.
-  await expect(app.locator(".dt-app-chip")).toHaveText("shop");
-  await expect(app.locator(".dt-app-chip .dt-icon")).toBeVisible();
-  await expect(app.locator(".dt-map-times")).toHaveText("×3");
+  await expect(app.locator(".tp-app-chip")).toHaveText("shop");
+  await expect(app.locator(".tp-app-chip .tp-icon")).toBeVisible();
+  await expect(app.locator(".tp-map-times")).toHaveText("×3");
   await expect(app).toHaveAttribute("title", /^shop: 3 traces for/);
-  await expect(app.locator(".dt-request-queries")).toHaveText("3");
+  await expect(app.locator(".tp-request-queries")).toHaveText("3");
   await expect(app).toHaveAttribute("aria-expanded", "true");
   // Three of one route in a row: a run, open (few traces), each of them under it, by its own path.
   await expect(run).toHaveCount(1);
   await expect(run).toContainText("/authors/{id}");
   await expect(run).toContainText("×3");
-  await expect(run.locator(".dt-request-queries")).toHaveText("3");
+  await expect(run.locator(".tp-request-queries")).toHaveText("3");
   await expect(run).toHaveAttribute("aria-expanded", "true");
-  await expect(traces.locator(".dt-request-path")).toHaveText(["/authors/1", "/authors/2", "/authors/3"]);
+  await expect(traces.locator(".tp-request-path")).toHaveText(["/authors/1", "/authors/2", "/authors/3"]);
   await expect(traces.first()).toHaveAttribute("title", "GET /authors/{id}");
-  await expect(traces.first().locator(".dt-map-flame")).toBeVisible();
+  await expect(traces.first().locator(".tp-map-flame")).toBeVisible();
 
   await traces.nth(1).click();
 
@@ -47,11 +47,11 @@ test("a row that called another app has that app's traces under it, open, in ord
 
   // The BFF's trace on its call tree, at the row where shop's part starts; its tabs under the app's traces.
   await expect(panel(page).getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
-  await expect(panel(page).locator('.dt-map-row[aria-current="true"]')).toContainText("shop");
+  await expect(panel(page).locator('.tp-map-row[aria-current="true"]')).toContainText("shop");
 
   await panel(page).getByRole("tab", { name: /^DB/ }).click();
 
-  await expect(panel(page).locator(".dt-scope-chip")).toContainText("Under shop");
+  await expect(panel(page).locator(".tp-scope-chip")).toContainText("Under shop");
   await expect(panel(page).getByText("3 queries · 1 unique")).toBeVisible();
 
   // As in the call tree: ← folds it, → opens it again.
@@ -73,7 +73,7 @@ test("an app's row the user folded stays folded when the panel reloads", async (
   await page.getByRole("button", { name: "Load graphql" }).click();
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const app = list.locator('.dt-request-row[data-chain="app"]');
+  const app = list.locator('.tp-request-row[data-chain="app"]');
   await app.locator('[data-toggle=""]').click();
 
   await expect(app).toHaveAttribute("aria-expanded", "false");
@@ -96,15 +96,15 @@ async function listed(page: Page, bff: string) {
   await page.getByRole("button", { name: "Load graphql" }).click();
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const app = list.locator('.dt-request-row[data-chain="app"]');
+  const app = list.locator('.tp-request-row[data-chain="app"]');
   await expect(app).toHaveCount(1);
   await expect(app).toHaveAttribute("aria-expanded", "true");
   return {
     list,
     app,
-    run: list.locator('.dt-request-row[data-chain="run"]'),
-    traces: list.locator('.dt-request-row[data-chain="trace"]'),
-    more: list.locator('.dt-request-row[data-chain="more"]'),
+    run: list.locator('.tp-request-row[data-chain="run"]'),
+    traces: list.locator('.tp-request-row[data-chain="trace"]'),
+    more: list.locator('.tp-request-row[data-chain="more"]'),
   };
 }
 
@@ -120,13 +120,13 @@ test("an app's 37 traces are all there, in order, the run of 36 open", async ({ 
   const { app, run, traces } = await listed(page, bff);
 
   await expect(app).toContainText("shop");
-  await expect(app.locator(".dt-map-times")).toHaveText("×37");
+  await expect(app.locator(".tp-map-times")).toHaveText("×37");
   await expect(run).toHaveCount(1);
   await expect(run).toContainText("/authors/{author_id}");
   await expect(run).toContainText("×36");
   await expect(run).toHaveAttribute("aria-expanded", "true");
   await expect(traces).toHaveCount(37);
-  await expect(traces.locator(".dt-request-path")).toHaveText([
+  await expect(traces.locator(".tp-request-path")).toHaveText([
     "/books",
     ...Array.from({ length: 36 }, (_, n) => `/authors/${n + 1}`),
   ]);
@@ -165,7 +165,7 @@ test("an app's traces go by when they started on the caller's clock, across rout
 
   // Two of a route in a row stay rows; three are a run.
   await expect(run).toHaveCount(1);
-  await expect(traces.locator(".dt-request-path")).toHaveText([
+  await expect(traces.locator(".tp-request-path")).toHaveText([
     "/books",
     "/authors/1",
     "/authors/2",
@@ -182,11 +182,11 @@ test("an app's traces go by when they started on the caller's clock, across rout
   await review.focus();
   await page.keyboard.press("ArrowRight");
 
-  const deeper = list.locator('.dt-request-row[data-chain="app"]').nth(1);
+  const deeper = list.locator('.tp-request-row[data-chain="app"]').nth(1);
   await expect(deeper).toContainText("shop");
   await expect(deeper).toHaveAttribute("title", /^shop: 1 trace for/);
   await expect(deeper).toHaveAttribute("aria-expanded", "true");
-  await expect(traces.locator(".dt-request-path")).toHaveText([
+  await expect(traces.locator(".tp-request-path")).toHaveText([
     "/books",
     "/authors/1",
     "/authors/2",
@@ -216,7 +216,7 @@ test("an app with more than 50 traces has its runs folded; open, the first 50, t
   });
   const { app, run, traces, more } = await listed(page, bff);
 
-  await expect(app.locator(".dt-map-times")).toHaveText("×60");
+  await expect(app.locator(".tp-map-times")).toHaveText("×60");
   await expect(run).toContainText("×60");
   await expect(run).toHaveAttribute("aria-expanded", "false");
   await expect(traces).toHaveCount(0);
@@ -229,7 +229,7 @@ test("an app with more than 50 traces has its runs folded; open, the first 50, t
   await more.click();
 
   await expect(traces).toHaveCount(60);
-  await expect(traces.last().locator(".dt-request-path")).toHaveText("/authors/60");
+  await expect(traces.last().locator(".tp-request-path")).toHaveText("/authors/60");
   await expect(more).toHaveCount(0);
 });
 
@@ -247,7 +247,7 @@ test("at the list's default width a chain row's path keeps its last segment whol
     })),
   ]);
   const { run, traces } = await listed(page, bff);
-  const paths = traces.locator(".dt-request-path");
+  const paths = traces.locator(".tp-request-path");
 
   await expect(run).toContainText("/api/library/authors/{author_id}");
   await expect(paths).toHaveText([
@@ -256,7 +256,7 @@ test("at the list's default width a chain row's path keeps its last segment whol
     "/api/library/authors/12",
     "/api/library/authors/345",
   ]);
-  await expect(paths.locator(".dt-path-tail")).toHaveText(["/trail-runner", "/7", "/12", "/345"]);
+  await expect(paths.locator(".tp-path-tail")).toHaveText(["/trail-runner", "/7", "/12", "/345"]);
   // Whole in the tooltip.
   expect(await paths.evaluateAll((each) => each.map((path) => path.getAttribute("title")))).toEqual([
     product,
@@ -265,30 +265,30 @@ test("at the list's default width a chain row's path keeps its last segment whol
     "/api/library/authors/345",
   ]);
   // A run's traces say their method, as the same rows outside a run do.
-  await expect(traces.locator(".dt-method")).toHaveText(["GET", "GET", "GET", "GET"]);
+  await expect(traces.locator(".tp-method")).toHaveText(["GET", "GET", "GET", "GET"]);
 
   // No ellipsis inside a last segment: the head gave way (the product's cut in its middle).
   const tails = await paths
-    .locator(".dt-path-tail")
+    .locator(".tp-path-tail")
     .evaluateAll((each) => each.map((tail) => tail.scrollWidth > tail.clientWidth));
   expect(tails).toEqual([false, false, false, false]);
   // The run's own row too: its route's last segment whole.
-  await expect(run.locator(".dt-path-tail")).toHaveText("/{author_id}");
-  expect(await run.locator(".dt-path-tail").evaluate((tail) => tail.scrollWidth > tail.clientWidth)).toBe(false);
+  await expect(run.locator(".tp-path-tail")).toHaveText("/{author_id}");
+  expect(await run.locator(".tp-path-tail").evaluate((tail) => tail.scrollWidth > tail.clientWidth)).toBe(false);
   expect(
     await paths
       .first()
-      .locator(".dt-path-head")
+      .locator(".tp-path-head")
       .evaluate((head) => head.scrollWidth > head.clientWidth),
   ).toBe(true);
 });
 
 /** Each row's badge (method or kind) and name: where they start, how wide the badge, the gap to the name. */
 function badges(list: Locator) {
-  return list.locator(".dt-request-row").evaluateAll((rows) =>
+  return list.locator(".tp-request-row").evaluateAll((rows) =>
     rows.flatMap((row) => {
-      const badge = row.querySelector(".dt-request-main :is(.dt-method, .dt-kind:not([data-muted]))");
-      const name = row.querySelector(".dt-request-main .dt-request-path");
+      const badge = row.querySelector(".tp-request-main :is(.tp-method, .tp-kind:not([data-muted]))");
+      const name = row.querySelector(".tp-request-main .tp-request-path");
       if (!(badge && name)) return [];
       const [b, n] = [badge.getBoundingClientRect(), name.getBoundingClientRect()];
       return [
@@ -310,7 +310,7 @@ for (const theme of ["light", "dark"]) {
     const { bff } = await fanout(12, [{ route: "/books", path: "/books", at: 0 }, ...authors(3, 1, 1_000)]);
     await page.addInitScript((theme) => localStorage.setItem("tracepanel:theme", theme), theme);
     const { list } = await listed(page, bff);
-    await expect(list.locator('.dt-request-row[data-chain="trace"]')).toHaveCount(4);
+    await expect(list.locator('.tp-request-row[data-chain="trace"]')).toHaveCount(4);
 
     const rows = await badges(list);
     const top = rows.filter((row) => row.chain === null);
@@ -328,7 +328,7 @@ for (const theme of ["light", "dark"]) {
 
 /** Each row of the list from the top: what it is, where its content starts, and where its tree corner comes down. */
 function tree(list: Locator) {
-  return list.locator(".dt-request-row").evaluateAll((rows) =>
+  return list.locator(".tp-request-row").evaluateAll((rows) =>
     rows.map((row) => {
       const corner = getComputedStyle(row, "::after");
       const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
@@ -361,7 +361,7 @@ for (const [width, px] of [
     await page.getByRole("button", { name: "Do graphql" }).click();
     await pill(page).click();
     const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-    const traces = list.locator('.dt-request-row[data-chain="trace"]');
+    const traces = list.locator('.tp-request-row[data-chain="trace"]');
     await expect(traces).toHaveCount(2);
     await traces.first().focus();
     await page.keyboard.press("ArrowRight");

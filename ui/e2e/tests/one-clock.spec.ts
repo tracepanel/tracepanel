@@ -25,7 +25,7 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
   const share = (row: Locator) => row.locator("td").nth(2).locator("span");
 
   // Side by side, what they add up to is said apart from their time on the clock, as a sum.
-  await expect(page.locator(".dt-scope-summary-text")).toHaveText(
+  await expect(page.locator(".tp-scope-summary-text")).toHaveText(
     "4 HTTP calls · 2 unique · 2 ms on the clock · 4 ms added up · slowest 0.9 ms",
   );
 
@@ -50,13 +50,13 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
 
 /** Every app chip on the page: its class, shape and font. */
 function chipLooks(page: Page) {
-  return page.locator(".dt-app-chip").evaluateAll((chips) =>
+  return page.locator(".tp-app-chip").evaluateAll((chips) =>
     chips.map((chip) => {
       const style = getComputedStyle(chip);
       return {
         radius: style.borderTopLeftRadius,
         font: style.fontFamily,
-        icon: chip.querySelector(".dt-icon") !== null,
+        icon: chip.querySelector(".tp-icon") !== null,
       };
     }),
   );
@@ -69,8 +69,8 @@ test("every app is named by one chip: the filters, the Profile tab's table and h
   await page.goto(`/#/t/${view}?tab=profile`);
   const panel = page.getByRole("tabpanel");
 
-  await expect(panel.locator(".dt-profile-sums .dt-app-chip")).toHaveText(["shop"]);
-  await expect(panel.locator(".dt-app-profile .dt-app-chip")).toHaveText(["shop"]);
+  await expect(panel.locator(".tp-profile-sums .tp-app-chip")).toHaveText(["shop"]);
+  await expect(panel.locator(".tp-app-profile .tp-app-chip")).toHaveText(["shop"]);
 
   const looks = [...(await chipLooks(page))];
   let filtered = 0;
@@ -80,7 +80,7 @@ test("every app is named by one chip: the filters, the Profile tab's table and h
     // The filters past "All apps" are the app's chip, as a button.
     const filters = panel.getByRole("list", { name: "Scope" }).getByRole("button", { name: /^(?!All apps)/ });
     for (const filter of await filters.all()) {
-      await expect(filter).toHaveClass(/\bdt-app-chip\b/);
+      await expect(filter).toHaveClass(/\btp-app-chip\b/);
       filtered += 1;
     }
     looks.push(...(await chipLooks(page)));
@@ -98,12 +98,12 @@ test("every app is named by one chip: the filters, the Profile tab's table and h
 async function split(page: Page) {
   return page.evaluate(() => {
     const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
-    const tree = box(".dt-map-body[data-side] .dt-map-tree");
-    const edge = box(".dt-map-resize");
+    const tree = box(".tp-map-body[data-side] .tp-map-tree");
+    const edge = box(".tp-map-resize");
     return {
       tree: { top: Math.round(tree?.top ?? 0), bottom: Math.round(tree?.bottom ?? 0), right: tree?.right ?? 0 },
       edge: { top: Math.round(edge?.top ?? 0), bottom: Math.round(edge?.bottom ?? 0) },
-      pane: Math.round(box(".dt-map-side")?.width ?? 0),
+      pane: Math.round(box(".tp-map-side")?.width ?? 0),
       view: window.innerHeight,
     };
   });
@@ -119,7 +119,7 @@ test("the line between the call tree and its details runs the whole height, befo
   page,
 }) => {
   await page.goto(`/#/t/${await traceId("GET /")}?tab=calls`);
-  await page.locator('.dt-map-row[data-kind="sql"]').first().click();
+  await page.locator('.tp-map-row[data-kind="sql"]').first().click();
   await expect(page.getByRole("complementary", { name: "Details" })).toBeVisible();
 
   const first = await split(page);
@@ -140,7 +140,7 @@ test("the line between the call tree and its details runs the whole height, befo
 
 test("the line drags anywhere along it, the arrow keys move it, and the width is kept", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("GET /")}?tab=calls`);
-  await page.locator('.dt-map-row[data-kind="sql"]').first().click();
+  await page.locator('.tp-map-row[data-kind="sql"]').first().click();
   await expect(page.getByRole("complementary", { name: "Details" })).toBeVisible();
   const before = await split(page);
   // Low on the line, below the rows the pane shows: the edge is there too.

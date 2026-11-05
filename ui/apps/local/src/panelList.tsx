@@ -477,7 +477,7 @@ function useStickToBottom(
  */
 function endKeepingSelected(element: HTMLElement): number {
   const end = element.scrollHeight - element.clientHeight;
-  const selected = element.querySelector<HTMLElement>('.dt-request-row[aria-current="true"]');
+  const selected = element.querySelector<HTMLElement>('.tp-request-row[aria-current="true"]');
   if (!selected) return end;
   const head = element.querySelector<HTMLElement>(".page-requests-head")?.offsetHeight ?? 0;
   const top = selected.getBoundingClientRect().top - element.getBoundingClientRect().top + element.scrollTop;
@@ -679,24 +679,24 @@ export function KindsMenu({
         </PopoverTrigger>
       </Hint>
       {/* The time legend's own chips: a kind's swatch and name, pressed while picked. */}
-      <PopoverContent align="start" className="dt-kinds-menu w-72 p-2">
+      <PopoverContent align="start" className="tp-kinds-menu w-72 p-2">
         <div className="flex flex-wrap gap-1.5">
           {offered.map((filter) => (
             <button
               key={filter.id}
               type="button"
-              className="dt-map-filter"
+              className="tp-map-filter"
               aria-pressed={kinds.includes(filter.id)}
               onClick={() =>
                 onKinds(kinds.includes(filter.id) ? kinds.filter((each) => each !== filter.id) : [...kinds, filter.id])
               }
             >
-              <span className="dt-swatch" style={{ background: `var(--dt-k-${filterColor(filter.id)})` }} />
+              <span className="tp-swatch" style={{ background: `var(--tp-k-${filterColor(filter.id)})` }} />
               {filter.label}
             </button>
           ))}
           {kinds.length > 0 ? (
-            <button type="button" className="dt-map-filter-clear" onClick={() => onKinds([])}>
+            <button type="button" className="tp-map-filter-clear" onClick={() => onKinds([])}>
               Show all
             </button>
           ) : null}

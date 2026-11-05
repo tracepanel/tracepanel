@@ -74,28 +74,28 @@ interface Tone {
 }
 
 const PALETTE: readonly Tone[] = [
-  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500", lit: "[--dt-lit:var(--color-sky-500)]" },
+  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500", lit: "[--tp-lit:var(--color-sky-500)]" },
   {
     fill: "bg-emerald-500/30 hover:bg-emerald-500/50",
     dot: "bg-emerald-500",
-    lit: "[--dt-lit:var(--color-emerald-500)]",
+    lit: "[--tp-lit:var(--color-emerald-500)]",
   },
-  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500", lit: "[--dt-lit:var(--color-amber-500)]" },
-  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500", lit: "[--dt-lit:var(--color-rose-500)]" },
-  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500", lit: "[--dt-lit:var(--color-cyan-500)]" },
-  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500", lit: "[--dt-lit:var(--color-orange-500)]" },
+  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500", lit: "[--tp-lit:var(--color-amber-500)]" },
+  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500", lit: "[--tp-lit:var(--color-rose-500)]" },
+  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500", lit: "[--tp-lit:var(--color-cyan-500)]" },
+  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500", lit: "[--tp-lit:var(--color-orange-500)]" },
 ];
-const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand", lit: "[--dt-lit:var(--color-brand)]" };
+const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand", lit: "[--tp-lit:var(--color-brand)]" };
 // Waiting is no package's time: neutral, hatched, as the time strip draws it.
 const WAITS: Tone = {
-  fill: "dt-hatched bg-muted-foreground/15 hover:bg-muted-foreground/25",
-  dot: "dt-hatched bg-muted-foreground/50",
-  lit: "[--dt-lit:var(--color-muted-foreground)]",
+  fill: "tp-hatched bg-muted-foreground/15 hover:bg-muted-foreground/25",
+  dot: "tp-hatched bg-muted-foreground/50",
+  lit: "[--tp-lit:var(--color-muted-foreground)]",
 };
 const REST: Tone = {
   fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30",
   dot: "bg-muted-foreground/50",
-  lit: "[--dt-lit:var(--color-muted-foreground)]",
+  lit: "[--tp-lit:var(--color-muted-foreground)]",
 };
 
 /**
@@ -104,74 +104,74 @@ const REST: Tone = {
  */
 const SHARE_TONES: Readonly<Record<string, Tone>> = {
   sql: {
-    fill: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-sql)]",
+    fill: "[--tp-k:var(--tp-k-sql)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-sql)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-sql)]",
   },
   cache: {
-    fill: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-cache)]",
+    fill: "[--tp-k:var(--tp-k-cache)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-cache)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-cache)]",
   },
   redis: {
-    fill: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-redis)]",
+    fill: "[--tp-k:var(--tp-k-redis)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-redis)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-redis)]",
   },
   http: {
-    fill: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-http)]",
+    fill: "[--tp-k:var(--tp-k-http)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-http)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-http)]",
   },
   datastore: {
-    fill: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-datastore)]",
+    fill: "[--tp-k:var(--tp-k-datastore)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-datastore)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-datastore)]",
   },
   messaging: {
-    fill: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-messaging)]",
+    fill: "[--tp-k:var(--tp-k-messaging)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-messaging)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-messaging)]",
   },
   storage: {
-    fill: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-storage)]",
+    fill: "[--tp-k:var(--tp-k-storage)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-storage)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-storage)]",
   },
   llm: {
-    fill: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-llm)]",
+    fill: "[--tp-k:var(--tp-k-llm)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-llm)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-llm)]",
   },
   mail: {
-    fill: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-mail)]",
+    fill: "[--tp-k:var(--tp-k-mail)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-mail)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-mail)]",
   },
   template: {
-    fill: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-template)]",
+    fill: "[--tp-k:var(--tp-k-template)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-template)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-template)]",
   },
   signal: {
-    fill: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-signal)]",
+    fill: "[--tp-k:var(--tp-k-signal)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-signal)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-signal)]",
   },
   django: {
-    fill: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-django)]",
+    fill: "[--tp-k:var(--tp-k-django)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-django)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-django)]",
   },
   unprofiled: {
-    fill: "[--dt-k:var(--dt-k-unprofiled)] bg-(--dt-k) hover:bg-muted-foreground/25",
-    dot: "[--dt-k:var(--dt-k-unprofiled)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--color-muted-foreground)]",
+    fill: "[--tp-k:var(--tp-k-unprofiled)] bg-(--tp-k) hover:bg-muted-foreground/25",
+    dot: "[--tp-k:var(--tp-k-unprofiled)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--color-muted-foreground)]",
   },
   gc: {
-    fill: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-gc)]",
+    fill: "[--tp-k:var(--tp-k-gc)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-gc)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-gc)]",
   },
 };
 
@@ -235,7 +235,7 @@ const ROW = 20;
 
 /** The head of a list under the flame graph: one box with its header in it, as every table's. */
 const LIST_HEAD = cn(
-  "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 bg-(--dt-table-head) px-3 shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] light:h-[2.125rem]",
+  "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 bg-(--tp-table-head) px-3 shadow-[inset_0_-1px_0_var(--tp-table-head-rule)] light:h-[2.125rem]",
   HEAD_TEXT,
 );
 /** A box narrower than this keeps its color but drops its name. */
@@ -794,18 +794,18 @@ function Packages({
     // A segment hovered lights its legend item, and the legend item its segment.
     <section className="grid gap-3" aria-label={`${noun} by package`} {...litScope}>
       <ShareBar parts={bar} total={total} />
-      <ul className="dt-breakdown-legend">
+      <ul className="tp-breakdown-legend">
         {parts.map((part) => (
           <li key={part.key}>
             <button
               type="button"
-              className="dt-share"
+              className="tp-share"
               {...litKey(part.key, true)}
               aria-pressed={lit.has(part.key)}
               onClick={() => onLight(part.key)}
             >
               <ShareFace
-                swatch={<span className={cn("dt-dot", part.tone.dot)} />}
+                swatch={<span className={cn("tp-dot", part.tone.dot)} />}
                 name={part.name}
                 value={part.value}
                 share={part.percent}
@@ -1128,7 +1128,7 @@ function SummaryName({
   return (
     <button
       type="button"
-      className="dt-link-button truncate text-left text-xs italic"
+      className="tp-link-button truncate text-left text-xs italic"
       title="Open its call in the call tree"
       onClick={() => onShowRow(call)}
     >
@@ -1385,7 +1385,7 @@ function OneApp({
   children: ReactNode;
 }) {
   return (
-    <div className="dt-profile-one" data-one-app="">
+    <div className="tp-profile-one" data-one-app="">
       {apps.length > 1 && app ? (
         <Segmented
           label="App"
@@ -1420,7 +1420,7 @@ function ChainTime({
 }) {
   const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
   const beside = useContext(HiddenColumns) !== null;
-  if (apps.length === 0) return <p className="dt-note">Nothing profiled under this.</p>;
+  if (apps.length === 0) return <p className="tp-note">Nothing profiled under this.</p>;
   if (beside) {
     const app = apps.find((each) => each.app === tab) ?? apps[0];
     const view = app && views.get(app.app);
@@ -1454,7 +1454,7 @@ function ChainMemory({
   onTab: (app: string) => void;
 }) {
   const beside = useContext(HiddenColumns) !== null;
-  if (apps.length === 0) return <p className="dt-note">No memory measured under this.</p>;
+  if (apps.length === 0) return <p className="tp-note">No memory measured under this.</p>;
   if (beside) {
     const app = apps.find((each) => each.app === tab) ?? apps[0];
     const measured = app && memories.get(app.app);
@@ -1532,8 +1532,8 @@ function appView(app: AppProfile): Scope {
 /** What each app's profiles add up to, a row an app in aligned columns: the time's, or the memory's. */
 function SumsTable({ label, columns, children }: { label: string; columns: readonly string[]; children: ReactNode }) {
   return (
-    <div className="dt-profile-sums-wrap">
-      <table className="dt-profile-sums" aria-label={label}>
+    <div className="tp-profile-sums-wrap">
+      <table className="tp-profile-sums" aria-label={label}>
         <thead>
           <tr>
             {columns.map((column) => (
@@ -1585,7 +1585,7 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
   const frames = useFrames(view.profile);
   return (
     <section
-      className="dt-app-profile"
+      className="tp-app-profile"
       aria-label={`Profile of ${app.app}`}
       data-traces={app.traces.map((each) => each.member.trace.id).join(",")}
     >
@@ -1652,7 +1652,7 @@ function AppMemorySection({ app, measured }: { app: AppProfile; measured: AppMem
   // The app's time profile decides the first choice, as a trace's own Profile tab has it.
   const frames = useFrames(measured.profile);
   return (
-    <section className="dt-app-profile" aria-label={`Memory of ${app.app}`}>
+    <section className="tp-app-profile" aria-label={`Memory of ${app.app}`}>
       <MemoryPane
         key={measured.title}
         profile={measured.profile}

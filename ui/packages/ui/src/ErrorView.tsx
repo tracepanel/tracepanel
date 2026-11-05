@@ -31,19 +31,19 @@ function groups(frames: readonly Frame[]): Group[] {
 
 function Source({ frame }: { frame: Frame }) {
   if (frame.context_start === null || frame.context.length === 0) {
-    return <p className="dt-frame-nosource">Source not available.</p>;
+    return <p className="tp-frame-nosource">Source not available.</p>;
   }
   const start = frame.context_start;
   const language = languageOf(frame.filename);
   if (language === null) return <PlainSource frame={frame} start={start} />;
   const lines = tokenizeLines(frame.context, language);
   return (
-    <ol className="dt-source" start={start}>
+    <ol className="tp-source" start={start}>
       {lines.map((line, index) => {
         const number = start + index;
         return (
           <li key={number} data-current={number === frame.lineno ? "" : undefined}>
-            <span className="dt-source-no">{number}</span>
+            <span className="tp-source-no">{number}</span>
             <code>
               <TokenLine tokens={line} />
             </code>
@@ -56,10 +56,10 @@ function Source({ frame }: { frame: Frame }) {
 
 function PlainSource({ frame, start }: { frame: Frame; start: number }) {
   return (
-    <ol className="dt-source" start={start}>
+    <ol className="tp-source" start={start}>
       {keyed(frame.context, (line) => line).map(({ key, item: line }, index) => (
         <li key={key} data-current={start + index === frame.lineno ? "" : undefined}>
-          <span className="dt-source-no">{start + index}</span>
+          <span className="tp-source-no">{start + index}</span>
           <code>{line || " "}</code>
         </li>
       ))}
@@ -87,9 +87,9 @@ function hasBody(frame: Frame): boolean {
 function BareFrame({ frame }: { frame: Frame }) {
   const name = frame.in_app || !frame.module ? frame.function : `${frame.module}.${frame.function}`;
   return (
-    <div className="dt-frame dt-frame-bare" data-app={frame.in_app ? "" : undefined}>
-      <span className="dt-frame-fn">{name}</span>
-      <code className="dt-frame-loc">
+    <div className="tp-frame tp-frame-bare" data-app={frame.in_app ? "" : undefined}>
+      <span className="tp-frame-fn">{name}</span>
+      <code className="tp-frame-loc">
         {frame.filename}:{frame.lineno}
       </code>
     </div>
@@ -99,11 +99,11 @@ function BareFrame({ frame }: { frame: Frame }) {
 function FrameView({ frame, open }: { frame: Frame; open: boolean }) {
   if (!hasBody(frame)) return <BareFrame frame={frame} />;
   return (
-    <details className="dt-frame" data-app={frame.in_app ? "" : undefined} open={open}>
+    <details className="tp-frame" data-app={frame.in_app ? "" : undefined} open={open}>
       <summary>
         <ChevronRightIcon />
-        <span className="dt-frame-fn">{frame.function}</span>
-        <code className="dt-frame-loc">
+        <span className="tp-frame-fn">{frame.function}</span>
+        <code className="tp-frame-loc">
           {frame.filename}:{frame.lineno}
         </code>
       </summary>
@@ -117,7 +117,7 @@ function FrameView({ frame, open }: { frame: Frame; open: boolean }) {
 function GroupNames({ frames }: { frames: readonly Frame[] }) {
   const modules = frames.map((frame) => frame.module);
   return (
-    <span className="dt-frame-group-names" title={modules.join("\n")}>
+    <span className="tp-frame-group-names" title={modules.join("\n")}>
       {packagesLine(modules)}
     </span>
   );
@@ -127,12 +127,12 @@ function Frames({ frames }: { frames: readonly Frame[] }) {
   // The deepest project frame is where it went wrong: open it.
   const crash = [...frames].reverse().find((frame) => frame.in_app) ?? frames.at(-1);
   return (
-    <div className="dt-frames">
+    <div className="tp-frames">
       {keyed(groups(frames), groupKey).map(({ key, item: group }) =>
         group.app ? (
           <FrameView key={key} frame={group.frame} open={group.frame === crash} />
         ) : (
-          <details key={key} className="dt-frame-group">
+          <details key={key} className="tp-frame-group">
             <summary>
               <ChevronRightIcon />
               {group.frames.length} library frame{group.frames.length === 1 ? "" : "s"}
@@ -154,10 +154,10 @@ function shortType(type: string): string {
 
 function Chained({ error }: { error: ChainedError }) {
   return (
-    <section className="dt-chained">
-      <p className="dt-chain-relation">{error.relation === "cause" ? "Caused by" : "Raised while handling"}</p>
-      <p className="dt-error-type">{shortType(error.type)}</p>
-      <p className="dt-error-message">{error.message}</p>
+    <section className="tp-chained">
+      <p className="tp-chain-relation">{error.relation === "cause" ? "Caused by" : "Raised while handling"}</p>
+      <p className="tp-error-type">{shortType(error.type)}</p>
+      <p className="tp-error-message">{error.message}</p>
       <Frames frames={error.frames} />
     </section>
   );
@@ -177,7 +177,7 @@ function ErrorHead({
   children?: ReactNode;
 }) {
   return (
-    <header className="dt-error-head group/copy relative">
+    <header className="tp-error-head group/copy relative">
       {copy ? (
         <CopyButton
           text={copy}
@@ -185,8 +185,8 @@ function ErrorHead({
           className="absolute top-2 right-2 opacity-0 transition-opacity group-hover/copy:opacity-100 focus-visible:opacity-100"
         />
       ) : null}
-      <p className="dt-error-type">{shortType(type)}</p>
-      {message ? <p className="dt-error-message">{message}</p> : null}
+      <p className="tp-error-type">{shortType(type)}</p>
+      {message ? <p className="tp-error-message">{message}</p> : null}
       {children}
     </header>
   );
@@ -200,7 +200,7 @@ export function ExceptionView({ exception }: { exception: ParsedException }) {
   return (
     <div>
       <ErrorHead type={exception.type} message={exception.message} copy={errorText(exception)}>
-        <p className="dt-error-meta">{exception.frames.length} frames · most recent call last</p>
+        <p className="tp-error-meta">{exception.frames.length} frames · most recent call last</p>
       </ErrorHead>
       <Frames frames={exception.frames} />
       {exception.chain.map((inner, index) => (
@@ -252,13 +252,13 @@ export function ErrorView({
   issues?: readonly Issue[];
   links?: TraceLinks | undefined;
 }) {
-  if (errors.length === 0) return <p className="dt-note">No errors.</p>;
+  if (errors.length === 0) return <p className="tp-note">No errors.</p>;
   return (
     <>
       {keyed(errors, (error) => `${error.time}:${error.type}`).map(({ key, item: error }, index) => (
-        <section key={key} className="dt-error">
+        <section key={key} className="tp-error">
           <ErrorHead type={error.type} message={error.message} copy={errorText(error)}>
-            <p className="dt-error-meta">
+            <p className="tp-error-meta">
               {error.handled ? "Handled" : "Unhandled"} · {error.frames.length} frames · most recent call last
             </p>
             <IssueLink links={links} issue={issues[index]} />

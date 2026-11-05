@@ -41,7 +41,7 @@ test("a chain's Memory view: each app whose traces measured it, added up, with w
 
   await kinds.getByRole("tab", { name: "Memory" }).click();
 
-  await expect(page.locator(".dt-scope-summary-text")).toHaveText("2 traces with their memory");
+  await expect(page.locator(".tp-scope-summary-text")).toHaveText("2 traces with their memory");
   const sums = page.getByRole("table", { name: "What the memory adds up to" }).locator("tbody tr");
   await expect(sums).toHaveCount(1);
   await expect(sums.locator("td")).toHaveText(["shop", "1.9 MB", "+1.9 MB", "get_author"]);

@@ -5,7 +5,7 @@ import type { IssueKind } from "./types";
 function Icon({ children, size = 16, label }: { children: ReactNode; size?: number; label?: string }) {
   return (
     <svg
-      className="dt-icon"
+      className="tp-icon"
       width={size}
       height={size}
       viewBox="0 0 24 24"

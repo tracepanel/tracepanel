@@ -87,7 +87,7 @@ test("the closed panel's hourglass stops, and turns again when the panel opens",
   await pill(page).click();
 
   await expect(panel(page).getByText("Trace on its way")).toBeVisible();
-  await expect.poll(() => running(page)).toContain("dt-turn-over");
+  await expect.poll(() => running(page)).toContain("tp-turn-over");
 
   await pill(page).click();
 
@@ -95,5 +95,5 @@ test("the closed panel's hourglass stops, and turns again when the panel opens",
 
   await pill(page).click();
 
-  await expect.poll(() => running(page)).toContain("dt-turn-over");
+  await expect.poll(() => running(page)).toContain("tp-turn-over");
 });

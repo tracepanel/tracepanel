@@ -47,7 +47,7 @@ function RunDetails({
   const words = RUN_WORDS[kind];
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">
+      <p className="tp-map-details-title">
         {words.what} · started {duration(Math.max(run.start - trace.start, 0))} after this request · took{" "}
         {duration(run.duration)}
       </p>
@@ -64,7 +64,7 @@ function WaitingDetails({ span }: { span: Span }) {
   const name = String(span.attrs["task.name"] ?? span.name);
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">task · enqueued, not run yet</p>
+      <p className="tp-map-details-title">task · enqueued, not run yet</p>
       <PropTable dense rows={[{ label: "Task", value: name, copy: name, mono: true }]} />
       <p className="text-sm text-muted-foreground">It shows up here once a worker has run it (is a worker running?).</p>
     </div>
@@ -114,8 +114,8 @@ function LogDetails({ node }: DetailsProps<"log">) {
 function ErrorDetails({ node }: DetailsProps<"error">) {
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">Error</p>
-      <p className="dt-error-message">
+      <p className="tp-map-details-title">Error</p>
+      <p className="tp-error-message">
         <b>{node.error.type.replace(/^builtins\./, "")}</b>: {node.error.message}
       </p>
     </div>
@@ -144,7 +144,7 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   const [origin] = origins;
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">
+      <p className="tp-map-details-title">
         {node.spans.length} similar {groupNoun(first)} · took {duration(node.end - node.start)} ·{" "}
         {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
       </p>
@@ -170,7 +170,7 @@ function SpanTitle({ span, trace, parent }: { span: Span; trace: Trace; parent: 
   // Beside the tree, the details' own head says what it is and how long it took.
   if (useContext(KindWords) !== null) return null;
   return (
-    <p className="dt-map-details-title">
+    <p className="tp-map-details-title">
       {spanKindLabel(span.kind, trace.attrs, parent?.kind)} · started at +{offset} · took {duration(span.duration)}
     </p>
   );
@@ -181,7 +181,7 @@ function Raised({ attrs }: { attrs: Attrs }) {
   const found = raised(attrs);
   if (!found) return null;
   return (
-    <p className="dt-error-message">
+    <p className="tp-error-message">
       <b className="text-error">{found.type}</b>
       {found.message ? `: ${found.message}` : null}
     </p>
@@ -331,7 +331,7 @@ function ServedBy({
     return (
       <section className="grid gap-3" aria-label={`Served by ${appName(served) ?? "another app"}`}>
         <ServedHeading served={served} />
-        <p className="dt-map-details-title" title={note}>
+        <p className="tp-map-details-title" title={note}>
           {split}
         </p>
         <ProfileLink open={servedProfile(served, onTraceProfile)} />
@@ -341,7 +341,7 @@ function ServedBy({
   return (
     <section className="grid gap-3" aria-label={`Served by ${appName(served) ?? "another app"}`}>
       <ServedHeading served={served} />
-      <p className="dt-map-details-title">
+      <p className="tp-map-details-title">
         started {duration(Math.max(served.run.start - trace.start, 0))} after this request · took{" "}
         {duration(served.run.duration)}
       </p>
@@ -371,7 +371,7 @@ function servedProfile(served: ServedRun, open: TraceProfileOpener | undefined):
 
 function ProfileLink({ open }: { open: (() => void) | undefined }) {
   return open ? (
-    <button type="button" className="dt-map-open" onClick={open}>
+    <button type="button" className="tp-map-open" onClick={open}>
       Open its profile →
     </button>
   ) : null;

@@ -98,7 +98,7 @@ function traces(tail: string): { request: object; run: object; id: string } {
 }
 
 async function expectArrives(scope: Page | FrameLocator, run: object): Promise<void> {
-  const tree = scope.locator(".dt-map-timed");
+  const tree = scope.locator(".tp-map-timed");
 
   await expect(tree.getByText("waiting for a worker…")).toBeVisible();
 

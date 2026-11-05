@@ -20,7 +20,7 @@ import { useCapability } from "./hooks";
  * plain icon buttons beside it. So does a narrow list's toolbar row (the `brand` container) when docked at the bottom.
  */
 const NARROW_ICON =
-  "max-[560px]:w-[1.875rem] max-[560px]:border-transparent max-[560px]:bg-transparent max-[560px]:px-0 max-[560px]:hover:bg-[var(--dt-hover)] @max-[17rem]/brand:w-[1.875rem] @max-[17rem]/brand:border-transparent @max-[17rem]/brand:bg-transparent @max-[17rem]/brand:px-0 @max-[17rem]/brand:[&>.bar-label]:hidden";
+  "max-[560px]:w-[1.875rem] max-[560px]:border-transparent max-[560px]:bg-transparent max-[560px]:px-0 max-[560px]:hover:bg-[var(--tp-hover)] @max-[17rem]/brand:w-[1.875rem] @max-[17rem]/brand:border-transparent @max-[17rem]/brand:bg-transparent @max-[17rem]/brand:px-0 @max-[17rem]/brand:[&>.bar-label]:hidden";
 
 function initials(user: User): string {
   const words = (user.name ?? user.username).split(/[\s._@-]+/).filter(Boolean);

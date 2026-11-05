@@ -81,9 +81,9 @@ for (const { app, language, handler, fn, word } of APPS) {
     await expect(facts.locator("dd").getByText(handler, { exact: true })).toBeVisible();
 
     await page.getByRole("tab", { name: "Call tree" }).click();
-    const row = page.locator('.dt-map-row[data-kind="view"]');
+    const row = page.locator('.tp-map-row[data-kind="view"]');
 
-    await expect(row.locator(".dt-map-kind")).toHaveText(word.toLowerCase());
+    await expect(row.locator(".tp-map-kind")).toHaveText(word.toLowerCase());
     // Its time is the code's own, said one way in every app and kind of trace.
     await expect(page.getByRole("list", { name: /^Where the time went/ })).toContainText("Your code");
   });

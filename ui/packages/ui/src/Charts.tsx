@@ -5,10 +5,10 @@ import { duration } from "./format";
 import { cn } from "./lib/utils";
 import type { HistogramBucket, LogBucket, SeriesBucket } from "./types";
 
-// Series colors are theme tokens (--dt-chart-1/2), validated with the dataviz palette checker on each theme's
+// Series colors are theme tokens (--tp-chart-1/2), validated with the dataviz palette checker on each theme's
 // surface: lightness band, chroma, CVD and normal-vision separation, contrast — all pass.
-const P50 = "var(--dt-chart-1)";
-const P95 = "var(--dt-chart-2)";
+const P50 = "var(--tp-chart-1)";
+const P95 = "var(--tp-chart-2)";
 const CALLS = P50;
 
 type Series = readonly SeriesBucket[];
@@ -199,7 +199,7 @@ function AxisY({
   const ticks = height < HEIGHT ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1];
   const plot = height - PAD.top - PAD.bottom;
   return (
-    <g className="[&_line]:stroke-(--dt-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
+    <g className="[&_line]:stroke-(--tp-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
       {ticks.map((tick) => {
         const y = PAD.top + plot * (1 - tick);
         return (
@@ -229,7 +229,7 @@ function AxisX({
   if (!first || !last) return null;
   const seconds = last.end - first.start < SHORT_RANGE_US;
   return (
-    <g className="[&_line]:stroke-(--dt-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
+    <g className="[&_line]:stroke-(--tp-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
       <text x={PAD.left} y={height - 6}>
         {clock(first.start, seconds)}
       </text>
@@ -940,7 +940,7 @@ export function Histogram({
               );
             })}
             {histogram[0] ? (
-              <g className="[&_line]:stroke-(--dt-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
+              <g className="[&_line]:stroke-(--tp-grid) [&_text]:fill-muted-foreground [&_text]:text-xs [&_text]:tabular-nums">
                 <text x={PAD.left} y={HEIGHT - 6}>
                   {duration(histogram[0].from)}
                 </text>

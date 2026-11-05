@@ -23,7 +23,7 @@ function place(stretch: Stretch, total: number): CSSProperties {
 function ends(stretch: Stretch, total: number): CSSProperties {
   const [start, end] = [stretch.from <= 0, stretch.to >= total];
   if (!(start || end)) return {};
-  const [left, right] = [start ? "var(--dt-bar-radius)" : "0", end ? "var(--dt-bar-radius)" : "0"];
+  const [left, right] = [start ? "var(--tp-bar-radius)" : "0", end ? "var(--tp-bar-radius)" : "0"];
   return { borderRadius: `${left} ${right} ${right} ${left}` };
 }
 
@@ -64,7 +64,7 @@ function LaneTip({ hover, shares }: { hover: Hover | null; shares: readonly Shar
   const share = shares.find((each) => each.category === hover?.category);
   if (!(hover && share)) return null;
   return (
-    <div role="tooltip" className={`dt-lane-tip ${TIP_CLASS}`} style={{ left: hover.x }}>
+    <div role="tooltip" className={`tp-lane-tip ${TIP_CLASS}`} style={{ left: hover.x }}>
       <ShareTip share={share} />
     </div>
   );
@@ -192,11 +192,11 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
   const shares = useMemo(() => sharesOf(trace), [trace]);
   const [hover, setHover] = useState<Hover | null>(null);
   return (
-    <div className="dt-lane" data-own="">
-      <span className="dt-lane-label">{word}</span>
+    <div className="tp-lane" data-own="">
+      <span className="tp-lane-label">{word}</span>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: the numbers on hover; the legend's buttons have them too. */}
       <div
-        className="dt-lane-track dt-time-track"
+        className="tp-lane-track tp-time-track"
         data-profiled={trace.profile ? "" : undefined}
         onPointerMove={(event) => setHover(hoverAt(event))}
         onPointerLeave={() => setHover(null)}
@@ -204,7 +204,7 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
         {lane.drawn.map((each) => (
           <span
             key={each.stretch.from}
-            className="dt-stretch"
+            className="tp-stretch"
             data-category={each.gc ? GC : each.stretch.category}
             data-faded={faded(each, parts)}
             {...litKey(shareOf(each))}
@@ -213,8 +213,8 @@ export function TimeLane({ trace, word, parts }: { trace: Trace; word: string; p
           />
         ))}
         {saidAt(lane.drawn).map((each) => (
-          <span key={`said:${each.stretch.from}`} className="dt-quiet-said" style={place(each.stretch, total)}>
-            <span className="dt-quiet-label">{quietLabel(lane, each)}</span>
+          <span key={`said:${each.stretch.from}`} className="tp-quiet-said" style={place(each.stretch, total)}>
+            <span className="tp-quiet-label">{quietLabel(lane, each)}</span>
           </span>
         ))}
         <LaneTip hover={hover} shares={shares} />

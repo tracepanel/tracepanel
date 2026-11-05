@@ -43,33 +43,33 @@ function Message({ span }: { span: Span }) {
   const sent = attrs["mail.sent"];
   const failed = span.status === "error" || sent === 0;
   return (
-    <article className="dt-mail" data-failed={failed ? "" : undefined}>
-      <header className="dt-mail-head">
+    <article className="tp-mail" data-failed={failed ? "" : undefined}>
+      <header className="tp-mail-head">
         <h3>{String(attrs["mail.subject"] || "(no subject)")}</h3>
         <Badge variant={failed ? "error" : "ok"} size="compact">
           {failed ? "Not sent" : "Sent"}
         </Badge>
-        <span className="dt-mail-time">{duration(span.duration)}</span>
+        <span className="tp-mail-time">{duration(span.duration)}</span>
       </header>
       <NameValues rows={mailRows(attrs)} />
       {html || text ? (
         <>
           {html && text ? (
-            <div className="dt-mail-switch">
+            <div className="tp-mail-switch">
               <Segmented label="Email as" segments={VIEWS} value={view} onChange={setView} />
             </div>
           ) : null}
           {view === "html" && html ? (
             // An empty sandbox: no scripts, no forms, no same-origin access for the email's markup.
-            <iframe className="dt-mail-html" title="Email HTML" sandbox="" srcDoc={html} />
+            <iframe className="tp-mail-html" title="Email HTML" sandbox="" srcDoc={html} />
           ) : (
-            <CopyBlock text={text ?? ""} label="Copy the text" className="dt-mail-text-box">
-              <pre className="dt-mail-text">{text ?? ""}</pre>
+            <CopyBlock text={text ?? ""} label="Copy the text" className="tp-mail-text-box">
+              <pre className="tp-mail-text">{text ?? ""}</pre>
             </CopyBlock>
           )}
         </>
       ) : (
-        <p className="dt-note">The message body was not captured (TRACEPANEL capture_mail_body is off).</p>
+        <p className="tp-note">The message body was not captured (TRACEPANEL capture_mail_body is off).</p>
       )}
     </article>
   );
@@ -77,9 +77,9 @@ function Message({ span }: { span: Span }) {
 
 /** Emails sent during the request, readable without a mailbox. */
 export function MailList({ spans }: { spans: readonly Span[] }) {
-  if (spans.length === 0) return <p className="dt-note">No emails were sent.</p>;
+  if (spans.length === 0) return <p className="tp-note">No emails were sent.</p>;
   return (
-    <div className="dt-mails">
+    <div className="tp-mails">
       {spans.map((span) => (
         <Message key={span.id} span={span} />
       ))}

@@ -206,7 +206,7 @@ function MoreRows({ onMore }: { onMore: () => void }) {
     return () => observer.disconnect();
   }, []);
   return (
-    <li ref={end} className="dt-requests-more">
+    <li ref={end} className="tp-requests-more">
       Older requests…
     </li>
   );
@@ -251,11 +251,11 @@ export function TraceList({
     onSelect,
   };
   return (
-    <ul className="dt-requests" data-compact={compact ? "" : undefined}>
+    <ul className="tp-requests" data-compact={compact ? "" : undefined}>
       {/* A trace opened from elsewhere (the one a call was served by) that isn't a row here: still open, first. */}
       {openContent !== undefined && selectedId && !rows.some((row) => row.trace.id === selectedId) ? (
         <li>
-          <div className="dt-requests-open">{openContent}</div>
+          <div className="tp-requests-open">{openContent}</div>
         </li>
       ) : null}
       {shownRows(rows, chains, openContent !== undefined).map(({ row, fold, under }) => (
@@ -335,7 +335,7 @@ function ListItem({
       <li>
         {/* On the list's scale: its bars as long as its closed row's, what it called within them. */}
         <div
-          className="dt-requests-open"
+          className="tp-requests-open"
           style={{ "--record-share": Math.min(trace.duration / (longest ?? trace.duration), 1) } as CSSProperties}
         >
           {openContent}
@@ -436,7 +436,7 @@ export function RecordRow({
     <KindWords.Provider value={WATERFALL_KINDS}>
       <button
         type="button"
-        className="dt-map-row dt-record"
+        className="tp-map-row tp-record"
         data-record={trace.id}
         data-gone={gone ? "" : undefined}
         title={gone ? GONE_NOTE : undefined}
@@ -448,40 +448,40 @@ export function RecordRow({
         // Gone from the store, there is nothing to open: it stays a quiet line, its note on hover.
         onClick={() => (gone ? undefined : onSelect(target ?? trace.id))}
       >
-        <span className="dt-map-name" style={indentOf(depth)}>
-          <span className="dt-map-lead">
-            <span className="dt-map-caret" data-toggle="">
+        <span className="tp-map-name" style={indentOf(depth)}>
+          <span className="tp-map-lead">
+            <span className="tp-map-caret" data-toggle="">
               <ChevronRightIcon />
             </span>
             <KindBadge
               kind={page ? page.badge.toLowerCase() : spanKindLabel(trace.kind, {})}
               muted={true}
-              className="dt-map-kind"
+              className="tp-map-kind"
             />
-            <span className="dt-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
-            {live ? null : <span className="dt-record-ago">{ago(trace.start)}</span>}
+            <span className="tp-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
+            {live ? null : <span className="tp-record-ago">{ago(trace.start)}</span>}
           </span>
           <StatusSlot status={page ? null : trace.http_status} />
           {/* A column each, the same on every row: its marks line up down the list, empty or not. */}
-          <span className="dt-map-chips dt-record-marks">
-            <span className="dt-record-errors">
+          <span className="tp-map-chips tp-record-marks">
+            <span className="tp-record-errors">
               <Errors count={trace.errors} />
             </span>
-            <span className="dt-record-issues">
+            <span className="tp-record-issues">
               <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
             </span>
-            <span className="dt-record-queries">
+            <span className="tp-record-queries">
               <Queries count={trace.queries} time={trace.db_time} />
             </span>
           </span>
         </span>
-        <span className="dt-map-track">
-          {live ? <span className="dt-map-bar dt-record-live" /> : null}
+        <span className="tp-map-track">
+          {live ? <span className="tp-map-bar tp-record-live" /> : null}
           {share === undefined ? null : (
-            <span className="dt-map-bar dt-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
+            <span className="tp-map-bar tp-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
           )}
         </span>
-        <span className="dt-map-time">
+        <span className="tp-map-time">
           <RowTime trace={trace} open={open} until={until} />
         </span>
       </button>
@@ -523,7 +523,7 @@ function ListRow({
   return (
     <button
       type="button"
-      className="dt-request-row"
+      className="tp-request-row"
       data-depth={depth}
       data-run={flag(run)}
       data-kind={trace.kind === "page" ? "page" : undefined}
@@ -536,7 +536,7 @@ function ListRow({
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(target_ ?? trace.id)}
     >
-      <span className="dt-request-main">
+      <span className="tp-request-main">
         <RowCaret fold={fold} />
         <RowName trace={trace} trigger={trigger} target={target} redirectedFrom={redirectedFrom} />
         <RowApp trace={trace} shown={services} />
@@ -592,7 +592,7 @@ function RowMarks({ cut, untraced }: { cut: number | null; untraced: string | un
 /** A call no trace answered and none will, as the call tree says it: muted, its reason in the tooltip. */
 function NotTracedMark({ host }: { host: string }) {
   return (
-    <span className="dt-not-traced" data-state="untraced" title={untracedNote(host)}>
+    <span className="tp-not-traced" data-state="untraced" title={untracedNote(host)}>
       not traced
     </span>
   );
@@ -625,7 +625,7 @@ function GroupRow({
   return (
     <button
       type="button"
-      className="dt-request-row"
+      className="tp-request-row"
       data-depth={depth}
       data-call="group"
       {...liveProps(trace, open, null)}
@@ -635,11 +635,11 @@ function GroupRow({
       data-new={fresh ? "" : undefined}
       onClick={() => (group.app && onApp ? onApp(group.view, group.app) : onSelect(group.view))}
     >
-      <span className="dt-request-main">
+      <span className="tp-request-main">
         <RowCaret fold={fold} />
         <AppChip name={name} runtime={group.runtime} compact />
       </span>
-      <span className="dt-request-meta">
+      <span className="tp-request-meta">
         {group.count > 1 ? <Times count={group.count} /> : <StatusSlot status={null} />}
         <RowTime trace={trace} open={open} until={undefined} />
         <CompactMeta trace={trace} pending={pending} blank={group.untraced} />
@@ -678,7 +678,7 @@ function RowMeta({
 }) {
   const Meta = compact ? CompactMeta : FullMeta;
   return (
-    <span className="dt-request-meta">
+    <span className="tp-request-meta">
       {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
       {failed !== undefined && !open ? (
         <FailedStatus failure={failed} />
@@ -727,7 +727,7 @@ function foldProps(fold: RowFold | null | undefined) {
 /** Its caret, or the caret's room for a row with no chain, so the names line up. */
 function RowCaret({ fold }: { fold: RowFold | null | undefined }) {
   if (fold === undefined) return null;
-  return fold ? <ChainCaret onToggle={fold.onToggle} /> : <span className="dt-map-caret" />;
+  return fold ? <ChainCaret onToggle={fold.onToggle} /> : <span className="tp-map-caret" />;
 }
 
 /** Open until folded; a row that starts folded (`folded`, a view's call), folded until opened. */
@@ -741,9 +741,9 @@ function rowFold(chains: ListChains, id: string, folded = false, calls = false):
 /** The page open in the browser tab: narrow, a dot, so the path keeps its room (the row is also highlighted). */
 function ThisPage({ compact }: { compact: boolean | undefined }) {
   return compact ? (
-    <span className="dt-this-page" role="img" aria-label="This page" title="This page" />
+    <span className="tp-this-page" role="img" aria-label="This page" title="This page" />
   ) : (
-    <span className="dt-tag">this page</span>
+    <span className="tp-tag">this page</span>
   );
 }
 
@@ -808,24 +808,24 @@ function RowChain({
 function ChainLoading({ level }: { level: number }) {
   return (
     <div
-      className="dt-request-row"
+      className="tp-request-row"
       data-chain="loading"
       role="status"
       aria-label="Loading the traces of this request's calls"
       title="Loading the traces of this request's calls"
-      style={{ "--dt-chain-level": level } as CSSProperties}
+      style={{ "--tp-chain-level": level } as CSSProperties}
     >
-      <span className="dt-request-main">
-        <span className="dt-map-caret" />
+      <span className="tp-request-main">
+        <span className="tp-map-caret" />
         {/* In a path's line box: the row is as tall as one with a name. */}
-        <span className="dt-request-path">
-          <span className="dt-skeleton dt-chain-skeleton" style={{ width: "4.5rem" }} />
+        <span className="tp-request-path">
+          <span className="tp-skeleton tp-chain-skeleton" style={{ width: "4.5rem" }} />
         </span>
-        <span className="dt-request-path">
-          <span className="dt-skeleton dt-chain-skeleton" style={{ width: "7rem" }} />
+        <span className="tp-request-path">
+          <span className="tp-skeleton tp-chain-skeleton" style={{ width: "7rem" }} />
         </span>
       </span>
-      <span className="dt-request-meta">
+      <span className="tp-request-meta">
         <StatusSlot status={null} />
       </span>
     </div>
@@ -843,20 +843,20 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
   const untraced = call.untraced;
   return (
     <div
-      className="dt-request-row"
+      className="tp-request-row"
       data-chain={untraced === undefined ? "waiting" : "untraced"}
       aria-disabled="true"
       title={untraced === undefined ? waitingTitle(name, call.cut) : `${name}: ${untracedNote(untraced)}`}
-      style={{ "--dt-chain-level": level } as CSSProperties}
+      style={{ "--tp-chain-level": level } as CSSProperties}
     >
-      <span className="dt-request-main">
-        <span className="dt-map-caret" />
+      <span className="tp-request-main">
+        <span className="tp-map-caret" />
         <RowName trace={summary} />
         {call.cut === null ? null : <NoAnswer at={call.cut} />}
         {untraced === undefined ? null : <NotTracedMark host={untraced} />}
       </span>
       {/* As the row of its trace will be: its status and time, its numbers pending until that trace comes. */}
-      <span className="dt-request-meta">
+      <span className="tp-request-meta">
         <StatusSlot status={summary.http_status} />
         <span>{duration(summary.duration)}</span>
         <CompactMeta trace={summary} pending={untraced === undefined} blank={untraced !== undefined} />
@@ -889,20 +889,20 @@ function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: Chain
     <>
       <button
         type="button"
-        className="dt-request-row"
+        className="tp-request-row"
         data-chain="app"
         data-tone={toneOf(app.summary)}
-        style={{ "--dt-chain-level": level } as CSSProperties}
+        style={{ "--tp-chain-level": level } as CSSProperties}
         aria-expanded={open}
         title={`${app.app}: ${traces} for this request's calls. Opens its call tree where ${app.app}'s part starts, its tabs under ${app.app}.`}
         onClick={() => chains.onApp(rowId, app.app)}
         onKeyDown={foldKeys(open, toggle)}
       >
-        <span className="dt-request-main">
+        <span className="tp-request-main">
           <ChainCaret onToggle={toggle} />
           <AppChip name={app.app} runtime={chainAppRuntime(app)} compact />
         </span>
-        <span className="dt-request-meta">
+        <span className="tp-request-meta">
           {/* How many, as a run's row counts its traces: in the status column. */}
           {app.ids.length > 1 ? <Times count={app.ids.length} /> : <StatusSlot status={null} />}
           <span title={`${traces} on the clock`}>{duration(app.summary.duration)}</span>
@@ -958,14 +958,14 @@ function ChainItems({
       {all ? null : (
         <button
           type="button"
-          className="dt-request-row"
+          className="tp-request-row"
           data-chain="more"
-          style={{ "--dt-chain-level": level } as CSSProperties}
+          style={{ "--tp-chain-level": level } as CSSProperties}
           onClick={() => chains.onToggle(allKey)}
         >
-          <span className="dt-request-main">
-            <span className="dt-map-caret" />
-            <span className="dt-request-trigger">Show all {items.length}</span>
+          <span className="tp-request-main">
+            <span className="tp-map-caret" />
+            <span className="tp-request-trigger">Show all {items.length}</span>
           </span>
         </button>
       )}
@@ -988,21 +988,21 @@ function ChainRunRows({ run, rowId, level, chains, selectedId, onSelect }: Chain
     <>
       <button
         type="button"
-        className="dt-request-row"
+        className="tp-request-row"
         data-chain="run"
         data-tone={toneOf(run.summary)}
-        style={{ "--dt-chain-level": level } as CSSProperties}
+        style={{ "--tp-chain-level": level } as CSSProperties}
         aria-current={holdsSelected ? "true" : undefined}
         aria-expanded={open}
         title={`${run.route} ×${count} in a row · ${time} on the clock, from the first's start to the last's end`}
         onClick={toggle}
         onKeyDown={foldKeys(open, toggle)}
       >
-        <span className="dt-request-main">
+        <span className="tp-request-main">
           <ChainCaret onToggle={toggle} />
           <RowName trace={run.summary} />
         </span>
-        <span className="dt-request-meta">
+        <span className="tp-request-meta">
           <Times count={count} />
           <span>{time}</span>
           <CompactMeta trace={run.summary} />
@@ -1035,10 +1035,10 @@ function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: Cha
     <>
       <button
         type="button"
-        className="dt-request-row"
+        className="tp-request-row"
         data-chain="trace"
         data-tone={toneOf(row.summary)}
-        style={{ "--dt-chain-level": level } as CSSProperties}
+        style={{ "--tp-chain-level": level } as CSSProperties}
         aria-current={row.id === selectedId ? "true" : undefined}
         aria-expanded={nested ? open : undefined}
         aria-label={traceLabel(row.summary)}
@@ -1046,12 +1046,12 @@ function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: Cha
         onClick={() => onSelect(row.id)}
         onKeyDown={foldKeys(nested ? open : undefined, toggle)}
       >
-        <span className="dt-request-main">
-          {nested ? <ChainCaret onToggle={toggle} /> : <span className="dt-map-caret" />}
+        <span className="tp-request-main">
+          {nested ? <ChainCaret onToggle={toggle} /> : <span className="tp-map-caret" />}
           <RowName trace={row.summary} />
           <RowFlame trace={row.trace} />
         </span>
-        <span className="dt-request-meta">
+        <span className="tp-request-meta">
           <StatusSlot status={row.summary.http_status} />
           <span>{duration(row.summary.duration)}</span>
           <CompactMeta trace={row.summary} />
@@ -1081,7 +1081,7 @@ function ChainCaret({ onToggle }: { onToggle: () => void }) {
     // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keyboard folds with the arrows.
     // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys (foldKeys).
     <span
-      className="dt-map-caret"
+      className="tp-map-caret"
       data-toggle=""
       onClick={(event) => {
         event.stopPropagation();
@@ -1123,18 +1123,18 @@ function CompactMeta({
     return (
       <>
         <span />
-        <span className="dt-request-chips" />
+        <span className="tp-request-chips" />
       </>
     );
   }
   if (pending) {
     return (
       <>
-        <span className="dt-request-queries" data-zero="">
+        <span className="tp-request-queries" data-zero="">
           <DatabaseIcon size={12} />
           <Pending what="SQL queries" />
         </span>
-        <span className="dt-request-chips" />
+        <span className="tp-request-chips" />
       </>
     );
   }
@@ -1143,12 +1143,12 @@ function CompactMeta({
       <span />
     ) : (
       <span
-        className="dt-request-queries"
+        className="tp-request-queries"
         data-zero={trace.queries === 0 ? "" : undefined}
         title={`${trace.queries} SQL ${trace.queries === 1 ? "query" : "queries"}`}
       >
         <DatabaseIcon size={12} />
-        <span className="dt-request-queries-n">{trace.queries}</span>
+        <span className="tp-request-queries-n">{trace.queries}</span>
       </span>
     );
   return (
@@ -1175,7 +1175,7 @@ function FullMeta({
     <>
       <span>{blank ? null : pending ? <Pending what="SQL queries" /> : queriesText(trace, chained)}</span>
       {pending ? <span /> : <FullChips kinds={trace.issue_kinds} issues={trace.issues} />}
-      <span className="dt-request-time">{ago(trace.start)}</span>
+      <span className="tp-request-time">{ago(trace.start)}</span>
     </>
   );
 }
@@ -1270,7 +1270,7 @@ export function traceLabel(
 /** An htmx request: the element that sent it and where the answer went, after the path. */
 function HtmxTrigger({ trigger, target }: { trigger: string; target?: string | undefined }) {
   return (
-    <span className="dt-request-trigger">
+    <span className="tp-request-trigger">
       {" "}
       · {trigger}
       {target ? ` → ${target}` : ""}
@@ -1323,9 +1323,9 @@ function RowName({
     <>
       <KindBadge kind={trace.kind} />
       {trace.kind === "task" ? (
-        <TaskName name={trace.name} className="dt-request-path" />
+        <TaskName name={trace.name} className="tp-request-path" />
       ) : (
-        <span className="dt-request-path">{trace.name.replace(/^WS /, "")}</span>
+        <span className="tp-request-path">{trace.name.replace(/^WS /, "")}</span>
       )}
     </>
   );
@@ -1340,10 +1340,10 @@ export function PageName({ name, redirectedFrom }: { name: string; redirectedFro
   return (
     <>
       <MethodBadge method={badge} />
-      <span className="dt-request-path">
+      <span className="tp-request-path">
         {label}
-        {page ? <span className="dt-request-trigger"> · {page}</span> : null}
-        {redirectedFrom ? <span className="dt-request-trigger"> · {redirectNote(redirectedFrom)}</span> : null}
+        {page ? <span className="tp-request-trigger"> · {page}</span> : null}
+        {redirectedFrom ? <span className="tp-request-trigger"> · {redirectNote(redirectedFrom)}</span> : null}
       </span>
     </>
   );
@@ -1378,10 +1378,10 @@ export function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined
   // Its findings, as its Issues tab counts them (three N+1s are three), not their kinds; before its trace loads (a
   // row from the widget's summary) the number is all there is.
   const count = issues || shown.length;
-  if (count === 0) return <span className="dt-request-chips" />;
+  if (count === 0) return <span className="tp-request-chips" />;
   const names = shown.map((kind) => ISSUE_LABELS[kind]).join(", ");
   return (
-    <span className="dt-request-chips">
+    <span className="tp-request-chips">
       <Badge
         variant="warn"
         size="compact"

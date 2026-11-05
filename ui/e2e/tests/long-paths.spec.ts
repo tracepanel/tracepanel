@@ -28,7 +28,7 @@ async function longQueries(page: Page): Promise<void> {
 }
 
 async function expectNoSideways(scope: Page | FrameLocator): Promise<void> {
-  const side = scope.locator(".dt-map-side");
+  const side = scope.locator(".tp-map-side");
   await expect(side).toContainText("CatalogController.java:109");
   expect(await side.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
 }
@@ -39,10 +39,10 @@ test("in the console, a query's long path wraps in a repeated query's details pa
   await page.setViewportSize(NARROW);
   await longQueries(page);
   await page.goto(`/#/t/${await traceId("GET /")}?tab=tree`);
-  await page.locator('.dt-map-group .dt-map-row[data-kind="sql"]').first().click();
+  await page.locator('.tp-map-group .tp-map-row[data-kind="sql"]').first().click();
 
   await expectNoSideways(page);
-  await expect(page.locator(".dt-map-side")).toContainText(`from ${ORIGIN}`);
+  await expect(page.locator(".tp-map-side")).toContainText(`from ${ORIGIN}`);
 });
 
 test("in the panel too, a query's long path wraps in the details pane", async ({ page }) => {
@@ -54,7 +54,7 @@ test("in the panel too, a query's long path wraps in the details pane", async ({
   await pill(page).click();
   const frame = panel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await frame.locator('.dt-map-group .dt-map-row[data-kind="sql"]').first().click();
+  await frame.locator('.tp-map-group .tp-map-row[data-kind="sql"]').first().click();
 
   await expectNoSideways(frame);
 });

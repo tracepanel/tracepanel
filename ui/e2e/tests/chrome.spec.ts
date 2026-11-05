@@ -157,7 +157,7 @@ test("a list loads in its own shape: the search, the filters and rows where they
   const loading = page.getByRole("main").getByRole("status");
 
   await expect(loading).toBeVisible();
-  await expect(loading.locator(".dt-skeleton")).toHaveCount(11);
+  await expect(loading.locator(".tp-skeleton")).toHaveCount(11);
   await expect(page.getByRole("main").getByRole("heading", { name: "Database" })).toBeVisible();
 });
 

@@ -221,21 +221,21 @@ function LaneRow({
 }) {
   const total = Math.max(trace.duration, 1);
   return (
-    <div className="dt-lane">
-      <span className="dt-lane-label">
-        <span className="dt-lane-count">{lane.marks.length}</span>{" "}
+    <div className="tp-lane">
+      <span className="tp-lane-label">
+        <span className="tp-lane-count">{lane.marks.length}</span>{" "}
         {lane.marks.length === 1 ? lane.noun[0] : lane.noun[1]}
       </span>
-      <div className="dt-lane-track">
+      <div className="tp-lane-track">
         {gridTicks(trace.duration).map((at) => (
-          <span key={at} className="dt-lane-grid" style={{ left: `${at * 100}%` }} />
+          <span key={at} className="tp-lane-grid" style={{ left: `${at * 100}%` }} />
         ))}
         {lane.marks.map((mark) => (
           <MarkOn
             key={mark.key}
             mark={mark}
             look={{
-              className: "dt-mark",
+              className: "tp-mark",
               "data-tone": mark.tone,
               "data-point": mark.duration === 0 && !mark.cut ? "" : undefined,
               "data-cut": mark.cut ? "" : undefined,
@@ -264,16 +264,16 @@ interface Picking {
 
 /** A press on a lane or the axis may start a drag across them (on a mark too: it stays a click unless it moves). */
 function pressOnLanes(event: PointerEvent<HTMLDivElement>, picking: Picking): void {
-  const onTrack = (event.target as Element).closest(".dt-lane-track, .dt-timeline-axis");
+  const onTrack = (event.target as Element).closest(".tp-lane-track, .tp-timeline-axis");
   if (onTrack && picking.layer.current) picking.start(event, picking.layer.current);
 }
 
 /** A click on a share's stretch picks its rows; on a lane beside its marks, the range goes. */
 function clickOnLanes(event: MouseEvent<HTMLDivElement>, picking: Picking): void {
   const target = event.target as Element;
-  const share = target.closest<HTMLElement>(".dt-time-track [data-category]");
+  const share = target.closest<HTMLElement>(".tp-time-track [data-category]");
   if (share) clickOnShare(share, picking);
-  else if (target.classList.contains("dt-lane-track")) picking.onRange(null);
+  else if (target.classList.contains("tp-lane-track")) picking.onRange(null);
 }
 
 /**
@@ -308,13 +308,13 @@ function LanesBody({
     // biome-ignore lint/a11y/noStaticElementInteractions: a drag over the marks, which are buttons of their own.
     // biome-ignore lint/a11y/useKeyWithClickEvents: from the keyboard, Esc lets the range go (useSlice).
     <div
-      className="dt-timeline-body"
+      className="tp-timeline-body"
       onPointerDown={(event) => pressOnLanes(event, picking)}
       onClick={(event) => clickOnLanes(event, picking)}
       onDoubleClick={() => picking.onRange(null)}
     >
-      <div className="dt-timeline-axis" aria-hidden="true">
-        <span className="dt-timeline-unit">time</span>
+      <div className="tp-timeline-axis" aria-hidden="true">
+        <span className="tp-timeline-unit">time</span>
         {/* Each label as far along itself as its tick is along the axis: the first starts there, the last ends. */}
         {axisTicks(trace.duration).map((tick) => (
           <span key={tick.at} style={{ left: `${tick.at * 100}%`, transform: `translateX(${-tick.at * 100}%)` }}>
@@ -326,7 +326,7 @@ function LanesBody({
       {drawn.map((lane) => (
         <LaneRow key={lane.noun[1]} lane={lane} trace={trace} range={range} onSelect={onSelect} />
       ))}
-      <div className="dt-timeline-layer" ref={picking.layer}>
+      <div className="tp-timeline-layer" ref={picking.layer}>
         {range ? <RangeBand range={range} total={Math.max(trace.duration, 1)} /> : null}
       </div>
     </div>
@@ -384,7 +384,7 @@ export function Timeline({
     ? { onRange: () => undefined, onShare: () => undefined, onQuiet: undefined, start: () => undefined, layer }
     : { onRange, onShare, onQuiet, start: drag.start, layer };
   return (
-    <figure className="dt-timeline" aria-label="Timeline">
+    <figure className="tp-timeline" aria-label="Timeline">
       <LanesBody
         trace={trace}
         drawn={drawn}
@@ -415,7 +415,7 @@ export function TimeStrip({
 }) {
   return (
     // A segment hovered on any lane lights its legend item, and the legend item every segment of it.
-    <section className="dt-strip" aria-label="Time" {...litScope}>
+    <section className="tp-strip" aria-label="Time" {...litScope}>
       <Timeline trace={trace} onSelect={onSelect} still={still} />
       {/* Its shares pick the tree's rows: beside the details, those under the row picked (CallMap). */}
       <TimeLegend trace={trace} related={related} shares={still} />

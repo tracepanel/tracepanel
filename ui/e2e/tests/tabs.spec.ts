@@ -48,7 +48,7 @@ async function expectAllReachable(scope: Page | FrameLocator, names: readonly st
   if (tabs.some((tab) => tab.name === "More tabs")) {
     await more.click();
     await expect(scope.getByRole("menu")).toBeVisible();
-    inMenu = await scope.getByRole("menuitem").locator(".dt-tab-label").allTextContents();
+    inMenu = await scope.getByRole("menuitem").locator(".tp-tab-label").allTextContents();
     await scope.getByRole("menuitem").first().press("Escape");
   }
 
@@ -143,9 +143,9 @@ test("on the trace page the call tree, the Logs tab's table and the loading bar 
     return [Math.round(box.x), Math.round(box.x + box.width)];
   };
   await page.goto(`/#/t/${id}?tab=calls`);
-  const tabs = await edges(page.locator(".dt-tabs").first());
+  const tabs = await edges(page.locator(".tp-tabs").first());
 
-  expect(await edges(page.locator(".dt-map-head").first())).toEqual(tabs);
+  expect(await edges(page.locator(".tp-map-head").first())).toEqual(tabs);
 
   await page.getByRole("tab", { name: /^Logs/ }).click();
 

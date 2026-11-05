@@ -28,7 +28,7 @@ test("a long attribute name is shown whole, not cut", async ({ page, request }) 
 test("library frames are summed up by their packages, on one line", async ({ page, request }) => {
   await page.goto(`/#/t/${await first(request, "route:/boom service:api")}`);
   await page.getByRole("tab", { name: /^Error/ }).click();
-  const names = page.locator(".dt-frame-group-names").first();
+  const names = page.locator(".tp-frame-group-names").first();
 
   await expect(names).toHaveText("runtime · net/http ×5 · example.com/api/internal/tracepanel ×3");
   expect(await names.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);

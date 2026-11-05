@@ -30,17 +30,17 @@ function fitted(width: number, total: number): number {
  */
 export function useSideWidth() {
   const [width, setWidth] = useState(stored);
-  const style = width ? ({ "--dt-side-width": `${width}px` } as CSSProperties) : undefined;
+  const style = width ? ({ "--tp-side-width": `${width}px` } as CSSProperties) : undefined;
   return { width, setWidth, style };
 }
 
 /** The grid holding the tree and the pane: what the pane's width is measured against. */
 function gridOf(handle: HTMLElement): DOMRect | undefined {
-  return handle.closest(".dt-map-body")?.getBoundingClientRect();
+  return handle.closest(".tp-map-body")?.getBoundingClientRect();
 }
 
 function paneWidth(handle: HTMLElement): number {
-  return handle.closest(".dt-map-body")?.querySelector(".dt-map-side")?.clientWidth ?? MIN_SIDE;
+  return handle.closest(".tp-map-body")?.querySelector(".tp-map-side")?.clientWidth ?? MIN_SIDE;
 }
 
 /** The width after an arrow key: from the dragged width, or the pane's default one. */
@@ -80,7 +80,7 @@ export function SideResize({
       aria-label="Resize the details"
       aria-valuenow={width ? Math.round(width) : undefined}
       tabIndex={0}
-      className="dt-map-resize"
+      className="tp-map-resize"
       onPointerDown={(event) => {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);

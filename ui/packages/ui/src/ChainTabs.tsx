@@ -307,14 +307,14 @@ function emptyCalls(empty: string, scoped: boolean): string {
 
 /** The list, or what says there is nothing in it. */
 function CallsOf({ spans, empty, children }: { spans: readonly Span[]; empty: string; children: ReactNode }) {
-  if (spans.length === 0) return <p className="dt-note">{empty}</p>;
+  if (spans.length === 0) return <p className="tp-note">{empty}</p>;
   return children;
 }
 
 /** What an issue is across the scope: its apps, and in how many traces how many times. */
 function IssueReach({ issue, runtimes }: { issue: ScopedIssue; runtimes: ReadonlyMap<string, string | undefined> }) {
   return (
-    <span className="dt-issue-reach">
+    <span className="tp-issue-reach">
       {issue.apps.map((app) => (
         <AppChip key={app} name={app} runtime={runtimes.get(app)} compact />
       ))}
@@ -365,7 +365,7 @@ export function ScopedIssues({
         summary={shown.length > 0 ? issueCount(shown.length, issues.length) : null}
       />
       {shown.length === 0 ? (
-        <p className="dt-note">{chain.scope ? "No issues under this." : "No issues in this request."}</p>
+        <p className="tp-note">{chain.scope ? "No issues under this." : "No issues in this request."}</p>
       ) : (
         <IssueList
           issues={shown}

@@ -133,8 +133,8 @@ export function Bar({
   const place = point ? pointPlace(trace, from) : barPlace(trace, from, long);
   const past = place.past ?? (cut ? "" : undefined);
   return (
-    <span className="dt-map-track" aria-hidden="true">
-      <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={past} style={place.style} />
+    <span className="tp-map-track" aria-hidden="true">
+      <span className="tp-map-bar" data-point={point ? "" : undefined} data-past={past} style={place.style} />
     </span>
   );
 }
@@ -188,7 +188,7 @@ export function RowTime({
   title?: string | undefined;
 }) {
   return (
-    <span className="dt-map-time" data-slow={slow} title={title}>
+    <span className="tp-map-time" data-slow={slow} title={title}>
       {duration(time)}
     </span>
   );
@@ -214,13 +214,13 @@ export function SpanName({ span }: { span: Span }) {
   if (span.kind === "task.enqueue" && span.name.startsWith(ENQUEUE)) {
     // "enqueue " stays whole: only the task's name gives way.
     return (
-      <span className="dt-map-text flex">
+      <span className="tp-map-text flex">
         <span className="shrink-0 whitespace-pre">{ENQUEUE}</span>
         <TaskName name={span.name.slice(ENQUEUE.length)} />
       </span>
     );
   }
-  if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="dt-map-text" />;
+  if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="tp-map-text" />;
   return <OpText text={callText(span)} kind={span.kind} />;
 }
 
@@ -233,11 +233,11 @@ const OP = /^([A-Z][A-Z_]+)( .*)$/;
  */
 export function OpText({ text, kind, className }: { text: string; kind: string | undefined; className?: string }) {
   const op = OP.exec(text);
-  const classes = className ? `dt-map-text ${className}` : "dt-map-text";
+  const classes = className ? `tp-map-text ${className}` : "tp-map-text";
   if (!op) return <span className={classes}>{text}</span>;
   return (
     <span className={classes}>
-      <span className="dt-map-op" data-method={kind === "http.client" ? op[1] : undefined}>
+      <span className="tp-map-op" data-method={kind === "http.client" ? op[1] : undefined}>
         {op[1]}
       </span>
       {op[2]}
@@ -249,7 +249,7 @@ export function OpText({ text, kind, className }: { text: string; kind: string |
 export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
   if (answers(span) && span.duration === 0 && unfinished(span)) {
     return (
-      <span className="dt-map-time" title={UNENDED_NOTE}>
+      <span className="tp-map-time" title={UNENDED_NOTE}>
         —
       </span>
     );
@@ -351,11 +351,11 @@ function cutPieces(span: Span, owner: Trace, trace: Trace): Piece[] | null {
 
 function PiecesBar({ pieces }: { pieces: readonly Piece[] }) {
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span className="tp-map-track" aria-hidden="true">
       {pieces.map((piece) => (
         <span
           key={piece.left}
-          className="dt-map-bar"
+          className="tp-map-bar"
           data-piece=""
           data-category={piece.category}
           data-quiet={piece.waiting ? "" : undefined}
@@ -434,7 +434,7 @@ export function CallStatus({ node }: { node: SpanNode }) {
 export function spanButton(ctx: RowContext, node: SpanNode, mark: Mark | undefined, fold: boolean | undefined) {
   const { span } = node;
   return {
-    className: "dt-map-row",
+    className: "tp-map-row",
     ...rowState(ctx, node.key, mark),
     "data-kind": span.kind,
     "data-category": ctx.categories.get(span.id),
@@ -460,7 +460,7 @@ export function SpanFold({
   return (
     <>
       <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-      <KindBadge kind={rowKind(node.span, ctx.trace, parent)} muted={true} className="dt-map-kind" />
+      <KindBadge kind={rowKind(node.span, ctx.trace, parent)} muted={true} className="tp-map-kind" />
     </>
   );
 }
@@ -506,12 +506,12 @@ function timeTitle(span: Span, trace: Trace): string | undefined {
  * opening its details. A row without any has the empty slot, so names line up.
  */
 export function Caret({ open, onToggle }: { open: boolean | undefined; onToggle: () => void }) {
-  if (open === undefined) return <span className="dt-map-caret" />;
+  if (open === undefined) return <span className="tp-map-caret" />;
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keyboard folds with the arrows (foldKeys).
     // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
     <span
-      className="dt-map-caret"
+      className="tp-map-caret"
       data-toggle=""
       onClick={(event) => {
         event.stopPropagation();
@@ -567,7 +567,7 @@ export function HiddenLogs({ count, onShow }: { count: number | undefined; onSho
     // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click here shows the records.
     // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's Logs chip is the keyboard's way.
     <span
-      className="dt-map-sub dt-map-logs"
+      className="tp-map-sub tp-map-logs"
       role="button"
       tabIndex={-1}
       title="Info and debug records here; a click shows every record"

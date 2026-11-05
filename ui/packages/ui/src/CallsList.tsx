@@ -58,7 +58,7 @@ function Template({ template }: { template: string }) {
   if (beside && template.startsWith("GraphQL ")) {
     return (
       <span className="flex min-w-0 shrink-[1000] items-center gap-2.5">
-        <span className="dt-method" data-method="GQL">
+        <span className="tp-method" data-method="GQL">
           GQL
         </span>{" "}
         <span className="truncate font-mono">{template.slice("GraphQL ".length)}</span>
@@ -221,7 +221,7 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
 export function CallsList({ spans, issueBySpan, focus, table = "trace-calls", clock }: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
-  if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
+  if (spans.length === 0) return <p className="tp-note">No calls of this kind in this request.</p>;
   return (
     <CallTable
       table={table}

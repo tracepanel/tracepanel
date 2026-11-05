@@ -37,12 +37,12 @@ test("Inside this span: a group of steps opens the records under it, its service
     .first()
     .click();
 
-  const under = page.locator(".dt-under-this");
+  const under = page.locator(".tp-under-this");
   await expect(under).toContainText("4 logs");
   await under.getByRole("button", { name: "4 logs" }).click();
 
   await expect(logsTab(page)).toHaveAttribute("aria-selected", "true");
-  const chip = page.locator(".dt-scope-chip");
+  const chip = page.locator(".tp-scope-chip");
   await expect(chip).toContainText("Under Book.author ×3");
   await expect(records(page)).toHaveCount(4);
   await expect(records(page).filter({ hasText: "author 2 asked" })).toHaveCount(1);
@@ -67,15 +67,15 @@ test("a service's trace in the tree: under it, its own records; a record leads b
   const view = await chain();
   await page.goto(`/#/t/${view}?tab=calls`);
   const step = page.getByRole("button", { name: /^function Book\.author/i }).first();
-  await step.locator(".dt-map-caret[data-toggle]").click();
+  await step.locator(".tp-map-caret[data-toggle]").click();
   // The call and the service's trace it reached, one row: what is under it is the service's.
   await page.getByRole("button", { name: /^http\.client GET \/authors\/2 served by shop/i }).click();
   const details = page.getByRole("complementary", { name: "Details" });
   await expect(details.getByRole("region", { name: "Call" })).toBeVisible();
   await expect(details.getByRole("region", { name: "Served by shop" })).toBeVisible();
-  await page.locator(".dt-under-this").getByRole("button", { name: "1 log" }).click();
+  await page.locator(".tp-under-this").getByRole("button", { name: "1 log" }).click();
 
-  await expect(page.locator(".dt-scope-chip")).toContainText("Under GET /authors/2 → shop");
+  await expect(page.locator(".tp-scope-chip")).toContainText("Under GET /authors/2 → shop");
   await expect(records(page)).toHaveCount(1);
   await expect(records(page).first()).toContainText("no author 2");
 

@@ -91,8 +91,8 @@ test("a trace a driver's folded request reached hangs under its search and is ca
   await expect(called).toBeVisible();
   await expect(tree.getByText("POST search/books/_search")).toHaveCount(0);
   const [above, below] = [
-    await search.locator(".dt-map-kind").boundingBox(),
-    await called.locator(".dt-map-kind").boundingBox(),
+    await search.locator(".tp-map-kind").boundingBox(),
+    await called.locator(".tp-map-kind").boundingBox(),
   ];
   expect(above && below && above.y < below.y && above.x < below.x).toBe(true);
   await page.screenshot({ path: process.env["DRIVER_LINK_SHOT"] ?? "test-results/driver-link.png" });

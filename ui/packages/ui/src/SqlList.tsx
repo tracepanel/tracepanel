@@ -333,7 +333,7 @@ function orderColumns(
               // A repeat is its group's (the Grouped view, the tree's row): each run says only its own.
               issue={ownIssue(issueBySpan.get(span.id))}
             />
-            {params ? <span className="dt-map-sub truncate font-mono">{params}</span> : null}
+            {params ? <span className="tp-map-sub truncate font-mono">{params}</span> : null}
           </span>
         );
       },
@@ -363,7 +363,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   const start = Math.min(...spans.map((span) => span.start));
 
-  if (spans.length === 0) return <p className="dt-note">No database queries in this request.</p>;
+  if (spans.length === 0) return <p className="tp-note">No database queries in this request.</p>;
 
   return (
     <>

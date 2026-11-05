@@ -150,7 +150,7 @@ async function store(docs: Doc[]): Promise<void> {
   }
 }
 
-const legend = (page: Page) => page.locator(".dt-breakdown-legend").filter({ visible: true }).first().locator("li");
+const legend = (page: Page) => page.locator(".tp-breakdown-legend").filter({ visible: true }).first().locator("li");
 
 test.beforeAll(async () => {
   const partial = CASES.find((each) => String((each as Doc)["name"]).includes("last 5 ms"));

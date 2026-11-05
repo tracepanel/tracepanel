@@ -87,7 +87,7 @@ function shownDocument(page: Page) {
   return page
     .getByRole("complementary", { name: "Details" })
     .locator("pre")
-    .filter({ has: page.locator(".dt-gql-keyword") });
+    .filter({ has: page.locator(".tp-gql-keyword") });
 }
 
 test("a GraphQL call shows its document in the caller's call tree, from the trace that served it or its own", async ({
@@ -95,7 +95,7 @@ test("a GraphQL call shows its document in the caller's call tree, from the trac
 }) => {
   await store();
   await page.goto(`/#/t/${VIEW}?tab=tree`);
-  const calls = page.locator('.dt-map-row[data-kind="http.client"]');
+  const calls = page.locator('.tp-map-row[data-kind="http.client"]');
 
   // Served by the gateway: its document, as the gateway's trace has it.
   await calls.filter({ hasText: "GraphQL query Features" }).click();
@@ -109,5 +109,5 @@ test("a GraphQL call shows its document in the caller's call tree, from the trac
   // The gateway's trace says the same on its Request tab.
   await page.goto(`/#/t/${GATEWAY}?tab=request`);
   await expect(page.getByRole("button", { name: "Copy query" })).toBeVisible();
-  await expect(page.locator(".dt-gql-keyword").first()).toHaveText("query");
+  await expect(page.locator(".tp-gql-keyword").first()).toHaveText("query");
 });

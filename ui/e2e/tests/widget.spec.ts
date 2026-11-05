@@ -114,8 +114,8 @@ test("once the agent stored the request, the pill shows its time as the panel do
   // Its issues come from the agent: the request is stored by then.
   await expect(pill(page)).toHaveAccessibleName(/1 issue/);
   await pill(page).click();
-  const row = panel(page).locator(".dt-request-row").filter({ hasText: "/api/posts" });
-  const time = await row.locator(".dt-request-meta > :nth-child(2)").innerText();
+  const row = panel(page).locator(".tp-request-row").filter({ hasText: "/api/posts" });
+  const time = await row.locator(".tp-request-meta > :nth-child(2)").innerText();
 
   // The time the page waited for it, the same in both: never the header's 0.4 ms.
   expect(time).toMatch(/^[\d.]+ ms$/);
@@ -291,8 +291,8 @@ test("with requests from more than one app, each row of the tab's list names its
   await pill(page).click();
   const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
 
-  await expect(rows.filter({ hasText: "/api/posts" }).locator(".dt-app-chip")).toHaveText("shop-api");
-  await expect(rows.filter({ hasText: /GET\s*\/books/ }).locator(".dt-app-chip")).toHaveText("api");
+  await expect(rows.filter({ hasText: "/api/posts" }).locator(".tp-app-chip")).toHaveText("shop-api");
+  await expect(rows.filter({ hasText: /GET\s*\/books/ }).locator(".tp-app-chip")).toHaveText("api");
 });
 
 test("with requests from one app only, the rows name no app", async ({ page }) => {
@@ -304,7 +304,7 @@ test("with requests from one app only, the rows name no app", async ({ page }) =
   const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
 
   await expect(rows).toHaveCount(2);
-  await expect(rows.locator(".dt-app-chip")).toHaveCount(0);
+  await expect(rows.locator(".tp-app-chip")).toHaveCount(0);
 });
 
 test("a form's POST that redirected heads the page it led to: the app names it in a cookie, read once", async ({
@@ -343,7 +343,7 @@ test("in the panel, the Request tab heads with the request at a glance", async (
     .getByRole("tab", { name: /^Request/ })
     .click();
 
-  await expect(panel(page).locator(".dt-tabpanel header")).toContainText(/GET\s*\/api\/posts\s*200/);
+  await expect(panel(page).locator(".tp-tabpanel header")).toContainText(/GET\s*\/api\/posts\s*200/);
 });
 
 test("docked at the bottom, the panel leaves room to scroll to the page's end, even where the root is as tall as the window", async ({
@@ -647,10 +647,10 @@ for (const theme of ["dark", "light"] as const) {
     await page.getByRole("button", { name: "Load posts" }).click();
     const status = pill(page).locator(".status");
 
-    await expect(pill(page)).toHaveCSS("background-color", token("--dt-float", theme));
-    await expect(pill(page)).toHaveCSS("color", token("--dt-float-text", theme));
+    await expect(pill(page)).toHaveCSS("background-color", token("--tp-float", theme));
+    await expect(pill(page)).toHaveCSS("color", token("--tp-float-text", theme));
     await expect(status).toHaveText("200");
-    await expect(status).toHaveCSS("color", token("--dt-ok", theme));
+    await expect(status).toHaveCSS("color", token("--tp-ok", theme));
   });
 }
 
@@ -659,7 +659,7 @@ test("with no theme chosen the pill is dark, even on a light system", async ({ p
   await openApp(page, { posts: await posts() });
 
   await expect(page.locator("tracepanel-widget")).toHaveAttribute("data-theme", "dark");
-  await expect(pill(page)).toHaveCSS("background-color", token("--dt-float", "dark"));
+  await expect(pill(page)).toHaveCSS("background-color", token("--tp-float", "dark"));
 });
 
 test("the widget's sources hold no colour of their own: its palette is the tokens'", () => {
@@ -689,7 +689,7 @@ test("the hover card says where the time went as the strip's legend does: GC its
 }) => {
   const id = await traceId("GET /reports/sales");
   await page.goto(`/#/t/${id}?tab=tree`);
-  const legend = page.locator(".dt-breakdown-legend").first().locator("li").filter({ hasText: / ms/ });
+  const legend = page.locator(".tp-breakdown-legend").first().locator("li").filter({ hasText: / ms/ });
   // "GC 12 ms" for "GC 12 ms 6%": each share's name and time, largest first.
   const shares = (await legend.allInnerTexts()).map((text) =>
     text

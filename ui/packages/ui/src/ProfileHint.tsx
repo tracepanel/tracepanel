@@ -15,7 +15,7 @@ export function RowFlame({ trace, onOpen }: { trace: Trace; onOpen?: (() => void
   const icon = <FlameIcon className={PROFILED} aria-hidden="true" />;
   if (!onOpen) {
     return (
-      <span className="dt-map-flame" data-on="">
+      <span className="tp-map-flame" data-on="">
         {icon}
       </span>
     );
@@ -24,7 +24,7 @@ export function RowFlame({ trace, onOpen }: { trace: Trace; onOpen?: (() => void
     // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click here opens the profile.
     // biome-ignore lint/a11y/useKeyWithClickEvents: the row's details have the same way there, a link.
     <span
-      className="dt-map-flame dt-map-flame-open"
+      className="tp-map-flame tp-map-flame-open"
       data-on=""
       role="button"
       tabIndex={-1}

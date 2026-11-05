@@ -59,7 +59,7 @@ function scrollParent(element: HTMLElement): HTMLElement | null {
 
 /** The pane sticks under the trace's sticky tabs and fits in the rest of the scrolling view. */
 function stickyTop(map: HTMLElement): number {
-  return map.closest(".dt-trace")?.querySelector<HTMLElement>(".dt-trace-strip, .dt-tabs")?.offsetHeight ?? 0;
+  return map.closest(".tp-trace")?.querySelector<HTMLElement>(".tp-trace-strip, .tp-tabs")?.offsetHeight ?? 0;
 }
 
 function viewHeight(map: HTMLElement): number {
@@ -69,8 +69,8 @@ function viewHeight(map: HTMLElement): number {
 function fitSidePane(map: HTMLElement): void {
   const top = stickyTop(map);
   const view = viewHeight(map);
-  map.style.setProperty("--dt-side-top", `${top}px`);
-  map.style.setProperty("--dt-side-height", `${view - top}px`);
+  map.style.setProperty("--tp-side-top", `${top}px`);
+  map.style.setProperty("--tp-side-height", `${view - top}px`);
 }
 
 /**
@@ -93,7 +93,7 @@ function watchView(map: HTMLElement, fit: () => void): () => void {
   observer.observe(map);
   const view = scrollParent(map);
   if (view) observer.observe(view);
-  const sticky = map.closest(".dt-trace")?.querySelector<HTMLElement>(".dt-trace-strip, .dt-tabs");
+  const sticky = map.closest(".tp-trace")?.querySelector<HTMLElement>(".tp-trace-strip, .tp-tabs");
   if (sticky) observer.observe(sticky);
   let frame = 0;
   const scrolled = () => {
@@ -135,15 +135,15 @@ function SidePane({ children, onClose }: { children: ReactNode; onClose: () => v
   const pane = useRef<HTMLElement>(null);
   useEffect(() => {
     const element = pane.current;
-    const map = element?.closest<HTMLElement>(".dt-map");
+    const map = element?.closest<HTMLElement>(".tp-map");
     if (!(element && map)) return;
     const fit = () => fitPane(element, map);
     fit();
     return watchView(map, fit);
   }, []);
   return (
-    <aside className="dt-map-side" aria-label="Details" ref={pane}>
-      <button type="button" className="dt-map-side-close" aria-label="Close the details" onClick={onClose}>
+    <aside className="tp-map-side" aria-label="Details" ref={pane}>
+      <button type="button" className="tp-map-side-close" aria-label="Close the details" onClick={onClose}>
         <CloseIcon />
       </button>
       {children}
@@ -158,8 +158,8 @@ function SidePane({ children, onClose }: { children: ReactNode; onClose: () => v
 function MapBody({ details, onClose, children }: { details: ReactNode; onClose: () => void; children: ReactNode }) {
   const { width, setWidth, style } = useSideWidth();
   return (
-    <div className="dt-map-body" data-side={details ? "" : undefined} style={details ? style : undefined}>
-      <div className="dt-map-tree">{children}</div>
+    <div className="tp-map-body" data-side={details ? "" : undefined} style={details ? style : undefined}>
+      <div className="tp-map-tree">{children}</div>
       {details ? (
         <>
           <SideResize width={width} onWidth={setWidth} />
@@ -273,7 +273,7 @@ function useOpenedTo(
     opener.current(path);
     // Into view once it is drawn, open.
     requestAnimationFrame(() =>
-      document.querySelector('.dt-map-rows [aria-current="true"]')?.scrollIntoView({ block: "center" }),
+      document.querySelector('.tp-map-rows [aria-current="true"]')?.scrollIntoView({ block: "center" }),
     );
   }, [tree, initialSpan]);
 }
@@ -432,25 +432,25 @@ function TimedRows({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a drag over the rows, which are buttons of their own.
     <div
-      className="dt-map-timed"
+      className="tp-map-timed"
       ref={timed}
       onPointerDown={(event) => {
         const target = event.target as Element;
-        if (onRange && ruler.current && target.closest(".dt-map-track, .dt-map-ruler"))
+        if (onRange && ruler.current && target.closest(".tp-map-track, .tp-map-ruler"))
           drag.start(event, ruler.current);
       }}
       onDoubleClick={(event) => {
-        if ((event.target as Element).closest(".dt-map-track, .dt-map-ruler")) onRange?.(null);
+        if ((event.target as Element).closest(".tp-map-track, .tp-map-ruler")) onRange?.(null);
       }}
     >
-      <div className="dt-map-head">
+      <div className="tp-map-head">
         <span>Call tree</span>
-        <span className="dt-map-ruler" ref={ruler} title={onRange ? "Drag to pick a stretch of the time" : undefined} />
+        <span className="tp-map-ruler" ref={ruler} title={onRange ? "Drag to pick a stretch of the time" : undefined} />
         <span>Time</span>
       </div>
       {children}
       {shown && column ? (
-        <div className="dt-map-range-layer" style={column}>
+        <div className="tp-map-range-layer" style={column}>
           <RangeBand range={shown} total={total} />
         </div>
       ) : null}
@@ -538,7 +538,7 @@ function useRowPicked(
   useEffect(() => {
     if (!external) return;
     const frame = requestAnimationFrame(() =>
-      document.querySelector('.dt-map-row[aria-current="true"]')?.scrollIntoView({ block: "nearest" }),
+      document.querySelector('.tp-map-row[aria-current="true"]')?.scrollIntoView({ block: "nearest" }),
     );
     return () => cancelAnimationFrame(frame);
   }, [external, selected]);
@@ -651,7 +651,7 @@ export function CallMap({
   const inline = side || external ? null : details;
 
   return (
-    <div className="dt-map" ref={map}>
+    <div className="tp-map" ref={map}>
       {head}
       <HostedDetails host={wiring.detailsHost} details={details} />
       <MapBody details={side && !external ? details : null} onClose={close}>
@@ -661,7 +661,7 @@ export function CallMap({
           // Beside the details, the rows are picked one by one: no stretch dragged across them.
           onRange={external ? undefined : (range) => change({ ...current, range })}
         >
-          <div className="dt-map-rows" ref={rows}>
+          <div className="tp-map-rows" ref={rows}>
             <Rows
               nodes={tree}
               depth={0}

@@ -253,7 +253,7 @@ async function resolvers(page: Page): Promise<number> {
 
 /** A row's bar, left and right edge on the page. */
 async function bar(row: ReturnType<Page["getByRole"]>): Promise<{ left: number; right: number }> {
-  const box = await row.locator(".dt-map-bar").first().boundingBox();
+  const box = await row.locator(".tp-map-bar").first().boundingBox();
   if (!box) throw new Error("no bar on the row");
   return { left: box.x, right: box.x + box.width };
 }
@@ -266,7 +266,7 @@ function hop(scope: Page | ReturnType<typeof panel>, call: string) {
 
 /** The server's part of a merged call's bar, left and right edge on the page. */
 async function serverBar(row: ReturnType<Page["getByRole"]>): Promise<{ left: number; right: number }> {
-  const box = await row.locator(".dt-map-bar[data-server]").boundingBox();
+  const box = await row.locator(".tp-map-bar[data-server]").boundingBox();
   if (!box) throw new Error("no server bar on the row");
   return { left: box.x, right: box.x + box.width };
 }
@@ -281,18 +281,18 @@ test("a resolver run per item groups as one row; open, each runs its call, and t
   await expect(group).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors/i })).toHaveCount(0);
 
-  await group.locator(".dt-map-caret[data-toggle]").click();
+  await group.locator(".tp-map-caret[data-toggle]").click();
 
   await expect(page.getByRole("button", { name: /^function Book\.author \d+ ms$/i })).toHaveCount(AUTHORS);
   // Each call one row with the trace it served: no row of its own for the service's trace.
   await expect(
     page.getByRole("button", { name: /^http\.client GET \/authors\/\d+ served by library-api/i }),
   ).toHaveCount(AUTHORS);
-  await expect(page.locator('.dt-map-row[data-kind="task"]')).toHaveCount(0);
+  await expect(page.locator('.tp-map-row[data-kind="task"]')).toHaveCount(0);
   const call = hop(page, "GET /authors/2");
   await expect(call).toHaveAttribute("aria-expanded", "false");
 
-  await call.locator(".dt-map-caret[data-toggle]").click();
+  await call.locator(".tp-map-caret[data-toggle]").click();
 
   await expect(page.getByRole("button", { name: /^sql SELECT author\.name/i })).toHaveCount(1);
 });
@@ -302,7 +302,7 @@ test("calls side by side show the time they ran from first to last; what they to
 }) => {
   await resolvers(page);
   const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
-  const time = group.locator(".dt-map-time");
+  const time = group.locator(".tp-map-time");
 
   // 36 resolvers of 3.2 ms each, 20 µs apart: 3.9 ms from the first's start to the last's end, 115 ms added up.
   await expect(time).toHaveText("4 ms");
@@ -322,12 +322,12 @@ test("another app's trace on its own clock is drawn inside its call, its rows to
   await page
     .getByRole("button", { name: /^function Book\.author/i })
     .first()
-    .locator(".dt-map-caret[data-toggle]")
+    .locator(".tp-map-caret[data-toggle]")
     .click();
   const client = hop(page, "GET /authors/2");
-  await client.locator(".dt-map-caret[data-toggle]").click();
+  await client.locator(".tp-map-caret[data-toggle]").click();
   const sql = page.getByRole("button", { name: /^sql SELECT author\.name/i });
-  const record = page.locator('.dt-map-row[data-kind="log"]').filter({ hasText: "author 2 served" });
+  const record = page.locator('.tp-map-row[data-kind="log"]').filter({ hasText: "author 2 served" });
 
   // The service ran 2 ms of the 3 ms call: centred in it, 0.5 ms either side, though its clock read 5 ms ahead.
   const [call, served, query] = [await bar(client), await serverBar(client), await bar(sql)];
@@ -336,8 +336,8 @@ test("another app's trace on its own clock is drawn inside its call, its rows to
   expect(query.left).toBeGreaterThanOrEqual(served.left - 0.5);
   expect(query.right).toBeLessThanOrEqual(served.right + 0.5);
   // The row's time is the call's; the server's part and the rest on hover, with what the clocks did.
-  await expect(client.locator(".dt-map-time")).toHaveText("3 ms");
-  await expect(client.locator(".dt-map-time")).toHaveAttribute(
+  await expect(client.locator(".tp-map-time")).toHaveText("3 ms");
+  await expect(client.locator(".tp-map-time")).toHaveAttribute(
     "title",
     /^server 2 ms · network 1 ms\nIts app.s clock is 5 ms ahead of this one.s: drawn centred in the 3 ms call, the 1 ms not spent/,
   );
@@ -345,9 +345,9 @@ test("another app's trace on its own clock is drawn inside its call, its rows to
   // Its record, an info one, counted on its row until shown; then on the same clock: before its call ended (4.1 ms
   // after the BFF's start), not 5 ms after.
   await expect(record).toHaveCount(0);
-  await page.locator(".dt-map-logs").first().click();
+  await page.locator(".tp-map-logs").first().click();
   const callEnd = (bff + 1_070 + 3_000) / 1000;
-  const logged = Number.parseFloat((await record.locator(".dt-map-time").innerText()).slice(1));
+  const logged = Number.parseFloat((await record.locator(".tp-map-time").innerText()).slice(1));
   expect(logged).toBeLessThanOrEqual(Math.round(callEnd));
 });
 
@@ -358,15 +358,15 @@ test("a served request longer than its call by the caller's clock ends with the 
   await page
     .getByRole("button", { name: /^function Book\.author/i })
     .first()
-    .locator(".dt-map-caret[data-toggle]")
+    .locator(".tp-map-caret[data-toggle]")
     .click();
   const client = hop(page, "GET /authors/1");
 
   const [call, served] = [await bar(client), await serverBar(client)];
   expect(served.left).toBeGreaterThanOrEqual(call.left - 0.5);
   expect(served.right).toBeLessThanOrEqual(call.right + 0.5);
-  await expect(client.locator(".dt-map-time")).toHaveText("3 ms");
-  await expect(client.locator(".dt-map-time")).toHaveAttribute(
+  await expect(client.locator(".tp-map-time")).toHaveText("3 ms");
+  await expect(client.locator(".tp-map-time")).toHaveAttribute(
     "title",
     /^server 4 ms by its app's clock\nServed in 4 ms by its app's clock, 1 ms more than the 3 ms call/,
   );
@@ -378,8 +378,8 @@ test("a click's call tree opens the whole chain: the BFF, each service call, the
   const asked = await chain(page);
   // The click's call and the BFF's trace it reached: one row, the BFF's name after its app (it isn't the path).
   const bff = hop(page, "GET /api/books");
-  await expect(bff.locator(".dt-app-chip")).toHaveText("library-bff");
-  await expect(bff.locator(".dt-map-hop-name")).toHaveText("POST /graphql");
+  await expect(bff.locator(".tp-app-chip")).toHaveText("library-bff");
+  await expect(bff.locator(".tp-map-hop-name")).toHaveText("POST /graphql");
 
   // The BFF's trace, open under the click's call, with its own calls in it: the 36 to one endpoint one row.
   await expect(bff).toHaveAttribute("aria-expanded", "true");
@@ -390,26 +390,26 @@ test("a click's call tree opens the whole chain: the BFF, each service call, the
   // The books' call reached the service: one of many calls, so its trace is a click away.
   const books = hop(page, "GET /books");
   await expect(books).toHaveAttribute("aria-expanded", "false");
-  await expect(books.locator(".dt-app-chip")).toHaveText("library-api");
-  await expect(books.locator(".dt-map-hop-name")).toHaveText("");
+  await expect(books.locator(".tp-app-chip")).toHaveText("library-api");
+  await expect(books.locator(".tp-map-hop-name")).toHaveText("");
 
-  await books.locator(".dt-map-caret[data-toggle]").click();
+  await books.locator(".tp-map-caret[data-toggle]").click();
 
   // The service's SQL, and the call it made in turn, open with its trace: the one call there.
   await expect(books).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("button", { name: /^sql SELECT book\.id/i })).toBeVisible();
   const pricing = hop(page, "GET /prices");
   await expect(pricing).toHaveAttribute("aria-expanded", "true");
-  await expect(pricing.locator(".dt-app-chip")).toHaveText("pricing");
+  await expect(pricing.locator(".tp-app-chip")).toHaveText("pricing");
   await expect(page.getByRole("button", { name: /^sql SELECT price FROM prices/i })).toBeVisible();
 
   // One row, one look at every level: each call with the trace it served, no row of an app's own.
   for (const row of [bff, books, pricing]) {
     await expect(row).toHaveAttribute("data-kind", "http.client");
     await expect(row).toHaveAttribute("data-hop", "");
-    await expect(row.locator(".dt-map-kind")).toHaveText("http.client");
+    await expect(row.locator(".tp-map-kind")).toHaveText("http.client");
   }
-  await expect(page.locator('.dt-map-row[data-kind="task"]')).toHaveCount(0);
+  await expect(page.locator('.tp-map-row[data-kind="task"]')).toHaveCount(0);
 
   // Each level's links were asked for once, as it opened; the authors' traces not, still folded.
   expect(asked.filter((trace) => trace === id(70))).toHaveLength(1);
@@ -423,14 +423,14 @@ test("an N+1 of calls to a service opens to each call, each with the service's t
   await chain(page);
   const group = page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i });
 
-  await group.locator(".dt-map-caret[data-toggle]").click();
+  await group.locator(".tp-map-caret[data-toggle]").click();
 
   const authors = page.getByRole("button", { name: /^http\.client GET \/authors\/\d+ served by/i });
   await expect(authors).toHaveCount(AUTHORS);
   for (const row of await authors.all()) await expect(row).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("button", { name: /^sql SELECT author\.name/i })).toHaveCount(0);
 
-  await authors.nth(4).locator(".dt-map-caret[data-toggle]").click();
+  await authors.nth(4).locator(".tp-map-caret[data-toggle]").click();
 
   await expect(authors.nth(4)).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("button", { name: /^sql SELECT author\.name/i })).toHaveCount(1);
@@ -442,8 +442,8 @@ test("an N+1 of calls to a service opens to each call, each with the service's t
 
 test("a record a coloured logger wrote shows its text without the escapes, in the call tree", async ({ page }) => {
   await chain(page);
-  const tree = page.locator(".dt-map-rows");
-  const record = tree.locator('.dt-map-row[data-kind="log"]').filter({ hasText: "query Books" });
+  const tree = page.locator(".tp-map-rows");
+  const record = tree.locator('.tp-map-row[data-kind="log"]').filter({ hasText: "query Books" });
 
   await expect(record).toContainText("GraphQL query Books took 30 ms");
   await expect(tree).not.toContainText("[35m");
@@ -471,7 +471,7 @@ test("in the panel too, the click's call tree opens the chain, row for row as th
     `×${AUTHORS}`,
   );
 
-  await books.locator(".dt-map-caret[data-toggle]").click();
+  await books.locator(".tp-map-caret[data-toggle]").click();
 
   await expect(hop(frame, "GET /prices")).toHaveAttribute("aria-expanded", "true");
   await expect(frame.getByRole("button", { name: /^sql SELECT price FROM prices/i })).toBeVisible();
@@ -483,32 +483,32 @@ test("a call and the trace it served are one row: the app and what it found, the
   await chain(page);
   const books = hop(page, "GET /books");
 
-  await expect(books.locator(".dt-map-op")).toHaveText("GET");
-  await expect(books.locator(".dt-map-hop")).toHaveText("→");
-  await expect(books.locator(".dt-app-chip")).toHaveText("library-api");
-  await expect(books.locator(".dt-run-chips")).toContainText("N+1");
-  await expect(books.locator(".dt-request-queries")).toHaveText("5");
+  await expect(books.locator(".tp-map-op")).toHaveText("GET");
+  await expect(books.locator(".tp-map-hop")).toHaveText("→");
+  await expect(books.locator(".tp-app-chip")).toHaveText("library-api");
+  await expect(books.locator(".tp-run-chips")).toContainText("N+1");
+  await expect(books.locator(".tp-request-queries")).toHaveText("5");
 
   // The call took 9.5 ms, the service 9 ms of it, drawn inside it; the row's time is the call's.
   const [call, served] = [await bar(books), await serverBar(books)];
   expect(served.left).toBeGreaterThanOrEqual(call.left - 0.5);
   expect(served.right).toBeLessThanOrEqual(call.right + 0.5);
   expect(served.right - served.left).toBeLessThan(call.right - call.left);
-  await expect(books.locator(".dt-map-time")).toHaveText("10 ms");
-  await expect(books.locator(".dt-map-time")).toHaveAttribute("title", /^server 9 ms · network 0.5 ms$/);
+  await expect(books.locator(".tp-map-time")).toHaveText("10 ms");
+  await expect(books.locator(".tp-map-time")).toHaveAttribute("title", /^server 9 ms · network 0.5 ms$/);
 });
 
 test("a merged call opens straight on the served trace's rows, no row of its app in between", async ({ page }) => {
   await chain(page);
   const books = hop(page, "GET /books");
 
-  await books.locator(".dt-map-caret[data-toggle]").click();
+  await books.locator(".tp-map-caret[data-toggle]").click();
 
   // The service's query and its own call one level under the call, as the call's children.
   const sql = page.getByRole("button", { name: /^sql SELECT book\.id/i });
   await expect(sql).toBeVisible();
   const depth = async (row: ReturnType<Page["getByRole"]>) =>
-    Number(await row.locator(".dt-map-name").evaluate((name) => getComputedStyle(name).getPropertyValue("--dt-depth")));
+    Number(await row.locator(".tp-map-name").evaluate((name) => getComputedStyle(name).getPropertyValue("--tp-depth")));
   expect(await depth(sql)).toBe((await depth(books)) + 1);
   expect(await depth(hop(page, "GET /prices"))).toBe((await depth(books)) + 1);
 
@@ -541,8 +541,8 @@ test("a call no trace served is a row as before: its host, no app, nothing under
 
   await expect(call).toBeVisible();
   await expect(call).not.toHaveAttribute("data-hop");
-  await expect(call.locator(".dt-app-chip")).toHaveCount(0);
-  await expect(call.locator(".dt-map-bar")).toHaveCount(1);
+  await expect(call.locator(".tp-app-chip")).toHaveCount(0);
+  await expect(call.locator(".tp-map-bar")).toHaveCount(1);
   await expect(call).not.toHaveAttribute("aria-expanded");
 });
 
@@ -552,11 +552,11 @@ test("an N+1 of calls is said once, on its group's row: its calls don't each say
 
   await expect(group.locator('[data-slot="badge"]')).toHaveText("N+1");
 
-  await group.locator(".dt-map-caret[data-toggle]").click();
+  await group.locator(".tp-map-caret[data-toggle]").click();
 
   const calls = page.getByRole("button", { name: /^http\.client GET \/authors\/\d+ served by/i });
   await expect(calls).toHaveCount(AUTHORS);
-  await expect(page.locator('.dt-map-rows [data-slot="badge"]')).toHaveText(["N+1"]);
+  await expect(page.locator('.tp-map-rows [data-slot="badge"]')).toHaveText(["N+1"]);
 });
 
 test("a group's details say where its calls ran from when they all did from one place", async ({ page }) => {
@@ -588,22 +588,22 @@ test("a group's details without one place its calls ran from have no from", asyn
  */
 async function chipsShowTheirText(page: Page | ReturnType<typeof panel>) {
   const chips = page.locator(
-    '.dt-map-rows :is([data-slot="badge"], .dt-app-chip, .dt-request-queries, .dt-alias, .dt-map-times)',
+    '.tp-map-rows :is([data-slot="badge"], .tp-app-chip, .tp-request-queries, .tp-alias, .tp-map-times)',
   );
   expect(await chips.count()).toBeGreaterThan(0);
   const broken = await chips.evaluateAll((all) =>
     all.flatMap((chip) => {
       const text = (chip.textContent ?? "").trim() || chip.getAttribute("aria-label");
       const box = chip.getBoundingClientRect();
-      const row = chip.closest(".dt-map-name")?.getBoundingClientRect();
-      const line = chip.closest(".dt-map-chips")?.getBoundingClientRect() ?? row;
+      const row = chip.closest(".tp-map-name")?.getBoundingClientRect();
+      const line = chip.closest(".tp-map-chips")?.getBoundingClientRect() ?? row;
       if (!line || box.width === 0) return [];
       // Gone below the line: not shown.
       if (box.top >= line.bottom - 0.5) return [];
       const whole = box.left >= line.left - 0.5 && box.right <= line.right + 0.5;
-      const label = chip.querySelector(".truncate, .dt-app-name") ?? chip;
+      const label = chip.querySelector(".truncate, .tp-app-name") ?? chip;
       const cut = label.scrollWidth > label.clientWidth + 1;
-      const readable = chip.matches(".dt-app-chip") ? label.clientWidth >= 14 : !cut;
+      const readable = chip.matches(".tp-app-chip") ? label.clientWidth >= 14 : !cut;
       return text && whole && readable ? [] : [`${chip.className}: "${text}" ${Math.round(box.width)}px`];
     }),
   );
@@ -615,7 +615,7 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
 }) => {
   await resolvers(page);
   const group = () => page.getByRole("button", { name: /^function Book\.author/i }).first();
-  await group().locator(".dt-map-caret[data-toggle]").click();
+  await group().locator(".tp-map-caret[data-toggle]").click();
   await hop(page, "GET /authors/1").click();
 
   for (const width of [1440, 1100, 800]) {
@@ -625,10 +625,10 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
 
   const { click } = await links(page);
   await page.goto(`/#/t/${click}?tab=calls`);
-  await hop(page, "GET /books").locator(".dt-map-caret[data-toggle]").click();
+  await hop(page, "GET /books").locator(".tp-map-caret[data-toggle]").click();
   await page
     .getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i })
-    .locator(".dt-map-caret[data-toggle]")
+    .locator(".tp-map-caret[data-toggle]")
     .click();
   await chipsShowTheirText(page);
 
@@ -638,7 +638,7 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
   await pill(page).click();
   const frame = panel(page);
   await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await hop(frame, "GET /books").locator(".dt-map-caret[data-toggle]").click();
+  await hop(frame, "GET /books").locator(".tp-map-caret[data-toggle]").click();
   await hop(frame, "GET /books").click();
 
   await chipsShowTheirText(frame);

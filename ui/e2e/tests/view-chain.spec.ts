@@ -140,23 +140,23 @@ test("a view whose calls went through a gateway has the gateway's row under it, 
   await openView(page);
   await pill(page).click();
   const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const calls = list.locator('.dt-request-row[data-call="trace"]');
+  const calls = list.locator('.tp-request-row[data-call="trace"]');
 
-  await expect(list.locator(".dt-request-row").first()).toContainText("/app/");
+  await expect(list.locator(".tp-request-row").first()).toContainText("/app/");
   // The view's six calls to the gateway, under its row, a row each as the view made them: the four it served, and the
   // two that got no answer, "failed" as the call tree says them.
-  const group = list.locator('.dt-request-row[data-call="group"]');
-  await expect(group.locator(".dt-app-chip")).toHaveText("gateway");
-  await expect(group.locator(".dt-map-times")).toHaveText("×6");
+  const group = list.locator('.tp-request-row[data-call="group"]');
+  await expect(group.locator(".tp-app-chip")).toHaveText("gateway");
+  await expect(group.locator(".tp-map-times")).toHaveText("×6");
   await expect(calls).toHaveCount(4);
-  const failed = list.locator('.dt-request-row[data-call="failed"]');
-  await expect(failed.locator(".dt-status")).toHaveText(["failed", "failed"]);
-  await expect(failed.nth(0).locator(".dt-status")).toHaveAttribute("title", "TypeError");
-  await expect(failed.nth(1).locator(".dt-status")).toHaveAttribute("title", "No answer");
-  await expect(list.locator('.dt-request-row[data-chain="app"]')).toHaveCount(0);
+  const failed = list.locator('.tp-request-row[data-call="failed"]');
+  await expect(failed.locator(".tp-status")).toHaveText(["failed", "failed"]);
+  await expect(failed.nth(0).locator(".tp-status")).toHaveAttribute("title", "TypeError");
+  await expect(failed.nth(1).locator(".tp-status")).toHaveAttribute("title", "No answer");
+  await expect(list.locator('.tp-request-row[data-chain="app"]')).toHaveCount(0);
   // What the first called, folded under it until opened: the subgraph's trace.
   await calls.first().locator("[data-toggle]").click();
-  await expect(list.locator('.dt-request-row[data-chain="app"] .dt-app-chip')).toHaveText(["subgraph"]);
+  await expect(list.locator('.tp-request-row[data-chain="app"] .tp-app-chip')).toHaveText(["subgraph"]);
 });
 
 test("the pill of a view counts what its chain did, as the panel's tabs count it", async ({ page }) => {
@@ -169,7 +169,7 @@ test("the pill of a view counts what its chain did, as the panel's tabs count it
   await expect(pill(page).locator(".seg").nth(3)).toHaveText("7");
 
   await pill(page).click();
-  await panel(page).locator('.dt-request-row[data-kind="page"]').first().click();
+  await panel(page).locator('.tp-request-row[data-kind="page"]').first().click();
 
   await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
   await expect(panel(page).getByRole("tab", { name: /^HTTP calls/ })).toContainText("7");
@@ -181,15 +181,15 @@ test("each call says what it was answered: 200, 404 amber, 503 and no answer red
   await seed();
   await page.goto(`/#/t/${VIEW}?tab=tree`);
   // The four the gateway served: a group (×4), opened; the two with no answer, rows of their own after it.
-  await page.locator(".dt-map-row").filter({ hasText: "×4" }).click();
+  await page.locator(".tp-map-row").filter({ hasText: "×4" }).click();
   // The view's own calls (the gateway's to the subgraph is under the first).
   const rows = page
-    .locator('.dt-map-row[data-kind="http.client"]')
+    .locator('.tp-map-row[data-kind="http.client"]')
     .filter({ hasText: "/graphql" })
     .filter({ hasNotText: "×4" });
 
   await expect(rows).toHaveCount(6);
-  await expect(rows.locator(".dt-status")).toHaveText(["200", "404", "503", "200", "failed", "failed"]);
+  await expect(rows.locator(".tp-status")).toHaveText(["200", "404", "503", "200", "failed", "failed"]);
   expect(await rows.evaluateAll((all) => all.map((row) => row.getAttribute("data-status")))).toEqual([
     "ok",
     "warn",
@@ -199,15 +199,15 @@ test("each call says what it was answered: 200, 404 amber, 503 and no answer red
     "error",
   ]);
   // The 404's row in the warning's colour, the 503's in the error's, as the lists mark them.
-  const colours = await rows.evaluateAll((all) => all.map((row) => getComputedStyle(row).getPropertyValue("--dt-k")));
+  const colours = await rows.evaluateAll((all) => all.map((row) => getComputedStyle(row).getPropertyValue("--tp-k")));
   expect(colours[1]).not.toEqual(colours[2]);
   expect(colours[1]).not.toEqual(colours[0]);
 
   // The call the page sent its trace before it ended: the gateway's 2 s, never 0 µs; its hover says why.
   const cut = rows.nth(3);
-  await expect(cut.locator(".dt-map-time")).toHaveText("2.0 s");
-  await expect(cut.locator(".dt-map-time")).toHaveAttribute("title", /sent its trace before this call ended/);
+  await expect(cut.locator(".tp-map-time")).toHaveText("2.0 s");
+  await expect(cut.locator(".tp-map-time")).toHaveAttribute("title", /sent its trace before this call ended/);
   // A call with no answer names what failed; an older SDK's status 0 is no answer either.
-  await expect(rows.nth(4).locator(".dt-status")).toHaveAttribute("title", "TypeError");
-  await expect(rows.nth(5).locator(".dt-status")).toHaveAttribute("title", "No answer");
+  await expect(rows.nth(4).locator(".tp-status")).toHaveAttribute("title", "TypeError");
+  await expect(rows.nth(5).locator(".tp-status")).toHaveAttribute("title", "No answer");
 });

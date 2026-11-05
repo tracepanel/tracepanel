@@ -205,7 +205,7 @@ test("an app's traces with no role are its roles by their kind: one frame per ap
 
   const rows = main.locator("table tbody tr").filter({ hasText: "App" });
   for (const row of await rows.all())
-    await expect(row.locator("td").first().locator("svg, .dt-monogram").first()).toBeVisible();
+    await expect(row.locator("td").first().locator("svg, .tp-monogram").first()).toBeVisible();
 });
 
 /** A box's middle on the screen. */

@@ -84,7 +84,7 @@ function LevelHistogram({ logs, window }: { logs: readonly ScopedLog[]; window: 
   const slices = slicesOf(logs, window);
   const most = Math.max(1, ...slices.map((slice) => slice.count));
   return (
-    <li className="dt-log-histogram" role="img" aria-label="Records over the time, by level">
+    <li className="tp-log-histogram" role="img" aria-label="Records over the time, by level">
       {slices.map((slice, index) => (
         <span
           // biome-ignore lint/suspicious/noArrayIndexKey: the slices of the time, in order.
@@ -102,9 +102,9 @@ function FirstError({ log, start, onOpen }: { log: ScopedLog | undefined; start:
   if (!log) return null;
   return (
     <li className="min-w-0">
-      <button type="button" className="dt-map-filter dt-log-first-error" title="Open the first error" onClick={onOpen}>
+      <button type="button" className="tp-map-filter tp-log-first-error" title="Open the first error" onClick={onOpen}>
         <span className="text-error">First error</span>
-        <span className="dt-map-filter-count">{since(log.time, start)}</span>
+        <span className="tp-map-filter-count">{since(log.time, start)}</span>
         <span className="truncate">{withoutAnsi(log.message)}</span>
       </button>
     </li>
@@ -300,7 +300,7 @@ function Records({
   onOpen: (key: string | null) => void;
   action: (log: ScopedLog) => ReactNode;
 }) {
-  if (logs.length === 0) return <p className="dt-note">{empty}</p>;
+  if (logs.length === 0) return <p className="tp-note">{empty}</p>;
   return (
     <LogTable
       table="trace-logs"

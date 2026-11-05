@@ -52,7 +52,7 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
   const queries = panel.locator("tr[aria-expanded]");
   await expect(queries).toHaveCount(2);
   await expect(queries.first()).toContainText(/SELECT author\s*×13/);
-  await expect(queries.nth(1).locator(".dt-map-times")).toHaveCount(0);
+  await expect(queries.nth(1).locator(".tp-map-times")).toHaveCount(0);
 
   await queries.first().click();
 
@@ -87,12 +87,12 @@ test("a query a template made says so in the DB tab; in the call tree its templa
 
   await page.getByRole("tab", { name: "Call tree" }).click();
 
-  const query = page.locator(".dt-map-row").filter({ hasText: "SELECT auth_user" });
+  const query = page.locator(".tp-map-row").filter({ hasText: "SELECT auth_user" });
 
   // It hangs under the template's own row: the template isn't said again beside it.
   await expect(query).toBeVisible();
-  await expect(query.locator(".dt-from-template")).toHaveCount(0);
-  await expect(page.locator(".dt-map-row").filter({ hasText: "blog/post_list.html" }).first()).toContainText(
+  await expect(query.locator(".tp-from-template")).toHaveCount(0);
+  await expect(page.locator(".tp-map-row").filter({ hasText: "blog/post_list.html" }).first()).toContainText(
     "template",
   );
 });

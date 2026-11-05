@@ -89,6 +89,6 @@ test("under a call to Apollo Router, its OTLP trace opens: its call to the subgr
   // The page's call is the Router's request ("served by library-router"); the Router's call to the subgraph under it.
   await expect(page.getByRole("button", { name: /served by library-router GraphQL query Books/ })).toBeVisible();
   await expect(
-    page.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "host.docker.internal" }),
+    page.locator('.tp-map-row[data-kind="http.client"]').filter({ hasText: "host.docker.internal" }),
   ).toBeVisible();
 });

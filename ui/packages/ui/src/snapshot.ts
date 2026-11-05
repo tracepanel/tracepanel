@@ -256,7 +256,7 @@ style.textContent = css;
 document.head.append(style);
 await import(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));`;
 
-/** The page's ground until the loader has unpacked the stylesheet: each theme's --dt-bg (styles.css), at zero
+/** The page's ground until the loader has unpacked the stylesheet: each theme's --tp-bg (styles.css), at zero
  * specificity, so the stylesheet wins. */
 const GROUND = `:where(:root) { color-scheme: dark; background: #0a0c11; }
 :where(:root[data-theme="light"]) { color-scheme: light; background: #fff; }`;

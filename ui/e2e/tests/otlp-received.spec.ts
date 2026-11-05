@@ -59,7 +59,7 @@ async function seed(): Promise<void> {
 }
 
 async function received(page: Page | FrameLocator, kind: string, name: string) {
-  await page.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name }).click();
+  await page.locator(`.tp-map-row[data-kind="${kind}"]`).filter({ hasText: name }).click();
   const block = page.getByRole("complementary", { name: "Details" }).getByRole("group", {
     name: "As received over OTLP",
   });

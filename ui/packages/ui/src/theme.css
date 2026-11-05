@@ -1,4 +1,4 @@
-/* Tailwind + shadcn/ui theme for tracepanel. Every shadcn token points at a --dt-* token from styles.css, so the
+/* Tailwind + shadcn/ui theme for tracepanel. Every shadcn token points at a --tp-* token from styles.css, so the
    light/dark switch (html[data-theme]) and the tracepanel palette stay the single source of truth. */
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -9,38 +9,38 @@
 @source "./";
 
 :root {
-  --background: var(--dt-bg);
-  --foreground: var(--dt-text);
-  --card: var(--dt-card);
-  --card-foreground: var(--dt-text);
-  --popover: var(--dt-popover);
-  --popover-foreground: var(--dt-text);
-  --primary: var(--dt-accent-strong);
+  --background: var(--tp-bg);
+  --foreground: var(--tp-text);
+  --card: var(--tp-card);
+  --card-foreground: var(--tp-text);
+  --popover: var(--tp-popover);
+  --popover-foreground: var(--tp-text);
+  --primary: var(--tp-accent-strong);
   --primary-foreground: #ffffff;
   /* Hovered: a step darker, so white on it keeps AA (primary/90 over white went lighter, 4.2:1). */
-  --primary-hover: color-mix(in oklab, var(--dt-accent-strong) 88%, black);
-  --secondary: var(--dt-faint);
-  --secondary-foreground: var(--dt-text);
-  --muted: var(--dt-faint);
-  --muted-foreground: var(--dt-text-3);
-  --accent: var(--dt-hover);
-  --accent-foreground: var(--dt-text);
-  --destructive: var(--dt-error);
-  --border: var(--dt-border);
-  --input: var(--dt-border-strong);
+  --primary-hover: color-mix(in oklab, var(--tp-accent-strong) 88%, black);
+  --secondary: var(--tp-faint);
+  --secondary-foreground: var(--tp-text);
+  --muted: var(--tp-faint);
+  --muted-foreground: var(--tp-text-3);
+  --accent: var(--tp-hover);
+  --accent-foreground: var(--tp-text);
+  --destructive: var(--tp-error);
+  --border: var(--tp-border);
+  --input: var(--tp-border-strong);
   /* No focus rings: a focused control keeps its own border colour (see the console's index.css). */
-  --ring: var(--dt-border);
+  --ring: var(--tp-border);
   --radius: 0.625rem;
-  --sidebar: var(--dt-sidebar, var(--dt-chrome));
-  --sidebar-foreground: var(--dt-text-2);
-  --sidebar-accent: var(--dt-hover);
-  --sidebar-accent-foreground: var(--dt-text);
-  --sidebar-border: var(--dt-border);
-  --chart-1: var(--dt-chart-1);
-  --chart-2: var(--dt-chart-2);
+  --sidebar: var(--tp-sidebar, var(--tp-chrome));
+  --sidebar-foreground: var(--tp-text-2);
+  --sidebar-accent: var(--tp-hover);
+  --sidebar-accent-foreground: var(--tp-text);
+  --sidebar-border: var(--tp-border);
+  --chart-1: var(--tp-chart-1);
+  --chart-2: var(--tp-chart-2);
   /* The service map: its canvas (opaque, so a line's halo matches it), its lines and arrowheads (at least 3:1 on the
      canvas, WCAG's non-text contrast), and its dot grid, quieter than a hairline so the lines and boxes win. */
-  --map-canvas: color-mix(in srgb, var(--dt-faint) 20%, var(--dt-bg));
+  --map-canvas: color-mix(in srgb, var(--tp-faint) 20%, var(--tp-bg));
   --map-edge: #6b7285;
   --map-dot: #191d27;
 }
@@ -52,8 +52,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--dt-font);
-  --font-mono: var(--dt-mono);
+  --font-sans: var(--tp-font);
+  --font-mono: var(--tp-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -81,40 +81,40 @@
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   /* tracepanel semantic colors as utilities: text-ok, bg-error-soft, text-brand… */
-  --color-ok: var(--dt-ok);
-  --color-ok-soft: var(--dt-ok-bg);
-  --color-warn: var(--dt-warn);
-  --color-warn-soft: var(--dt-warn-bg);
-  --color-error: var(--dt-error);
-  --color-error-soft: var(--dt-error-bg);
-  --color-info: var(--dt-info);
-  --color-info-soft: var(--dt-info-bg);
-  --color-brand: var(--dt-accent);
-  --color-brand-soft: var(--dt-accent-bg);
-  --color-lime: var(--dt-lime);
-  --color-faint: var(--dt-faint);
-  --color-text-2: var(--dt-text-2);
-  --color-text-3: var(--dt-text-3);
+  --color-ok: var(--tp-ok);
+  --color-ok-soft: var(--tp-ok-bg);
+  --color-warn: var(--tp-warn);
+  --color-warn-soft: var(--tp-warn-bg);
+  --color-error: var(--tp-error);
+  --color-error-soft: var(--tp-error-bg);
+  --color-info: var(--tp-info);
+  --color-info-soft: var(--tp-info-bg);
+  --color-brand: var(--tp-accent);
+  --color-brand-soft: var(--tp-accent-bg);
+  --color-lime: var(--tp-lime);
+  --color-faint: var(--tp-faint);
+  --color-text-2: var(--tp-text-2);
+  --color-text-3: var(--tp-text-3);
   /* The type scale (styles.css): text-2xs … text-4xl, in place of Tailwind's own. */
-  --text-2xs: var(--dt-size-2xs);
+  --text-2xs: var(--tp-size-2xs);
   --text-2xs--line-height: 1.5;
-  --text-xs: var(--dt-size-xs);
+  --text-xs: var(--tp-size-xs);
   --text-xs--line-height: 1.5;
-  --text-sm: var(--dt-size-sm);
+  --text-sm: var(--tp-size-sm);
   --text-sm--line-height: 1.5;
-  --text-base: var(--dt-size-base);
+  --text-base: var(--tp-size-base);
   --text-base--line-height: 1.5;
-  --text-md: var(--dt-size-md);
+  --text-md: var(--tp-size-md);
   --text-md--line-height: 1.5;
-  --text-lg: var(--dt-size-lg);
+  --text-lg: var(--tp-size-lg);
   --text-lg--line-height: 1.45;
-  --text-xl: var(--dt-size-xl);
+  --text-xl: var(--tp-size-xl);
   --text-xl--line-height: 1.35;
-  --text-2xl: var(--dt-size-2xl);
+  --text-2xl: var(--tp-size-2xl);
   --text-2xl--line-height: 1.25;
-  --text-3xl: var(--dt-size-3xl);
+  --text-3xl: var(--tp-size-3xl);
   --text-3xl--line-height: 1.2;
-  --text-4xl: var(--dt-size-4xl);
+  --text-4xl: var(--tp-size-4xl);
   --text-4xl--line-height: 1.15;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

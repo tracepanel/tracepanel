@@ -414,7 +414,7 @@ function StripHeader({
   actions: ReactNode;
 }) {
   return (
-    <header className="dt-trace-strip">
+    <header className="tp-trace-strip">
       {lead}
       {tabs}
       {explore}
@@ -516,14 +516,14 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
   const took = scope.at ? scope.at.windows.reduce((sum, [start, end]) => sum + end - start, 0) : to - from;
   const kind = scope.at?.kind ?? scopeKind(chain.members, scope);
   return (
-    <h3 className="dt-details-title">
+    <h3 className="tp-details-title">
       {kind ? (
         <KindWords.Provider value={WATERFALL_KINDS}>
-          <KindBadge kind={kind} muted={true} className="dt-map-kind" />
+          <KindBadge kind={kind} muted={true} className="tp-map-kind" />
         </KindWords.Provider>
       ) : null}
-      <span className="dt-details-name">{scope.label}</span>
-      <span className="dt-details-took">
+      <span className="tp-details-name">{scope.label}</span>
+      <span className="tp-details-took">
         <ClockIcon />
         {duration(took)}
       </span>
@@ -566,7 +566,7 @@ function RowStrip({
 }) {
   if (!trace) return null;
   return (
-    <header className="dt-details-head">
+    <header className="tp-details-head">
       <TimeStrip trace={trace} related={related} onSelect={onSelect} still={true} />
     </header>
   );
@@ -596,7 +596,7 @@ function WaterfallParts({
   return (
     <>
       <KindWords.Provider value={WATERFALL_KINDS}>
-        <article className="dt-trace" data-variant="waterfall" data-trace={traceId}>
+        <article className="tp-trace" data-variant="waterfall" data-trace={traceId}>
           {rows}
         </article>
       </KindWords.Provider>
@@ -604,10 +604,10 @@ function WaterfallParts({
       {hosts.details
         ? createPortal(
             <HiddenColumns.Provider value={DETAILS_HIDES}>
-              <div className="dt-trace" data-variant="details">
+              <div className="tp-trace" data-variant="details">
                 {tabs}
                 {head}
-                <div ref={onSlot} className="dt-details-row" hidden={!showRow} />
+                <div ref={onSlot} className="tp-details-row" hidden={!showRow} />
                 {panel}
               </div>
             </HiddenColumns.Provider>,
@@ -811,12 +811,12 @@ function OnItsWay({ waiting }: { waiting: readonly ChainWaiting[] }) {
   const count = waiting.length;
   if (count === 0) return null;
   return waiting.every((call) => call.cut !== null) ? (
-    <p className="dt-on-its-way" role="status" data-state="cut">
+    <p className="tp-on-its-way" role="status" data-state="cut">
       <WaitingIcon />
       {noAnswerText(count)}
     </p>
   ) : (
-    <p className="dt-on-its-way" role="status" data-state="running">
+    <p className="tp-on-its-way" role="status" data-state="running">
       <RunningMark />
       {onItsWayText(count)}
     </p>
@@ -934,24 +934,24 @@ function FullHeader({ trace, placed }: { trace: Trace; placed: { explore: ReactN
   const route = trace.attrs["http.route"];
   const from = redirectedFrom(trace.attrs);
   return (
-    <header className="dt-trace-head">
+    <header className="tp-trace-head">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <div className="dt-trace-title">
+          <div className="tp-trace-title">
             <TraceBadge word={head.badge} htmx={htmxOf(trace)} />
             <h2>
               <HeadingTitle kind={trace.kind} title={head.title} />
             </h2>
             <StatusBadge status={typeof status === "number" ? status : null} />
-            <span className="dt-trace-time">{duration(trace.duration)}</span>
+            <span className="tp-trace-time">{duration(trace.duration)}</span>
             <HeadFacts trace={trace} />
           </div>
           {typeof route === "string" && route !== path ? (
-            <p className="dt-trace-route">
+            <p className="tp-trace-route">
               route <RoutePath path={route} />
             </p>
           ) : null}
-          {from ? <p className="dt-trace-route">{redirectNote(from)}</p> : null}
+          {from ? <p className="tp-trace-route">{redirectNote(from)}</p> : null}
         </div>
         {placed.explore}
         {placed.actions ? <div className="flex shrink-0 items-center gap-0.5">{placed.actions}</div> : null}
@@ -1130,12 +1130,12 @@ export function TraceView({
       rootMark={
         waterfall ? (
           // In the closed records' columns (TraceList): the open one's marks under theirs.
-          <span className="dt-record-marks">
-            <span className="dt-record-errors" />
-            <span className="dt-record-issues">
+          <span className="tp-record-marks">
+            <span className="tp-record-errors" />
+            <span className="tp-record-issues">
               <RecordIssues issues={chainFindings(chain, findings)} />
             </span>
-            <span className="dt-record-queries" data-opens="sql">
+            <span className="tp-record-queries" data-opens="sql">
               <Queries count={scopedSpans(chain.members, null, callsOfTab("sql")).length} />
             </span>
           </span>
@@ -1168,7 +1168,7 @@ export function TraceView({
   const panel = (
     // The calls no trace answered: said on their rows in the call tree and the calls tabs alike.
     <UntracedCalls value={chain.untraced}>
-      <div role="tabpanel" className="dt-tabpanel">
+      <div role="tabpanel" className="tp-tabpanel">
         <RequestPane
           open={active === "request"}
           trace={trace}
@@ -1257,7 +1257,7 @@ export function TraceView({
   if (compact) {
     return (
       <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
-        <article className="dt-trace" data-variant="strip" data-trace={trace.id}>
+        <article className="tp-trace" data-variant="strip" data-trace={trace.id}>
           <StripHeader lead={lead} tabs={tabsBar} explore={placed.explore} actions={placed.actions} />
           {panel}
         </article>
@@ -1267,7 +1267,7 @@ export function TraceView({
 
   return (
     <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
-      <article className="dt-trace" data-variant={variant} data-trace={trace.id}>
+      <article className="tp-trace" data-variant={variant} data-trace={trace.id}>
         <FullHeader trace={trace} placed={placed} />
         {tabsBar}
         {panel}
