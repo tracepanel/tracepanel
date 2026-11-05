@@ -523,6 +523,8 @@ export function CallMap({
   detailsHost?: HTMLElement | null | undefined;
   /** The selected row's scope, in a tree with a `detailsHost`: null for its root. */
   onPicked?: PickedHandler | undefined;
+  /** Beside the root row's name, in a tree with no summary over it. */
+  rootMark?: ReactNode;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
@@ -566,6 +568,7 @@ export function CallMap({
                 selected,
                 onSelect: select,
                 selectOnly: external,
+                rootMark: wiring.rootMark,
                 collapsed,
                 onToggle: toggle,
                 marks,

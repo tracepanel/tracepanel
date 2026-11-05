@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useContext } from "react";
 import { AsReceived } from "./AsReceived";
 import { Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
 import { appName, type Linked, OpenRun } from "./CallRows";
@@ -18,7 +18,7 @@ import { attrsWhere } from "./lib/values";
 import type { TraceLinks } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { PropTable } from "./PropTable";
-import { AppChip, SectionHeading } from "./primitives";
+import { AppChip, KindWords, SectionHeading } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { RunChips } from "./RunChips";
 import { SqlCode } from "./SqlCode";
@@ -348,6 +348,17 @@ function Fields({ rows }: { rows: readonly NameValue[] }) {
 function SpanAttributes({ span, attrs, titled }: { span: Span; attrs: Attrs; titled: boolean }) {
   const template = span.kind === "template";
   const llm = span.kind === "llm";
+  const waterfall = useContext(KindWords) !== null;
+  const rest = withoutMessages(withoutContext(attrs));
+  // Beside the tree, the fields above say what matters: the raw attributes behind one click.
+  if (waterfall && titled && !template && !llm) {
+    return (
+      <details className="dt-attrs-more">
+        <summary>All attributes {Object.keys(rest).length}</summary>
+        <AllAttributes attrs={rest} titled={false} />
+      </details>
+    );
+  }
   return (
     <>
       {template ? <TemplateContext attrs={attrs} /> : null}

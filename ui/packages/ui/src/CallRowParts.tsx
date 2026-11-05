@@ -19,6 +19,8 @@ import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 export interface RowContext {
   /** A click only selects: the arrow alone folds. */
   selectOnly?: boolean | undefined;
+  /** Beside the root row's name: what the whole record found, as its closed row says it. */
+  rootMark?: ReactNode;
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
   selected: string | null;

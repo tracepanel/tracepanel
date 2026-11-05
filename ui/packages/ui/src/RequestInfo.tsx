@@ -410,6 +410,8 @@ function linkedRows(trace: Trace, related: Related | undefined, links: TraceLink
   return [...relatedRows(related, links, workflow.taken), ...(drawn ? [] : workflow.rows)];
 }
 
+const LED_TO_IT = new Set(["Called by", "Enqueued by", "Sent by", "Connection"]);
+
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
 export function RequestInfo({ trace, related, links, hero: wanted, linked: linkedShown = true }: RequestInfoProps) {
   const hero = wanted === true;
@@ -420,11 +422,14 @@ export function RequestInfo({ trace, related, links, hero: wanted, linked: linke
   const graphql = document ? [{ id: "graphql", label: "GraphQL", content: <GraphqlCode document={document} /> }] : [];
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
   // A task run's workflow lists the runs before and after it: the other rows leave those out.
-  const linked = linkedShown ? linkedRows(trace, related, links) : [];
+  const allLinked = linkedRows(trace, related, links);
+  const linked = linkedShown ? allLinked : [];
+  // Beside a tree, which draws what it called: only what led to it, among its facts.
+  const ledToIt = linkedShown ? [] : allLinked.filter((row) => LED_TO_IT.has(String(row.label)));
   return (
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}
-      <FactGrid rows={ownRows(trace, hero, related, links)} />
+      <FactGrid rows={[...ledToIt, ...ownRows(trace, hero, related, links)]} />
       <MigrationsSection trace={trace} links={links} />
       {linked.length ? (
         <Part label="Related traces" title="Related traces">

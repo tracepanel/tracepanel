@@ -62,6 +62,7 @@ import { ShareList } from "./TimeLegend";
 import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
+import { CompactChips } from "./TraceList";
 import type { App, Chain, Issue, IssueKind, Related, Trace } from "./types";
 import { UntracedCalls } from "./Untraced";
 
@@ -424,6 +425,12 @@ function wholeRecordTabs<T extends { id: string; label: string; icon?: unknown }
 
 function isLeafRow(chain: TraceScope, scope: SpanScope): boolean {
   return scopedSpans(chain.members, scope, () => true).length <= 1 && chain.scoped.length === 0;
+}
+
+/** The record's findings, on its open row as on its closed one. */
+function RecordIssues({ issues }: { issues: readonly { kind: IssueKind }[] }) {
+  const found = issues.filter((issue) => issue.kind !== "error");
+  return <CompactChips kinds={found.map((issue) => issue.kind)} issues={found.length} />;
 }
 
 /** Where the record's time went, on its Details: the selected row itself says the rest. */
@@ -975,6 +982,7 @@ export function TraceView({
       plain={waterfall}
       detailsHost={waterfall ? detailsSlot : undefined}
       onPicked={waterfall ? onPicked : undefined}
+      rootMark={waterfall ? <RecordIssues issues={chainFindings(chain, findings)} /> : undefined}
       onSelect={openAt}
       trace={trace}
       issueBySpan={tabbed.issueBySpan}

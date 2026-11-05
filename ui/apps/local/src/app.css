@@ -2256,3 +2256,12 @@ body {
 .panel-wf .dt-map-row .dt-request-queries {
   display: none;
 }
+
+.dt-attrs-more > summary {
+  color: var(--dt-text-3);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.dt-attrs-more[open] > summary {
+  margin-bottom: 0.5rem;
+}

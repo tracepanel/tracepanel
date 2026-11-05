@@ -568,7 +568,10 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           <MigrationNotes span={span} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
-          <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
+          <RowChips>
+            {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
+            {span.parent_id === null ? ctx.rootMark : null}
+          </RowChips>
         </span>
         <OwnBar span={span} ctx={ctx} />
         <OwnTime span={span} ctx={ctx} />

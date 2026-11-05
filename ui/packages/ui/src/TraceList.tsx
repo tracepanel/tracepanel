@@ -1238,7 +1238,7 @@ export function PageName({ name, redirectedFrom }: { name: string; redirectedFro
  * The narrow list's findings: a mark and how many, in the first kind's colour, their names in its title. A label per
  * finding ("Before commit +3") took the row's room from its path.
  */
-function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
+export function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
   const shown = (kinds ?? []).filter((kind) => kind !== "error");
   // Its findings, as its Issues tab counts them (three N+1s are three), not their kinds; before its trace loads (a
   // row from the widget's summary) the number is all there is.
