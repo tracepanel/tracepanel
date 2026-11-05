@@ -410,7 +410,7 @@ export function RecordRow({
           <span className="dt-map-chips">
             <Errors count={trace.errors} />
             <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
-            <Queries count={trace.queries} time={trace.db_time} />
+            <Queries count={trace.queries} />
           </span>
         </span>
         <span className="dt-map-track">

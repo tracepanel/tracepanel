@@ -941,10 +941,6 @@ tr[data-new] {
 .dt-request-queries[data-zero] {
   color: var(--dt-text-3);
 }
-.dt-request-queries-time {
-  color: var(--dt-text-3);
-  font-variant-numeric: tabular-nums;
-}
 /* A linked trace's findings and queries, on the row that leads to it: they keep their size, its name gives way. */
 .dt-run-chips {
   display: inline-flex;
