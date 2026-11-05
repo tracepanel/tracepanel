@@ -188,6 +188,12 @@ impl Reader {
             "{MEMBERS} SELECT DISTINCT i.fingerprint, i.kind FROM members m
              JOIN issue_traces t ON t.trace_id = m.id JOIN issues i ON i.fingerprint = t.fingerprint"
         ))?;
+        // What ran down the chain: its spans' kinds (functions, GraphQL, transactions) and its calls' systems (sql,
+        // http, redis): what a list can be narrowed to, and which rows have it.
+        let mut kinds_of = db.prepare_cached(&format!(
+            "{MEMBERS} SELECT s.kind FROM members m JOIN spans s ON s.trace_id = m.id
+             UNION SELECT c.system FROM members m JOIN calls c ON c.trace_id = m.id ORDER BY 1"
+        ))?;
         let mut counts = serde_json::Map::new();
         for id in ids {
             let args = rusqlite::params![id, CHAIN_LEVELS as i64, CHAIN_TRACES as i64];
@@ -203,6 +209,9 @@ impl Reader {
                 .collect::<rusqlite::Result<_>>()?;
             found.extend(self.found_across_apps(id, traces as usize)?);
             found.retain(|_, kind| kind != "error");
+            let span_kinds: Vec<String> = kinds_of
+                .query_map(args, |row| row.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
             let mut kinds: Vec<&str> = found.values().map(String::as_str).collect();
             kinds.sort_by_key(|kind| ISSUE_ORDER.iter().position(|each| each == kind));
             kinds.dedup();
@@ -212,6 +221,7 @@ impl Reader {
                     "queries": queries,
                     "db_time": db_time,
                     "errors": errors,
+                    "span_kinds": span_kinds,
                     "issues": found.len(),
                     "kinds": kinds,
                     "traces": traces,
@@ -1224,6 +1234,8 @@ mod tests {
         assert_eq!(counts["VIEW"]["issues"], across);
         assert_eq!(counts["VIEW"]["db_time"], sum("db_time"));
         assert_eq!(counts["VIEW"]["errors"], sum("errors"));
+        // Its calls by system, its other spans by kind (the root's own, a page or a request, isn't one).
+        assert_eq!(counts["VIEW"]["span_kinds"], json!(["function", "http", "sql"]));
         assert_eq!(counts["API1"]["traces"], 1);
         assert_eq!(counts.get("NONE"), None);
         let _ = std::fs::remove_dir_all(&dir);

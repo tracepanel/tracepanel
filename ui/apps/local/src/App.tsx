@@ -2,6 +2,7 @@ import {
   CloseIcon,
   Empty,
   ExternalIcon,
+  FILTERS,
   Hint,
   type ListChains,
   Logo,
@@ -10,6 +11,7 @@ import {
   parseSlice,
   RecordRow,
   RowFilter,
+  RowKinds,
   type Slice,
   sliceParams,
   type TabId,
@@ -32,8 +34,10 @@ import {
   BackTo,
   currentTrace,
   DockButton,
+  KindsMenu,
   ListToggles,
   ListTools,
+  offeredKinds,
   opensOnTab,
   PANEL_LINKS,
   PANEL_V2,
@@ -42,6 +46,8 @@ import {
   RequestSwitcher,
   readFollow,
   sectionFor,
+  showsKinds,
+  useShownKinds,
   writeFollow,
 } from "./panelList";
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
@@ -380,6 +386,7 @@ function PanelWaterfall({
   const wideMap = useMapWidth(MAP_WIDE);
   const map = detailsShown || dock === "right" ? narrowMap : wideMap;
   const [filter, setFilter] = useState("");
+  const [kinds, setKinds] = useShownKinds();
   // The waterfall stays put: a link to a trace in the open record's chain picks its row there. Only a trace outside
   // the chain opens on its own.
   const shownRecord = useRef<string | null>(null);
@@ -388,7 +395,13 @@ function PanelWaterfall({
   if (isRecord) shownRecord.current = selectedId;
   const rootId = isRecord || outside === selectedId ? selectedId : (shownRecord.current ?? selectedId);
   const focusTrace = rootId !== selectedId ? (selectedId ?? undefined) : undefined;
-  const records = filteredRecords(listRows, filter, rootId);
+  // The kinds shown keep the records that have them: a record with none of them goes, the open one too. An agent
+  // that doesn't say what ran (an older one) keeps every record, and offers every kind.
+  const ranKinds = [...(chains.counts?.values() ?? [])].map((each) => each.span_kinds);
+  const knowsKinds = ranKinds.some((each) => each !== undefined);
+  const records = filteredRecords(listRows, filter, rootId).filter(
+    (row) => !knowsKinds || showsKinds(chains.counts?.get(row.trace.id)?.span_kinds, kinds),
+  );
   const opened = rows.find((row) => row.trace.id === rootId);
   return (
     <div className="panel" data-v2="" style={{ ...details.style, ...map.style }}>
@@ -404,6 +417,7 @@ function PanelWaterfall({
         </span>
         <div className="panel-top-rows">
           <PanelFilter value={filter} onChange={setFilter} />
+          <KindsMenu kinds={kinds} offered={knowsKinds ? offeredKinds(ranKinds, kinds) : FILTERS} onKinds={setKinds} />
           {listTools}
           {/* At the rows' end, by the details' line: what the panel records, and the details shown or not. */}
           <div className="panel-top-controls">
@@ -435,63 +449,65 @@ function PanelWaterfall({
               <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
             ) : (
               <RowFilter.Provider value={filter}>
-                <TraceList
-                  compact={true}
-                  services={manyApps(rows)}
-                  rows={records}
-                  onMore={onMore}
-                  selectedId={rootId}
-                  currentId={currentId}
-                  chains={chains}
-                  opensOn={opensOn}
-                  onSelect={(id) => {
-                    clicked.current = rowTop(id);
-                    go({ name: "trace", id });
-                  }}
-                  openContent={
-                    rootId ? (
-                      <TraceScreen
-                        key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
-                        id={rootId}
-                        focusTrace={focusTrace}
-                        onOutsideChain={setOutside}
-                        source={source}
-                        arriving={arrivingIn(rows, stored, rootId)}
-                        running={runningIn(rows, rootId)}
-                        variant="waterfall"
-                        waiting={
-                          opened ? (
-                            <>
-                              <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
-                              {callsUnder(rows, opened).map((call) => (
-                                <RecordRow
-                                  key={call.key ?? call.trace.id}
-                                  row={call}
-                                  fresh={false}
-                                  depth={1}
-                                  live={Boolean(call.open)}
-                                  onSelect={(id) => go({ name: "trace", id })}
-                                />
-                              ))}
-                              {detailsHost ? createPortal(<TraceLoading variant="waterfall" />, detailsHost) : null}
-                            </>
-                          ) : undefined
-                        }
-                        detailsHost={detailsHost}
-                        actionsHost={actionsHost}
-                        initialTab={trace ? tabOf(trace.tab) : undefined}
-                        initialUnder={trace?.under}
-                        initialSlice={sliced.slice}
-                        onSliceChange={sliced.onChange}
-                        onTabShown={view.onTabShown}
-                        initialMemory={view.initialMemory}
-                        onMemoryChange={view.onMemoryChange}
-                        links={PANEL_LINKS}
-                        explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
-                      />
-                    ) : null
-                  }
-                />
+                <RowKinds.Provider value={kinds}>
+                  <TraceList
+                    compact={true}
+                    services={manyApps(rows)}
+                    rows={records}
+                    onMore={onMore}
+                    selectedId={rootId}
+                    currentId={currentId}
+                    chains={chains}
+                    opensOn={opensOn}
+                    onSelect={(id) => {
+                      clicked.current = rowTop(id);
+                      go({ name: "trace", id });
+                    }}
+                    openContent={
+                      rootId ? (
+                        <TraceScreen
+                          key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
+                          id={rootId}
+                          focusTrace={focusTrace}
+                          onOutsideChain={setOutside}
+                          source={source}
+                          arriving={arrivingIn(rows, stored, rootId)}
+                          running={runningIn(rows, rootId)}
+                          variant="waterfall"
+                          waiting={
+                            opened ? (
+                              <>
+                                <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
+                                {callsUnder(rows, opened).map((call) => (
+                                  <RecordRow
+                                    key={call.key ?? call.trace.id}
+                                    row={call}
+                                    fresh={false}
+                                    depth={1}
+                                    live={Boolean(call.open)}
+                                    onSelect={(id) => go({ name: "trace", id })}
+                                  />
+                                ))}
+                                {detailsHost ? createPortal(<TraceLoading variant="waterfall" />, detailsHost) : null}
+                              </>
+                            ) : undefined
+                          }
+                          detailsHost={detailsHost}
+                          actionsHost={actionsHost}
+                          initialTab={trace ? tabOf(trace.tab) : undefined}
+                          initialUnder={trace?.under}
+                          initialSlice={sliced.slice}
+                          onSliceChange={sliced.onChange}
+                          onTabShown={view.onTabShown}
+                          initialMemory={view.initialMemory}
+                          onMemoryChange={view.onMemoryChange}
+                          links={PANEL_LINKS}
+                          explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
+                        />
+                      ) : null
+                    }
+                  />
+                </RowKinds.Provider>
               </RowFilter.Provider>
             )}
           </div>

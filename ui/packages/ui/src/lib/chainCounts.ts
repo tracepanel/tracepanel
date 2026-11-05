@@ -14,6 +14,9 @@ export type RowCounts = Pick<ChainCounts, "queries" | "issues" | "kinds" | "trac
   // biome-ignore lint/style/useNamingConvention: wire format.
   db_time?: number;
   errors?: number;
+  /** What ran down the chain: its spans' kinds and its calls' systems (function, graphql, sql, http…). */
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  span_kinds?: string[];
 };
 
 export interface ChainCounts {

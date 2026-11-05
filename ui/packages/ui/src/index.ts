@@ -1,8 +1,9 @@
 export { AppDetails, appSaidAnything } from "./AppDetails";
-export { CallMap, RowFilter } from "./CallMap";
+export { CallMap, RowFilter, RowKinds } from "./CallMap";
 export { CallsList } from "./CallsList";
 export { CallsChart, Histogram, LatencyChart, LogsChart, Stat, StatGrid } from "./Charts";
 export * from "./CopyButton";
+export { FILTERS } from "./callTree";
 export { type DataColumn, type DataRows, DataTable } from "./DataTable";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";
@@ -47,6 +48,7 @@ export {
   Empty,
   IssueChip,
   KindBadge,
+  KindWords,
   MethodBadge,
   NeutralTag,
   RichText,
@@ -56,6 +58,7 @@ export {
   StatusBadge,
   TaskName,
   TraceBadge,
+  WATERFALL_KINDS,
   WaitingIcon,
 } from "./primitives";
 export { RequestInfo } from "./RequestInfo";

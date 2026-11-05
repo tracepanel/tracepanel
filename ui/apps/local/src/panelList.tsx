@@ -4,8 +4,10 @@ import {
   ClearIcon,
   DockBottomIcon,
   DockRightIcon,
+  FILTERS,
   Hint,
   KindBadge,
+  KindWords,
   LayersIcon,
   type ListChains,
   PageName,
@@ -16,11 +18,20 @@ import {
   TraceList,
   type TraceRow,
   type TraceSummary,
+  WATERFALL_KINDS,
 } from "@tracepanel/ui";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@tracepanel/ui/components/ui/dropdown-menu";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { LocateFixedIcon } from "lucide-react";
+import { ListFilterIcon, LocateFixedIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNewIds } from "./hooks";
 import { ProfileToggle } from "./ProfileToggle";
@@ -569,5 +580,111 @@ export function DockButton({ dock }: { dock: string }) {
         {dock === "right" ? <DockBottomIcon /> : <DockRightIcon />}
       </button>
     </Hint>
+  );
+}
+
+const KINDS_KEY = "tracepanel:panel-kinds";
+
+/** The kinds of calls the panel shows (none: all), remembered: the Show menu's. */
+export function useShownKinds(): [readonly string[], (kinds: readonly string[]) => void] {
+  const [kinds, setKinds] = useState<readonly string[]>(() => {
+    try {
+      const stored = JSON.parse(readItem(KINDS_KEY) ?? "[]");
+      return Array.isArray(stored) ? stored.filter((each) => typeof each === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const keep = (next: readonly string[]) => {
+    setKinds(next);
+    writeItem(KINDS_KEY, next.length > 0 ? JSON.stringify(next) : null);
+  };
+  return [kinds, keep];
+}
+
+/** A filter's own: what ran down a record's chain (its counts' span_kinds) has it. */
+function hasFilter(present: ReadonlySet<string>, filter: (typeof FILTERS)[number]): boolean {
+  return present.has(filter.id) || filter.kinds.some((kind) => present.has(kind));
+}
+
+/** Whether a record has any of the kinds picked (none picked: every record). */
+export function showsKinds(spanKinds: readonly string[] | undefined, kinds: readonly string[]): boolean {
+  if (kinds.length === 0) return true;
+  const present = new Set(spanKinds ?? []);
+  return FILTERS.some((filter) => kinds.includes(filter.id) && hasFilter(present, filter));
+}
+
+/** The kinds the list's records have, the ones picked kept: what the Show menu offers. */
+export function offeredKinds(spanKinds: readonly (readonly string[] | undefined)[], kinds: readonly string[]) {
+  const present = new Set(spanKinds.flatMap((each) => each ?? []));
+  return FILTERS.filter((filter) => kinds.includes(filter.id) || hasFilter(present, filter));
+}
+
+/** A kind's badge, as the tree's rows have it: "sql", "gql", "fn", "http". */
+function filterBadge(filter: (typeof FILTERS)[number]): string {
+  return filter.id === "task" ? "task" : filter.kinds[0];
+}
+
+/** The kinds offered first: what a request's calls mostly are. The rest follow. */
+const FIRST: readonly string[] = ["sql", "http", "graphql", "function", "cache", "redis", "messaging", "task"];
+
+/**
+ * Beside the filter: which kinds of calls the tree shows, every record's (only SQL, only GraphQL…). Its icon is
+ * raised while some are picked.
+ */
+export function KindsMenu({
+  kinds,
+  offered: present,
+  onKinds,
+}: {
+  kinds: readonly string[];
+  offered: readonly (typeof FILTERS)[number][];
+  onKinds: (kinds: readonly string[]) => void;
+}) {
+  const offered = [
+    ...present.filter((filter) => FIRST.includes(filter.id)),
+    ...present.filter((filter) => !FIRST.includes(filter.id)),
+  ];
+  if (offered.length === 0) return null;
+  const label = kinds.length > 0 ? `Showing ${kinds.length === 1 ? "1 kind" : `${kinds.length} kinds`}` : "Show";
+  return (
+    <DropdownMenu>
+      <Hint title={label} detail="Which calls the tree shows: only SQL, only GraphQL… The rest are hidden.">
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn("icon-button", kinds.length > 0 && "text-brand hover:text-brand")}
+            aria-label={label}
+            aria-pressed={kinds.length > 0}
+          >
+            <ListFilterIcon size={16} />
+          </button>
+        </DropdownMenuTrigger>
+      </Hint>
+      <DropdownMenuContent align="start" className="max-h-96 w-52 overflow-y-auto">
+        {offered.map((filter) => (
+          <DropdownMenuCheckboxItem
+            key={filter.id}
+            checked={kinds.includes(filter.id)}
+            onCheckedChange={(checked) =>
+              onKinds(checked ? [...kinds, filter.id] : kinds.filter((each) => each !== filter.id))
+            }
+            onSelect={(event) => event.preventDefault()}
+            className="gap-2"
+          >
+            <KindWords.Provider value={WATERFALL_KINDS}>
+              <KindBadge kind={filterBadge(filter)} muted={true} className="dt-map-kind" />
+            </KindWords.Provider>
+            {filter.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {kinds.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onKinds([])}>Show all</DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

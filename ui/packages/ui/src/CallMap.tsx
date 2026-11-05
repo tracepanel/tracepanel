@@ -542,6 +542,12 @@ type PickedHandler = (scope: SpanScope | null) => void;
 /** What the rows are filtered by, where a filter is over them (the panel's waterfall). */
 export const RowFilter = createContext("");
 
+/**
+ * The kinds of calls the panel shows (its Show menu: SQL, GraphQL, HTTP…): their rows and the way to them, every
+ * record's. None picked, all show.
+ */
+export const RowKinds = createContext<readonly string[]>([]);
+
 export function CallMap({
   trace,
   issueBySpan,
@@ -620,9 +626,13 @@ export function CallMap({
     })
   );
   const { categories, quiet } = useSpansTime(trace);
+  const kinds = useContext(RowKinds);
   const marks = useMemo(
-    () => scopedMarks(tree, pickedOf(current, trace, categories), external ? selected : null),
-    [tree, current, trace, categories, external, selected],
+    () =>
+      kinds.length > 0
+        ? marksOf(tree, pickedOf({ ...current, parts: kinds, range: null }, trace, categories))
+        : scopedMarks(tree, pickedOf(current, trace, categories), external ? selected : null),
+    [tree, current, trace, categories, external, selected, kinds],
   );
   // A share picked is of the row it was picked on: another row picked lets it go.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not the slice it changes.
@@ -677,7 +687,8 @@ export function CallMap({
                   profiles: wiring.profilesIn?.(trace) === true,
                 },
                 categories,
-                slice: current,
+                // The kinds shown pick the code rows too: none of them is SQL.
+                slice: kinds.length > 0 ? { ...current, parts: kinds, range: null } : current,
                 onTraceProfile: wiring.onTraceProfile,
                 profilesIn: wiring.profilesIn,
                 onShowLogs: () => change({ ...current, logs: true }),
