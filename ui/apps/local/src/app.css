@@ -2759,9 +2759,23 @@ body {
   justify-content: center;
 }
 /* The tree's marks in the records' columns: its rows keep the queries' column the records have, so every ⚠ of
-   the panel lines up, the open record's and its calls'. */
+   the panel lines up, the open record's and its calls'. Its status and logs each a column of their own too, there
+   empty as well: a row with no ⚠ keeps its status where the others have theirs. */
 .panel-wf .tp-map-row:not(.tp-record):not([data-root]) > .tp-map-name > .tp-map-chips {
+  justify-content: flex-end;
+  width: 2.75rem;
   margin-right: 3.25rem;
+}
+.panel-wf .tp-map-row:not(.tp-record) .tp-map-slot {
+  display: inline-flex;
+  flex: none;
+  justify-content: flex-end;
+}
+.panel-wf .tp-map-row:not(.tp-record) .tp-map-slot[data-slot="status"] {
+  width: 3.25rem;
+}
+.panel-wf .tp-map-row:not(.tp-record) .tp-map-slot[data-slot="logs"] {
+  width: 2.25rem;
 }
 /* A row's marks never give way: its name and its app's chip are cut first. */
 .panel-wf .tp-map-row > .tp-map-name > .tp-map-chips {

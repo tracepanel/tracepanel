@@ -291,6 +291,9 @@ function scopeOfNode(node: Node): SpanScope | undefined {
   if (node.type === "task" && node.kind === "call") {
     return { targets: [node.run.id], label: appName(node) ?? node.run.name, only: false };
   }
+  // A log record or an error: a row of its own, nothing under it: its details, not the record's.
+  if (node.type === "log") return { targets: [], label: node.log.message, only: true };
+  if (node.type === "error") return { targets: [], label: node.error.type, only: true };
   return undefined;
 }
 

@@ -3721,3 +3721,8 @@ div.tp-map-row[data-kind="code"] {
   opacity: 0.55;
   cursor: default !important;
 }
+
+/* A mark's place in a call tree's row: nothing of its own where the rows don't line their marks up (the panel does). */
+.tp-map-slot {
+  display: contents;
+}

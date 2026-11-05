@@ -497,6 +497,15 @@ function IssuesMark({
   );
 }
 
+/** A mark's place in its row, there empty too: beside the bars every row's status and logs line up (the panel). */
+function Slot({ of, children }: { of: "status" | "logs"; children: ReactNode }) {
+  return (
+    <span className="tp-map-slot" data-slot={of}>
+      {children}
+    </span>
+  );
+}
+
 function RowChips({ children }: { children: ReactNode }) {
   return <span className="tp-map-chips">{children}</span>;
 }
@@ -603,13 +612,17 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
             <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
             <SpanName span={span} />
           </CallLead>
-          <CallStatus node={node} />
+          <Slot of="status">
+            <CallStatus node={node} />
+          </Slot>
           <NotTraced spanId={span.id} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           <MigrationNotes span={span} />
-          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
+          <Slot of="logs">
+            <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
+          </Slot>
           <RowChips>
             {/* Beside the tree, a folded row says what is under it too: its findings don't hide in the fold. */}
             {ctx.issuesIn && (issue || fold === false) ? (
@@ -723,9 +736,13 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
             <ServedName text={text} name={served.run.name} />
           </CallLead>
           {/* After what served it: the answer is the served trace's when the call says none. */}
-          <CallStatus node={node} />
+          <Slot of="status">
+            <CallStatus node={node} />
+          </Slot>
           <FromTemplate span={span} parent={parent} />
-          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
+          <Slot of="logs">
+            <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
+          </Slot>
           <RowChips>
             {ctx.issuesIn ? (
               <IssuesMark ctx={ctx} rowKey={node.key} targets={[span.id]} kind={ctx.issueBySpan.get(span.id)} />
