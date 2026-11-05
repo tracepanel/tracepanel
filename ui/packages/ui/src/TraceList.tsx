@@ -493,6 +493,8 @@ export function RecordRow({
         data-gone={gone ? "" : undefined}
         title={gone ? GONE_NOTE : undefined}
         data-kind={trace.kind}
+        // Its badge in its open tree's root colour: a view's is its code's, as the tree's first row has it.
+        data-category={trace.kind === "page" ? "code" : undefined}
         data-live={live ? "" : undefined}
         aria-current={live || current ? "true" : undefined}
         data-new={fresh ? "" : undefined}

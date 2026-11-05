@@ -2249,7 +2249,7 @@ body {
   content: "";
 }
 .panel-wf-split:is(:hover, :focus-visible, :active)::before {
-  background: var(--tp-text-3);
+  background: color-mix(in srgb, var(--tp-text-3) 50%, transparent);
 }
 .panel-wf-split:focus-visible {
   outline: none;
@@ -2292,20 +2292,6 @@ body {
 .panel-wf .tp-map-row .tp-map-logs svg {
   width: 0.75rem;
   height: 0.75rem;
-}
-
-/* Beside the bars, a kind's badge is one quiet look: the bar carries the colour, a log's level or an error stays. */
-.panel-wf
-  .tp-map-row:not([data-level="warning"], [data-level="error"], [data-level="critical"], [data-kind="error"])
-  .tp-map-kind[data-muted] {
-  color: var(--tp-text-3);
-  background: var(--tp-hover);
-}
-:root[data-theme="light"]
-  .panel-wf
-  .tp-map-row:not([data-level="warning"], [data-level="error"], [data-level="critical"], [data-kind="error"])
-  .tp-map-kind[data-muted] {
-  background: var(--tp-faint);
 }
 
 /* The line between the rows and the details moves too: across docked at the bottom, down docked at the right. */
