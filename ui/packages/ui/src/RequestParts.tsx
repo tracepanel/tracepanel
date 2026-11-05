@@ -129,7 +129,7 @@ function headersPart(attrs: Attrs): Part[] {
     : [];
 }
 
-/** The request's parts, then the given ones (a GraphQL query), then every other attribute. */
+/** The request's parts, then the given ones (a GraphQL query), then every other attribute, where there are any. */
 export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[] = []): Part[] {
   return [
     ...headersPart(attrs),
@@ -140,12 +140,17 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
     ...pairsPart("response", "Response headers", under(attrs, PREFIXES.response, dashed)),
     ...bodyPart("response-body", "Response body", bodyOf(attrs, "response")),
     ...extra,
-    {
-      id: "attributes",
-      label: "Attributes",
-      count: Object.keys(others).length,
-      content: <AttributeGroups attrs={others} />,
-    },
+    // None at all: no switch to a page that says so.
+    ...(Object.keys(others).length > 0
+      ? [
+          {
+            id: "attributes",
+            label: "Attributes",
+            count: Object.keys(others).length,
+            content: <AttributeGroups attrs={others} />,
+          },
+        ]
+      : []),
   ];
 }
 
