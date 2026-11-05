@@ -141,7 +141,8 @@ test("only warnings and worse show by default; the Logs chip, or a row's note, s
   await expect(chip).toHaveAttribute("aria-pressed", "true");
   await expect(lanes.locator(".tp-lane-label")).toHaveText(["task", "11 log records"]);
   await expect(page).toHaveURL(/[?&]logs=all/);
-  await expect(page.locator(".tp-map-logs")).toHaveCount(0);
+  // The row's mark stays, pressed: a click on it hides them again, as the chip does.
+  await expect(page.locator(".tp-map-logs[aria-pressed='true']")).toHaveCount(2);
 
   await chip.click();
 
