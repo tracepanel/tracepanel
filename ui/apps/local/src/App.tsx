@@ -403,6 +403,9 @@ function PanelWaterfall({
     (row) => !knowsKinds || showsKinds(chains.counts?.get(row.trace.id)?.span_kinds, kinds),
   );
   const opened = rows.find((row) => row.trace.id === rootId);
+  // Narrowed to nothing but the open record: said so, with the way back, not a list that silently shrank.
+  const narrowed = filter.trim() !== "" || kinds.length > 0;
+  const nothingElse = narrowed && records.every((row) => row.trace.id === rootId);
   return (
     <div className="panel" data-v2="" style={{ ...details.style, ...map.style }}>
       <header
@@ -507,6 +510,23 @@ function PanelWaterfall({
                       ) : null
                     }
                   />
+                  {nothingElse ? (
+                    <p className="panel-no-match">
+                      {filter.trim()
+                        ? `No other requests match “${filter.trim()}”.`
+                        : "No other requests have these kinds."}
+                      <button
+                        type="button"
+                        className="dt-link-button"
+                        onClick={() => {
+                          setFilter("");
+                          setKinds([]);
+                        }}
+                      >
+                        Show all
+                      </button>
+                    </p>
+                  ) : null}
                 </RowKinds.Provider>
               </RowFilter.Provider>
             )}

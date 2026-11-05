@@ -13,7 +13,7 @@ import {
   WaitingIcon,
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { SearchXIcon } from "lucide-react";
+import { SearchXIcon, UnplugIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useServiceCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
@@ -292,10 +292,10 @@ export function TraceLoading({ variant }: { variant: TraceScreenProps["variant"]
 }
 
 /** What the screen shows for a trace: it, null when it is gone, "arriving" while it is on its way. */
-type Loaded = Trace | null | "arriving";
+type Loaded = Trace | null | "arriving" | "unreachable";
 
 function isTrace(value: Loaded | undefined): value is Trace {
-  return value !== undefined && value !== null && value !== "arriving";
+  return value !== undefined && value !== null && value !== "arriving" && value !== "unreachable";
 }
 
 function traceOf(value: Loaded | undefined): Trace | null {
@@ -316,6 +316,9 @@ interface Loading {
  * Loads a trace: retried briefly while it may not be stored yet, then, while it is on its way, less and less often
  * until it is stored. Returns the way to stop.
  */
+/** How often a trace is asked for again while the agent doesn't answer. */
+const UNREACHABLE_RETRY_MS = 3_000;
+
 function loadTrace({ id, source, retries, onItsWay, show }: Loading): () => void {
   let cancelled = false;
   let timer: number | undefined;
@@ -335,7 +338,12 @@ function loadTrace({ id, source, retries, onItsWay, show }: Loading): () => void
         if (result === null) missing(left, delay);
         else show(result);
       },
-      () => !cancelled && show(null),
+      // No answer at all (the agent restarting, gone): said as such, not as a trace gone, and asked again.
+      () => {
+        if (cancelled) return;
+        show("unreachable");
+        later(() => attempt(left, delay), UNREACHABLE_RETRY_MS);
+      },
     );
   };
   // Known to be on its way (the list says so): it says so at once, not after the quick looks, while it is asked for.
@@ -381,7 +389,8 @@ function useTrace(
       onItsWay: () => waiting.current ?? recent(id),
       show: (value) => {
         setLoaded({ id, value });
-        if (value !== "arriving") onLoaded?.(value);
+        // Told once there is an answer: a trace, or none; not while it is on its way or the agent is silent.
+        if (value !== "arriving" && value !== "unreachable") onLoaded?.(value);
       },
     });
   }, [id, source, variant, known]);
@@ -431,6 +440,13 @@ function NoTrace({
 }) {
   if (loaded === undefined) return <TraceLoading variant={variant} />;
   if (loaded === "arriving") return <TraceArriving variant={variant} running={running} />;
+  if (loaded === "unreachable") {
+    return (
+      <Empty title="No answer from Tracepanel" icon={UnplugIcon} page={true}>
+        The agent didn't answer: it may be restarting. Trying again…
+      </Empty>
+    );
+  }
   return (
     <Empty title="Trace not found" action={back} icon={SearchXIcon} page={true}>
       It is no longer in the local store: older traces are removed as new ones arrive, and the store starts fresh after

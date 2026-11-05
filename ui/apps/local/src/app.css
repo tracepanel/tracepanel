@@ -2789,3 +2789,13 @@ body {
 [data-radix-popper-content-wrapper] :is(button, [role="menuitem"], [role="menuitemcheckbox"]):not(:disabled) {
   cursor: pointer;
 }
+
+/* Under a list narrowed to nothing: what happened, and the way back. */
+.panel-no-match {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+}
