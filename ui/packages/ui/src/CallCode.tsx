@@ -269,20 +269,29 @@ export function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; dep
 function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
   const open = ctx.code.onProfile;
-  // With a profile, a click opens it at that stretch; without, a plain row.
-  return open ? (
+  const row = `${span.id}:${part.waiting ? "wait" : "code"}`;
+  const pick = ctx.onCodeRow;
+  // With a profile, a click opens it at that stretch; beside the tree it is a row to pick either way: its span's
+  // details say what it is in. Elsewhere, without a profile, a plain row.
+  return open || pick ? (
     <button
       type="button"
       className="dt-map-row"
       data-kind="code"
       data-category={codeCategory(span, ctx)}
+      aria-current={ctx.codeRow === row ? "true" : undefined}
       // Says where it leads: a code row of a call's trace opens that trace, not a tab of this one.
       title={
-        ctx.code.trace.id === ctx.trace.id
-          ? "Open the profile at this stretch"
-          : "Open the profile of the trace that served this call, at this stretch"
+        open
+          ? ctx.code.trace.id === ctx.trace.id
+            ? "Open the profile at this stretch"
+            : "Open the profile of the trace that served this call, at this stretch"
+          : undefined
       }
-      onClick={() => open(stretchesOf(part.pieces))}
+      onClick={() => {
+        pick?.(row, span.id);
+        open?.(stretchesOf(part.pieces));
+      }}
     >
       {inside}
     </button>

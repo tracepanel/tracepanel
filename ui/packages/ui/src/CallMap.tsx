@@ -565,6 +565,7 @@ export function CallMap({
     [issueBySpan, related, chain.loaded],
   );
   const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring);
+  const [codeRow, setCodeRow] = useState<string | null>(null);
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
@@ -593,8 +594,18 @@ export function CallMap({
                 trace,
                 issueBySpan: issues,
                 selected,
-                onSelect: select,
+                onSelect: (key) => {
+                  setCodeRow(null);
+                  select(key);
+                },
                 opensOnly: external,
+                codeRow,
+                onCodeRow: external
+                  ? (row, span) => {
+                      select(span);
+                      setCodeRow(row);
+                    }
+                  : undefined,
                 issuesIn: wiring.issuesIn,
                 onIssues: wiring.onIssues,
                 rootMark: wiring.rootMark,

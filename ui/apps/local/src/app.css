@@ -2482,8 +2482,8 @@ body {
   flex: none;
 }
 .panel-filter {
-  flex: 1 1 4rem;
-  max-width: 16rem;
+  flex: 1 1 22rem;
+  max-width: 30rem;
   min-width: 3rem;
 }
 @container panel-top (max-width: 40rem) {

@@ -19,6 +19,9 @@ import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 export interface RowContext {
   /** A click on a closed row opens it, on an open one only selects it: the arrow alone closes. */
   opensOnly?: boolean | undefined;
+  /** The code row picked (its span and which of its parts), where a code row is a row to pick. */
+  codeRow?: string | null | undefined;
+  onCodeRow?: ((row: string, span: string) => void) | undefined;
   /** How many findings are in these spans and what ran under them, where a row says a count, not a name. */
   issuesIn?: ((targets: readonly string[]) => number) | undefined;
   /** Opens the findings of the row just selected. */
@@ -493,6 +496,6 @@ export function clockNote(node: Extract<Node, { type: "task" }>): string | undef
 export function rowState(ctx: RowContext, key: string, mark: Mark | undefined) {
   return {
     "data-dim": mark === "path" ? "" : undefined,
-    "aria-current": ctx.selected === key ? ("true" as const) : undefined,
+    "aria-current": ctx.selected === key && !ctx.codeRow ? ("true" as const) : undefined,
   };
 }
