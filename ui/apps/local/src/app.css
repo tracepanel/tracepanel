@@ -2267,15 +2267,6 @@ body {
   display: none;
 }
 
-.dt-attrs-more > summary {
-  color: var(--dt-text-3);
-  font-size: 0.8125rem;
-  cursor: pointer;
-}
-.dt-attrs-more[open] > summary {
-  margin-bottom: 0.5rem;
-}
-
 /* Beside the bars, a kind's badge is one quiet look: the bar carries the colour, a log's level or an error stays. */
 .panel-wf
   .dt-map-row:not([data-level="warning"], [data-level="error"], [data-level="critical"], [data-kind="error"])

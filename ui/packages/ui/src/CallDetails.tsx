@@ -403,15 +403,8 @@ function SpanAttributes({ span, attrs, titled }: { span: Span; attrs: Attrs; tit
   const llm = span.kind === "llm";
   const waterfall = useContext(KindWords) !== null;
   const rest = withoutMessages(withoutContext(attrs));
-  // Beside the tree, the fields above say what matters: the raw attributes behind one click.
-  if (waterfall && titled && !template && !llm) {
-    return (
-      <details className="dt-attrs-more">
-        <summary>All attributes {Object.keys(rest).length}</summary>
-        <AllAttributes attrs={rest} titled={false} />
-      </details>
-    );
-  }
+  // Beside the tree, as the record's own row has them: the same switch, the same groups.
+  if (waterfall && !template && !llm) return <RootAttributes attrs={rest} />;
   return (
     <>
       {template ? <TemplateContext attrs={attrs} /> : null}
