@@ -2341,7 +2341,9 @@ button.wf-crumb:hover {
   background: transparent;
   transition: background 0.12s;
 }
-.wf-splitter:hover::after,
+.wf-splitter:hover::after {
+  background: var(--dt-border-strong);
+}
 .wf-splitter:focus-visible::after,
 .wf-splitter[data-dragging]::after {
   background: var(--dt-accent);
@@ -2355,8 +2357,8 @@ button.wf-crumb:hover {
 .wf-splitter[aria-orientation="vertical"]::after {
   top: 0;
   bottom: 0;
-  left: calc(50% - 1px);
-  width: 2px;
+  left: calc(50% - 0.5px);
+  width: 1px;
 }
 .wf-splitter[aria-orientation="horizontal"] {
   left: 0;
@@ -2367,8 +2369,8 @@ button.wf-crumb:hover {
 .wf-splitter[aria-orientation="horizontal"]::after {
   left: 0;
   right: 0;
-  top: calc(50% - 1px);
-  height: 2px;
+  top: calc(50% - 0.5px);
+  height: 1px;
 }
 /* Over the gap between the names and the bars: where the time column starts, less half the gap. */
 .wf-splitter-names {
@@ -2994,8 +2996,7 @@ button.wf-crumb:hover {
 .wf-other .dt-status {
   margin-left: auto;
 }
-.wf-other[data-hovered],
-.wf-band-block[data-hovered] {
+.wf-other[data-hovered] {
   background-color: var(--dt-hover);
   outline: 1px solid var(--dt-border-strong);
 }
@@ -3249,10 +3250,10 @@ button.wf-crumb:hover {
   left: calc(50% - 12px);
   width: 24px;
 }
-.wf-panel .dt-wf-details :is(button, a):not(.icon-button) {
+.wf-panel .dt-wf-details :is(button, a):not(.icon-button, [role="tab"]) {
   position: relative;
 }
-.wf-panel .dt-wf-details :is(button, a):not(.icon-button)::after {
+.wf-panel .dt-wf-details :is(button, a):not(.icon-button, [role="tab"])::after {
   content: "";
   position: absolute;
   inset: -5px -2px;
@@ -3365,9 +3366,10 @@ button.wf-crumb:hover {
 :root[data-theme="light"] .dt-map[data-waterfall] .dt-map-bar[data-call] {
   background: color-mix(in srgb, var(--dt-k-http) 72%, transparent);
 }
-/* A call's lead (its name and what served it) gives way before its chips: chips whole, the name cut. */
+/* A call's lead (its name and what served it) keeps its width up to two thirds: the chips give way first. */
 .dt-map[data-waterfall] .dt-map-lead {
-  min-width: min(7rem, 100% - 5rem);
+  flex: 0 0 auto;
+  max-width: 66%;
 }
 /* A row's name and chips on one line: nothing wraps under the row's height (out of sight). */
 .dt-map[data-waterfall] .dt-map-name {
@@ -3418,42 +3420,6 @@ button.wf-crumb:hover {
   color: var(--dt-text-3);
 }
 /* ---------- round 14 ---------- */
-/* The tab's entries under the ticks: an ordered strip, equal segments with gaps (not the ticks' scale). */
-.wf-time-cell > .wf-band {
-  display: flex;
-  gap: 3px;
-  height: 12px;
-  padding: 0 var(--wf-track-gutter) 3px var(--wf-track-pad);
-}
-.wf-time-cell .wf-band-block,
-.wf-time-cell .wf-band-block[data-depth="0"] {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 6px;
-  max-width: 64px;
-  height: 6px;
-  margin-top: 3px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--dt-k-http) 70%, transparent);
-}
-.wf-time-cell .wf-band-block[data-depth="0"] {
-  max-width: 24px;
-  background: color-mix(in srgb, var(--dt-k-view) 70%, transparent);
-}
-.wf-time-cell .wf-band-block::before {
-  content: "";
-  position: absolute;
-  inset: -9px -1px;
-}
-.wf-time-cell .wf-band-block[data-issues] {
-  box-shadow: inset 0 -2px 0 var(--dt-warn);
-}
-.wf-time-cell .wf-band-block[aria-current="true"] {
-  height: 8px;
-  margin-top: 2px;
-  outline: 2px solid var(--dt-accent);
-  outline-offset: 1px;
-}
 /* Names never under 12ch: chips go to their icon first. */
 .dt-map[data-waterfall] .dt-map-text {
   min-width: min(12ch, 100%);
@@ -3508,16 +3474,6 @@ button.wf-crumb:hover {
 .dt-map[data-waterfall] .dt-app-chip > :not(.dt-app-name) {
   display: none;
 }
-/* The strip: a failed or 4xx entry in its tone. */
-.wf-time-cell .wf-band-block[data-tone="error"] {
-  background: var(--dt-error);
-}
-.wf-time-cell .wf-band-block[data-tone="warn"] {
-  background: var(--dt-warn);
-}
-.wf-time-cell > .wf-band {
-  margin-top: 2px;
-}
 /* Wait and code hatching quieter. */
 .dt-map[data-waterfall] .dt-map-row[data-kind="code"] .dt-map-bar {
   opacity: 0.8;
@@ -3533,12 +3489,6 @@ button.wf-crumb:hover {
 .wf-panel {
   --dt-k-request: rgb(140 147 166 / 0.72);
   --dt-k-django: rgb(140 147 166 / 0.72);
-}
-:root[data-theme="light"] .wf-time-cell .wf-band-block {
-  background: var(--dt-k-http);
-}
-:root[data-theme="light"] .wf-time-cell .wf-band-block[data-depth="0"] {
-  background: var(--dt-k-view);
 }
 /* A bar that runs past the axis ends in a mark: it goes on. */
 .dt-map[data-waterfall] .dt-map-bar[data-past]::after {
@@ -3563,6 +3513,28 @@ button.wf-crumb:hover {
   min-width: 6ch;
   text-align: right;
 }
-.wf-time-cell .wf-band-block {
-  min-width: 10px;
+/* The name comes first: it keeps its width (up to two thirds of the column), the chips give way and clip. */
+.dt-map[data-waterfall] .dt-map-name > .dt-map-text,
+.dt-map[data-waterfall] .dt-map-name > .dt-map-op {
+  flex: 0 0 auto;
+  max-width: 66%;
+}
+.dt-map[data-waterfall] .dt-map-chips {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.dt-map[data-waterfall] .dt-map-chips > * {
+  flex-shrink: 1;
+  min-width: 1.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* In the waterfall a call's path is its name: it keeps its width; the app chip gives way first. */
+.dt-map[data-waterfall] .dt-map-text.dt-map-hop-path {
+  flex: 0 1 auto;
+  max-width: none;
+}
+.dt-map[data-waterfall] .dt-map-text.dt-map-hop-name:empty {
+  display: none;
 }

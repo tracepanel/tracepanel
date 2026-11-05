@@ -377,13 +377,10 @@ function AxisHead({
   ticksRef,
   filter,
   skipped,
-  overview,
 }: {
   axis: Axis;
   ticksRef: RefObject<HTMLSpanElement | null>;
   filter: ReactNode;
-  /** The tab's entries, a thin track under the ticks: one line for both times. */
-  overview: ReactNode;
   /** The page's idle start left off the axis (µs): a break mark says how long. */
   skipped: number;
 }) {
@@ -392,7 +389,7 @@ function AxisHead({
     <div className="wf-head wf-grid">
       {filter}
       <span className="wf-time-cell">
-        <span className="wf-ticks" aria-hidden="true" ref={ticksRef} title="Drag to pick a stretch of time">
+        <span className="wf-ticks" aria-hidden="true" ref={ticksRef}>
           {skipped > 0 ? (
             <span className="wf-break" title={`${duration(skipped)} before the first span, left off the axis`}>
               <svg viewBox="0 0 10 12" width="10" height="12" aria-hidden="true">
@@ -408,7 +405,6 @@ function AxisHead({
             </span>
           ))}
         </span>
-        {overview}
       </span>
     </div>
   );
@@ -608,7 +604,6 @@ function Splitter({
       aria-valuenow={Math.round(value ?? 0) || undefined}
       aria-valuemin={0}
       tabIndex={0}
-      title="Drag to resize · double-click to reset"
       onPointerDown={(event) => {
         event.preventDefault();
         const handle = event.currentTarget;
@@ -975,15 +970,6 @@ export function PanelA({ route }: { route: Route }) {
                     skipped={skipped}
                     axis={host.axis}
                     ticksRef={ticksRef}
-                    overview={
-                      <TabTimeline
-                        rows={listed}
-                        openKey={openKey}
-                        onOpen={openEntry}
-                        hoveredKey={hoveredKey}
-                        onHover={setHoveredKey}
-                      />
-                    }
                     filter={
                       <span className="wf-call-head">
                         <FollowButton follow={follow} onFollow={onFollow} />
@@ -1082,98 +1068,6 @@ function rootWord(row: TraceRow): string {
 
 function badgeWord(row: TraceRow): string {
   return row.trace.kind === "page" ? "VIEW" : (row.trace.method ?? row.trace.kind.toUpperCase());
-}
-
-/** How far apart (µs) a page and its first request may be before the page is placed by its requests (two clocks). */
-const CLOCKS_APART = 60_000_000;
-
-/** Every page and request of the tab on one clock: a page far from its requests (an app's clock) ends where they start. */
-function onOneClock(rows: readonly TraceRow[]): TraceRow[] {
-  return pagesOf(rows).flatMap(([head, ...rest]) => {
-    if (!head) return [];
-    const first = rest.length ? Math.min(...rest.map((row) => row.trace.start)) : null;
-    const end = head.trace.start + head.trace.duration;
-    if (first === null || Math.abs(first - end) < CLOCKS_APART) return [head, ...rest];
-    // Its key as listed (its start moved here would make another).
-    return [{ ...head, key: entryKey(head), trace: { ...head.trace, start: first - head.trace.duration } }, ...rest];
-  });
-}
-
-/**
- * The tab's entries, in order, as one strip under the open entry's ticks: each page and request an equal segment
- * (not to scale: they are seconds or minutes apart, and the ticks above are the open entry's time), its status in its
- * colour, the open one outlined. A click opens one; hover names it.
- */
-function TabTimeline({
-  rows,
-  openKey,
-  onOpen,
-  hoveredKey,
-  onHover,
-}: {
-  rows: readonly TraceRow[];
-  openKey: string | null;
-  onOpen: (row: TraceRow) => void;
-  hoveredKey: string | null;
-  onHover: (key: string | null) => void;
-}) {
-  const all = onOneClock(uniqueTraces(rows));
-  if (all.length < 2) return null;
-  const now = Date.now() * 1000;
-  const lasted = (row: TraceRow) =>
-    row.open || row.trace.id.startsWith("~") ? Math.max(now - row.trace.start, row.trace.duration) : row.trace.duration;
-  return (
-    <div className="wf-band" role="toolbar" aria-label="Pages and requests of this tab">
-      {all.map((row) => {
-        const open = entryKey(row) === openKey;
-        const status = row.trace.http_status ? ` · ${row.trace.http_status}` : "";
-        const issues = row.trace.issues ? ` · ${row.trace.issues} ${row.trace.issues === 1 ? "issue" : "issues"}` : "";
-        const name = `${row.trace.name}${status} · ${duration(lasted(row))}${issues}`;
-        return (
-          <button
-            type="button"
-            key={entryKey(row)}
-            className="wf-band-block"
-            data-depth={row.depth ?? 0}
-            data-tone={bandTone(row)}
-            data-issues={row.trace.issues ? "" : undefined}
-            aria-current={open ? "true" : undefined}
-            data-hovered={hoveredKey === entryKey(row) ? "" : undefined}
-            aria-label={`Open ${name}`}
-            title={name}
-            tabIndex={open ? 0 : -1}
-            onMouseEnter={() => onHover(entryKey(row))}
-            onMouseLeave={() => onHover(null)}
-            onKeyDown={(event) => {
-              const blocks = [
-                ...(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(".wf-band-block") ?? []),
-              ];
-              const at = blocks.indexOf(event.currentTarget);
-              const to = new Map([
-                ["ArrowRight", at + 1],
-                ["ArrowLeft", at - 1],
-                ["Home", 0],
-                ["End", blocks.length - 1],
-              ]).get(event.key);
-              if (to === undefined) return;
-              event.preventDefault();
-              const next = blocks[Math.min(Math.max(to, 0), blocks.length - 1)];
-              for (const block of blocks) block.tabIndex = block === next ? 0 : -1;
-              next?.focus();
-            }}
-            onClick={() => onOpen(row)}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-/** How an entry went, for its segment's colour: failed, answered 4xx, or fine. */
-function bandTone(row: TraceRow): string {
-  if (row.trace.status === "error" || (row.trace.http_status ?? 0) >= 500) return "error";
-  if ((row.trace.http_status ?? 0) >= 400) return "warn";
-  return "ok";
 }
 
 /** An entry's identity in the list: several entries may share a trace (fetches carrying the page's trace). */

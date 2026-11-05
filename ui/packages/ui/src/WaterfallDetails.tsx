@@ -68,10 +68,17 @@ function HopSplit({ node }: { node: Node }) {
   const app = appName(node.served) ?? "the app";
   const share = waited > 0 ? Math.min(server / waited, 1) : 0;
   const lead = waited > 0 ? (network / 2 / waited) * 100 : 0;
+  // The caller's span only mirrors the served trace (it has no time of its own): there is no wait to say.
+  const mirrored = Math.abs(waited - server) < 1000;
   return (
     <div className="dt-wf-split">
       <p>
-        <b>{duration(waited)}</b> the caller waited · <b>{duration(server)}</b> in {app}
+        {mirrored ? null : (
+          <>
+            <b>{duration(waited)}</b> the caller waited ·{" "}
+          </>
+        )}
+        <b>{duration(server)}</b> in {app}
         {/* No network time to say (the clocks disagree, or it was nothing): not "0 µs". */}
         {network >= 1000 ? (
           <>
