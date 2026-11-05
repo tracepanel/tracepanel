@@ -2248,8 +2248,9 @@ body {
   background: transparent;
   content: "";
 }
-.panel-wf-split:is(:hover, :focus-visible, :active)::before {
-  background: var(--dt-border);
+/* Under the pointer or dragged, the rows' own line says it: never a second one beside it. */
+.panel-wf-split:is(:hover, :focus-visible, :active) ~ .panel-wf-rows .dt-map-row > .dt-map-track::before {
+  border-left-color: var(--dt-text-3);
 }
 .panel-wf-split:focus-visible {
   outline: none;
