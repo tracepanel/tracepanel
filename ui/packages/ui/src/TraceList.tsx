@@ -292,7 +292,7 @@ function ListItem({
           row={{ ...row, trace }}
           fresh={fresh}
           onSelect={onSelect}
-          share={trace.duration / (longest ?? trace.duration)}
+          share={Math.sqrt(trace.duration / (longest ?? trace.duration))}
         />
       </li>
     );
@@ -355,7 +355,7 @@ export function RecordRow({
   live = false,
   share,
 }: {
-  /** Closed: its time as a share of the longest listed, so the records compare at a glance. */
+  /** Closed: its time against the longest listed, on a root's scale so that one slow record doesn't flatten the rest. */
   share?: number | undefined;
   row: TraceRow;
   fresh: boolean;

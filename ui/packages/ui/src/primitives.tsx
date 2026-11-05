@@ -74,9 +74,12 @@ export function IssueChip({
   /** `ISSUE_CHIP_SHRINKS` in a row too narrow for it. */
   className?: string | undefined;
 }) {
+  const word = useContext(KindWords)?.[kind];
   return (
     <Badge variant={kind === "error" ? "error" : "warn"} size="compact" data-kind={kind} className={className}>
-      <span className="truncate">{ISSUE_LABELS[kind]}</span>
+      <span className="truncate" title={ISSUE_LABELS[kind]}>
+        {word ?? ISSUE_LABELS[kind]}
+      </span>
       {count !== undefined && count > 1 ? <span className="opacity-75">{count}</span> : null}
     </Badge>
   );
@@ -335,6 +338,9 @@ export const WATERFALL_KINDS: Readonly<Record<string, string>> = {
   framework: "fw",
   handler: "fn",
   "http.client": "http",
+  "slow-sql": "slow",
+  "slow-http": "slow",
+  "slow-call": "slow",
 };
 
 export function KindBadge({

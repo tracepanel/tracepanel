@@ -2234,7 +2234,7 @@ body {
 .panel-wf-split:is(:hover, :focus-visible, :active)::before {
   left: calc(50% - 1px);
   width: 2px;
-  background: var(--dt-accent);
+  background: var(--dt-text-3);
 }
 .panel-wf-split:focus-visible {
   outline: none;
@@ -2321,7 +2321,7 @@ body {
   bottom: 0;
   left: calc(50% - 1px);
   width: 2px;
-  background: var(--dt-accent);
+  background: var(--dt-text-3);
   content: "";
 }
 .panel-wf[data-dock="right"] .panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
@@ -2397,7 +2397,7 @@ body {
 .panel-wf:not([data-dock="right"]) .panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
   left: calc(50% - 1px);
   width: 2px;
-  background: var(--dt-accent);
+  background: var(--dt-text-3);
 }
 
 /* The filter over the rows: a quiet field in the bar, no box until it is used. */
@@ -2464,4 +2464,45 @@ body {
 }
 .panel-wf-details button[aria-label="Columns"] {
   display: none !important;
+}
+
+/* Rows stay clean: closed records' times and marks in columns, marks as words with no boxes, profiles on their tab. */
+.dt-record .dt-map-chips {
+  flex: none;
+  justify-content: flex-end;
+  min-width: 2rem;
+}
+.dt-record-ago {
+  margin-left: auto;
+}
+.panel-wf .dt-map-row .dt-map-chips [data-kind],
+.panel-wf .dt-map-row .dt-request-chips > * {
+  padding-inline: 0 !important;
+  background: none !important;
+}
+.panel-wf .dt-map-row [title*="profile" i] {
+  display: none !important;
+}
+
+/* A narrow bar keeps its order: the field gives way first, then the words. */
+.panel-top {
+  container: panel-top / inline-size;
+}
+.panel-top-rows {
+  gap: 0.5rem;
+}
+.panel-top-controls {
+  flex: none;
+}
+.panel-filter {
+  flex: 1 1 4rem;
+  max-width: 16rem;
+  min-width: 3rem;
+}
+@container panel-top (max-width: 40rem) {
+  .panel-top-controls label > span:last-child,
+  .panel-top-controls span[class*="brand"],
+  .panel-filter > kbd {
+    display: none;
+  }
 }
