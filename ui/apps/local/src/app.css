@@ -2610,11 +2610,8 @@ body {
   right: 1rem;
 }
 
-/* On a row, slow is said by its time, in the colour every slow time has: no word beside it. */
-.panel-wf .dt-map-row [data-kind^="slow"] {
-  display: none !important;
-}
-.panel-wf .dt-map-row:has([data-kind^="slow"]) .dt-map-time {
+/* On a row, slow is said by its time, in the colour every slow time has. */
+.panel-wf .dt-map-row:has([data-issue-kind^="slow"]) .dt-map-time {
   color: var(--dt-error);
   font-weight: 600;
 }
@@ -2647,4 +2644,9 @@ body {
 /* A row picked in the tree as it stands: nowhere was left, so no way back to offer. */
 .panel-top[data-focus] button[aria-label^="Back to"] {
   display: none !important;
+}
+
+.panel-wf .dt-map-row .dt-map-chips > span[data-issue-kind],
+.panel-wf .dt-map-row .dt-map-chips > span:has(> .dt-request-chips) {
+  cursor: pointer;
 }

@@ -285,7 +285,12 @@ function tabLabel(trace: Trace): string {
  * A system's tab, when the request called it: how many calls, and how long they took on the clock (calls side by
  * side, as a chain's 36 calls to another app run, counted once); what they add up to in its tooltip.
  */
-function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>, trace: Trace) {
+function callsTabs(
+  calls: Partial<Record<CallsTabId, SystemCalls>>,
+  trace: Trace,
+  /** Beside the tree, the marks that raise a tab's count: its calls in an N+1. */
+  marks?: ReadonlyMap<string, IssueKind> | undefined,
+) {
   // The chain's count, its own among them in the count's tooltip: a view's 23 HTTP calls are its 3 and its apps' 20.
   const own = callsByTab(trace);
   return CALLS_TABS.flatMap(({ id, label, icon: Icon }) => {
@@ -297,7 +302,19 @@ function callsTabs(calls: Partial<Record<CallsTabId, SystemCalls>>, trace: Trace
     const detailTitle = timed ? addedUp(of.total, onTheClock(of.spans)) : undefined;
     const mine = own[id]?.spans.length ?? 0;
     const hint = mine < of.spans.length ? chainScope(id, of.spans.length, mine, whoseOwn(trace.kind)) : undefined;
-    return [{ id, label, icon: <Icon />, count: of.spans.length, detail, detailTitle, hint }];
+    const repeats = marks && of.spans.some((span) => marks.get(span.id) === "n+1");
+    return [
+      {
+        id,
+        label,
+        icon: <Icon />,
+        count: of.spans.length,
+        detail,
+        detailTitle,
+        hint,
+        ...(repeats ? { tone: "warn" as const } : {}),
+      },
+    ];
   });
 }
 
@@ -328,8 +345,10 @@ function traceTabs({
   logs,
   profiled,
   waterfall = false,
+  issueBySpan,
 }: {
   waterfall?: boolean;
+  issueBySpan?: ReadonlyMap<string, IssueKind> | undefined;
   trace: Trace;
   outcome: ReactNode;
   findings: readonly Issue[];
@@ -367,7 +386,7 @@ function traceTabs({
       tone: "warn" as const,
     }),
     // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs when it wrote any.
-    ...(waterfall ? callsTabs(calls, trace).map(shortTab) : callsTabs(calls, trace)),
+    ...(waterfall ? callsTabs(calls, trace, issueBySpan).map(shortTab) : callsTabs(calls, trace)),
     ...(logs > 0 ? [{ id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: logs }] : []),
     // Recorded only when asked for: where the time went in code.
     ...(profiled ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
@@ -451,7 +470,11 @@ function wholeRecordTabs<T extends { id: string; label: string; icon?: unknown }
 }
 
 function isLeafRow(chain: TraceScope, scope: SpanScope): boolean {
-  return scopedSpans(chain.members, scope, () => true).length <= 1 && chain.scoped.length === 0;
+  return (
+    scopedSpans(chain.members, scope, () => true).length <= 1 &&
+    chain.scoped.length === 0 &&
+    scopedIssues(chain.members, scope, chain.chainIssues).length === 0
+  );
 }
 
 /** The record's findings, on its open row as on its closed one. */
@@ -1026,6 +1049,7 @@ export function TraceView({
     outcome,
     findings: tabbed.findings,
     calls: tabbed.calls,
+    issueBySpan: tabbed.issueBySpan,
     app,
     logs: waterfall ? chain.scoped.length : chain.logs.length,
     profiled: chain.members.some((member) => member.trace.profile !== undefined),
@@ -1052,6 +1076,15 @@ export function TraceView({
       detailsHost={waterfall ? detailsSlot : undefined}
       onPicked={waterfall ? onPicked : undefined}
       rootMark={waterfall ? <RecordIssues issues={chainFindings(chain, findings)} /> : undefined}
+      issuesIn={
+        waterfall
+          ? (targets: readonly string[]) =>
+              scopedIssues(chain.members, { targets: [...targets], label: "", only: false }, chain.chainIssues).filter(
+                (issue) => issue.kind !== "error",
+              ).length
+          : undefined
+      }
+      onIssues={waterfall ? () => setActive("issues") : undefined}
       onSelect={openAt}
       trace={trace}
       issueBySpan={tabbed.issueBySpan}

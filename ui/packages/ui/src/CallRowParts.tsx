@@ -19,6 +19,10 @@ import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 export interface RowContext {
   /** A click on a closed row opens it, on an open one only selects it: the arrow alone closes. */
   opensOnly?: boolean | undefined;
+  /** How many findings are in these spans and what ran under them, where a row says a count, not a name. */
+  issuesIn?: ((targets: readonly string[]) => number) | undefined;
+  /** Opens the findings of the row just selected. */
+  onIssues?: (() => void) | undefined;
   /** Beside the root row's name: what the whole record found, as its closed row says it. */
   rootMark?: ReactNode;
   trace: Trace;

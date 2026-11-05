@@ -11,7 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Details } from "./CallDetails";
-import { hopText, type ProfilesIn, type TraceProfileOpener, UnderSlot } from "./CallRowParts";
+import { hopText, type ProfilesIn, type RowContext, type TraceProfileOpener, UnderSlot } from "./CallRowParts";
 import { appName, Rows } from "./CallRows";
 import type { ExplainOf } from "./CallTable";
 import {
@@ -548,6 +548,8 @@ export function CallMap({
   onPicked?: PickedHandler | undefined;
   /** Beside the root row's name, in a tree with no summary over it. */
   rootMark?: ReactNode;
+  issuesIn?: RowContext["issuesIn"];
+  onIssues?: RowContext["onIssues"];
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
@@ -593,6 +595,8 @@ export function CallMap({
                 selected,
                 onSelect: select,
                 opensOnly: external,
+                issuesIn: wiring.issuesIn,
+                onIssues: wiring.onIssues,
                 rootMark: wiring.rootMark,
                 collapsed,
                 onToggle: toggle,

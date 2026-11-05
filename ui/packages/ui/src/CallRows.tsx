@@ -68,6 +68,7 @@ import {
 } from "./primitives";
 import { RunChips } from "./RunChips";
 import { SignalNotes } from "./SignalNotes";
+import { CompactChips } from "./TraceList";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 import { GroupNotTraced, NotTraced, useUntraced } from "./Untraced";
 
@@ -427,7 +428,13 @@ function GroupName({
       <Times count={node.spans.length} />
       <GroupStatus answer={answer} />
       <GroupNotTraced spans={node.spans} />
-      <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
+      <RowChips>
+        {ctx.issuesIn ? (
+          <IssuesMark ctx={ctx} rowKey={node.key} targets={node.spans.map((span) => span.id)} kind={issue} />
+        ) : issue ? (
+          <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} />
+        ) : null}
+      </RowChips>
     </>
   );
 }
@@ -459,6 +466,36 @@ function withoutGroupIssue(
  * A row's chips after its name: its issue, then what a call's trace found. Short of room they go whole, the last
  * first, onto a line that doesn't show (.dt-map-chips): never a chip cut down to an empty pill.
  */
+/** A row's findings as a count, its kind on hover: a click opens them. Beside the tree, in place of their names. */
+function IssuesMark({
+  ctx,
+  rowKey,
+  targets,
+  kind,
+}: {
+  ctx: RowContext;
+  rowKey: string;
+  targets: readonly string[];
+  kind: IssueKind | undefined;
+}) {
+  const count = ctx.issuesIn?.(targets) ?? 0;
+  if (count === 0) return null;
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keys are the row's.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
+    <span
+      data-issue-kind={kind}
+      onClick={(event) => {
+        event.stopPropagation();
+        ctx.onSelect(rowKey);
+        ctx.onIssues?.();
+      }}
+    >
+      <CompactChips kinds={kind ? [kind] : undefined} issues={count} />
+    </span>
+  );
+}
+
 function RowChips({ children }: { children: ReactNode }) {
   return <span className="dt-map-chips">{children}</span>;
 }
@@ -568,8 +605,26 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <MigrationNotes span={span} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           <RowChips>
-            {issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}
-            {span.parent_id === null ? ctx.rootMark : null}
+            {ctx.issuesIn && issue ? (
+              span.parent_id === null ? null : (
+                <IssuesMark ctx={ctx} rowKey={node.key} targets={[span.id]} kind={issue} />
+              )
+            ) : issue ? (
+              <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} />
+            ) : null}
+            {span.parent_id === null && ctx.rootMark ? (
+              // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keys are the row's.
+              // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
+              <span
+                onClick={(event) => {
+                  event.stopPropagation();
+                  ctx.onSelect(node.key);
+                  ctx.onIssues?.();
+                }}
+              >
+                {ctx.rootMark}
+              </span>
+            ) : null}
           </RowChips>
         </span>
         <OwnBar span={span} ctx={ctx} />
@@ -662,8 +717,14 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
           <FromTemplate span={span} parent={parent} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           <RowChips>
-            <HopIssue span={span} served={served} ctx={ctx} />
-            <RunChips trace={served.run} />
+            {ctx.issuesIn ? (
+              <IssuesMark ctx={ctx} rowKey={node.key} targets={[span.id]} kind={ctx.issueBySpan.get(span.id)} />
+            ) : (
+              <>
+                <HopIssue span={span} served={served} ctx={ctx} />
+                <RunChips trace={served.run} />
+              </>
+            )}
           </RowChips>
           <LinkedFlame node={served} ctx={ctx} />
         </span>
