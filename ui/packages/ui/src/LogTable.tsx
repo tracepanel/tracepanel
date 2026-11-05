@@ -27,6 +27,7 @@ import {
   DropdownMenuSubTrigger,
 } from "./components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableRow } from "./components/ui/table";
+import { HiddenColumns } from "./DataTable";
 import { DumpLine } from "./Dump";
 import { ago, duration, since, stamp } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
@@ -66,6 +67,18 @@ function rowLevel(log: LogLike): string {
 }
 
 /** A log level as a colored dot and its name: the same in every list of records and in the Level filter. */
+/** A record's level as its dot alone, the word on hover: a compact table's. */
+function LevelDot({ level }: { level: string }) {
+  return (
+    <span
+      role="img"
+      title={level}
+      aria-label={level}
+      className={cn("inline-block size-2 rounded-full", LEVEL_DOT[level] ?? LEVEL_DOT["debug"])}
+    />
+  );
+}
+
 export function LogLevel({ level }: { level: string }) {
   return (
     <span
@@ -163,17 +176,26 @@ function leading<R extends LogLike>(
   mode: TimeMode,
   start: number | undefined,
   terms: readonly string[],
+  compact = false,
 ): LogColumn<R>[] {
   return [
     {
       id: "time",
       label: "Time",
-      // The whole stamp, to the millisecond, at the larger dark text: Oct 23 07:44:12.345.
-      width: 13.5,
+      // The whole stamp, to the millisecond, at the larger dark text: Oct 23 07:44:12.345. Compact, "+12 ms".
+      width: compact ? 6.5 : 13.5,
       fixed: true,
       cell: (log) => <LogTime time={log.time} mode={mode} start={start} />,
     },
-    { id: "level", label: "Level", width: 7, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
+    compact
+      ? {
+          id: "level",
+          label: "",
+          width: 2.75,
+          fixed: true,
+          cell: (log) => <LevelDot level={log.level} />,
+        }
+      : { id: "level", label: "Level", width: 7, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
     { id: "message", label: "Message", required: true, cell: (log) => <Message log={log} terms={terms} /> },
     {
       id: "logger",
@@ -677,7 +699,15 @@ export function LogTable<R extends LogLike>({
 }) {
   const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
   const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
-  const all = [...leading<R>(mode, start, highlight), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
+  // Beside the tree: compact, the time since the trace began and the level as its dot.
+  const hidden = useContext(HiddenColumns);
+  const beside = hidden !== null;
+  const all = [
+    ...leading<R>(beside ? "relative" : mode, start, highlight, beside),
+    ...extra,
+    ...attributeColumns<R>(picked),
+    ...trailing<R>(),
+  ].filter((column) => !hidden?.has(column.id));
   // The columns menu has a column of its own.
   const { ref, columns, widths } = useColumnWidths(useColumns(table, all), MENU_REM);
   const shown = columns.shown;

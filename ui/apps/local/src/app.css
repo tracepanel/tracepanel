@@ -2530,19 +2530,26 @@ body {
     display: none;
   }
 }
-/* Too narrow for the list's tools and the actions on one line (a panel docked right): the actions take a second. */
+/* Too narrow for the list's tools and the actions on one line (a panel docked right): two lines, the actions
+   first, the filter and the list's tools last, right over the list they filter. */
 .panel-top {
   flex-wrap: wrap;
   height: auto;
   min-height: 2.5rem;
 }
-.panel-top-rows {
-  min-width: 19rem;
+.panel-top-rows,
+.panel-top > .bar-actions {
   height: 2.5rem;
 }
-.panel-top > .bar-actions {
-  flex-grow: 1;
-  height: 2.5rem;
+@container panel-top (max-width: 34rem) {
+  .panel-top > .bar-actions {
+    order: -1;
+    flex-basis: 100%;
+  }
+  .panel-top-rows {
+    flex-basis: 100%;
+    border-top: 1px solid var(--dt-border);
+  }
 }
 
 /* Profile's tabs name the app: its section doesn't again, nor a lone table. */

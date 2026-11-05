@@ -381,22 +381,29 @@ function PanelWaterfall({
         className="panel-top"
         data-dock={dock}
         data-focus={focusTrace ? "" : undefined}
-        data-no-details={empty || !detailsShown ? "" : undefined}
+        data-no-details={empty || (!detailsShown && dock !== "right") ? "" : undefined}
       >
         <div className="panel-top-rows">
           <LogoMark className="size-5" />
           <PanelFilter value={filter} onChange={setFilter} />
           {listTools}
-          <div className="panel-top-controls">{toolbar}</div>
+          {/* At the rows' end, by the details' line: what the panel records, and the details shown or not. */}
+          <div className="panel-top-controls">
+            {toolbar}
+            <PanelProfile />
+            {/* Docked right, the details are under the rows: nothing to fold away. */}
+            {empty || dock === "right" ? null : (
+              <DetailsToggle dock={dock} shown={detailsShown} onShown={showDetails} />
+            )}
+          </div>
         </div>
-        <div className="bar-actions">
-          {/* What the panel records and shows, not the list: with its other actions. */}
-          <PanelProfile />
-          {empty ? null : <DetailsToggle dock={dock} shown={detailsShown} onShown={showDetails} />}
-          {actions(<span ref={setActionsHost} className="contents" />)}
-        </div>
+        <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
-      <div className="panel-wf" data-dock={dock} data-no-details={empty || !detailsShown ? "" : undefined}>
+      <div
+        className="panel-wf"
+        data-dock={dock}
+        data-no-details={empty || (!detailsShown && dock !== "right") ? "" : undefined}
+      >
         <div className="panel-wf-tree">
           {empty ? null : <MapSplitter {...map.handle} />}
           <div
