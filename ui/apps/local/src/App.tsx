@@ -5,6 +5,7 @@ import {
   Hint,
   type ListChains,
   Logo,
+  LogoMark,
   memoryFromParams,
   parseSlice,
   RecordRow,
@@ -47,7 +48,7 @@ import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { ShareAction } from "./ShareDialog";
-import { NAV, ThemeToggle } from "./Sidebar";
+import { NAV, SearchButton, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
@@ -347,7 +348,8 @@ function PanelWaterfall({
       />
       <header className="panel-top" data-dock={dock}>
         <div className="panel-top-rows">
-          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+          <LogoMark className="size-5" />
+          <SearchButton rail={false} onSearch={() => setSearching(true)} />
           <div className="panel-top-controls">{toolbar}</div>
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>

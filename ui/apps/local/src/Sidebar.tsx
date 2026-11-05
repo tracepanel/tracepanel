@@ -358,7 +358,7 @@ export function SidebarToggle({ collapsed, collapse }: { collapsed: boolean; col
 }
 
 /** Opens search: the field open, its icon as a rail, the same height in both. */
-function SearchButton({ rail, onSearch }: { rail: boolean; onSearch: () => void }) {
+export function SearchButton({ rail, onSearch }: { rail: boolean; onSearch: () => void }) {
   if (rail) {
     return (
       <RailTip label="Search traces" detail="⌘K">

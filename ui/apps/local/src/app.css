@@ -2399,3 +2399,10 @@ body {
   width: 2px;
   background: var(--dt-accent);
 }
+
+/* Search first in the bar, at the bar's own height. */
+.panel-top-rows > button {
+  flex: 0 1 16rem;
+  height: 1.75rem;
+  min-width: 7rem;
+}
