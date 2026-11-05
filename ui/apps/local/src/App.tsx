@@ -551,7 +551,9 @@ function PanelApp({ route }: { route: Route }) {
       dock={dock}
     />
   );
-  const tabCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
+  // What Clear empties, as the list counts it: the tab's records (a page and what it called are one), all of them.
+  const records = PANEL_V2 ? (history?.entries.filter((entry) => entry.parent === null).length ?? 0) : tabRows.length;
+  const tabCount = `${records} ${records === 1 ? "request" : "requests"}`;
   if (PANEL_V2) {
     return (
       <PanelWaterfall
