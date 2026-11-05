@@ -2343,13 +2343,6 @@ body {
 }
 
 /* Closed details: the rows take the panel, their bars most of it, the split between them gone. */
-.panel-wf[data-no-details] .panel-wf-split {
-  display: none;
-}
-.panel-wf[data-no-details] .dt-map-row,
-.panel-wf[data-no-details] .dt-map-head {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 4rem;
-}
 /* There, the names' column ends in a line: each row's own, at its bars' column, there while a record loads too. */
 .panel-wf .dt-map-row > .dt-map-track::before {
   position: absolute;

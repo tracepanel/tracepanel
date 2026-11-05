@@ -49,6 +49,8 @@ import { base, source } from "./panelSource";
 import {
   DetailsSplitter,
   DetailsToggle,
+  MAP,
+  MAP_WIDE,
   MapSplitter,
   PanelFilter,
   useDetailsShown,
@@ -373,7 +375,10 @@ function PanelWaterfall({
   const trace = route.name === "trace" ? route : null;
   const details = useDetailsSplit(dock);
   const [detailsShown, showDetails] = useDetailsShown();
-  const map = useMapWidth();
+  // The bars' width, its own with the details hidden: wider there, as the rows have the panel.
+  const narrowMap = useMapWidth(MAP);
+  const wideMap = useMapWidth(MAP_WIDE);
+  const map = detailsShown || dock === "right" ? narrowMap : wideMap;
   const [filter, setFilter] = useState("");
   // The waterfall stays put: a link to a trace in the open record's chain picks its row there. Only a trace outside
   // the chain opens on its own.

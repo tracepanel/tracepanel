@@ -81,10 +81,11 @@ export function DetailsSplitter({ down, now, ...props }: ReturnType<typeof useDe
   );
 }
 
-const MAP_KEY = "tracepanel:panel-map";
-const MAP_AT_FIRST = 128;
+/** The bars' width beside the details, and with them hidden (the rows across the panel): each remembered. */
+export const MAP = { key: "tracepanel:panel-map", first: 128 } as const;
+export const MAP_WIDE = { key: "tracepanel:panel-map-wide", first: 560 } as const;
 const MAP_LEAST = 64;
-const MAP_MOST = 640;
+const MAP_MOST = 1600;
 /** The time column, its gaps and the row's end, right of the bars. */
 const AFTER_MAP = 90;
 /** The names' room the bars leave, at the least. */
@@ -95,14 +96,14 @@ function heldMap(width: number): number {
 }
 
 /** The bars' width, a small map at first: in `--wf-map`, the names take the rest. Remembered. */
-export function useMapWidth() {
+export function useMapWidth({ key, first }: { key: string; first: number }) {
   const [width, setWidth] = useState(() => {
-    const stored = Number(readItem(MAP_KEY));
-    return stored > 0 ? heldMap(stored) : MAP_AT_FIRST;
+    const stored = Number(readItem(key));
+    return stored > 0 ? heldMap(stored) : first;
   });
   const keep = (next: number) => {
     setWidth(next);
-    writeItem(MAP_KEY, String(next));
+    writeItem(key, String(next));
   };
   return {
     style: { "--wf-map": `${width}px` } as CSSProperties,
@@ -120,12 +121,12 @@ export function useMapWidth() {
           setWidth(heldMap(Math.min(box.right - AFTER_MAP - event.clientX, most)));
         }
       },
-      onPointerUp: () => writeItem(MAP_KEY, String(width)),
+      onPointerUp: () => writeItem(key, String(width)),
       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
         if (event.key === "ArrowLeft") keep(heldMap(width + 16));
         else if (event.key === "ArrowRight") keep(heldMap(width - 16));
       },
-      onDoubleClick: () => keep(MAP_AT_FIRST),
+      onDoubleClick: () => keep(first),
     },
   };
 }
