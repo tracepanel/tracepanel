@@ -2748,9 +2748,9 @@ body {
   font-size: 0.6875rem !important;
 }
 .panel-wf-details td:has([data-level-dot]) {
-  padding-inline: 0;
+  padding-inline: 0 !important;
   text-align: center;
-  text-overflow: clip;
+  text-overflow: clip !important;
 }
 
 /* With the details hidden, a record says more on its row (TraceList): the room is there. */
@@ -2783,4 +2783,19 @@ body {
 /* A row's marks never give way: its name and its app's chip are cut first. */
 .panel-wf .dt-map-row > .dt-map-name > .dt-map-chips {
   flex: none;
+}
+
+/* The Show menu: its kinds as the tables' heads say theirs, small capitals, tight rows. */
+.dt-kinds-menu [role="menuitemcheckbox"],
+.dt-kinds-menu [role="menuitem"] {
+  min-height: 1.625rem !important;
+  padding-block: 0.25rem !important;
+  font-size: 0.6875rem !important;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dt-text-2);
+}
+.dt-kinds-menu [role="menuitemcheckbox"][data-state="checked"] {
+  color: var(--dt-text);
 }

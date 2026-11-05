@@ -684,7 +684,7 @@ export function KindsMenu({
           </button>
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent align="start" className="max-h-96 w-52 overflow-y-auto">
+      <DropdownMenuContent align="start" className="dt-kinds-menu max-h-96 w-44 overflow-y-auto">
         {offered.map((filter) => (
           <DropdownMenuCheckboxItem
             key={filter.id}
