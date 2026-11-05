@@ -117,11 +117,14 @@ test("in the docked panel a long query and a long request body wrap inside their
 
   // The request's own row: its details are the request's parts.
   await frame.locator(".tp-map-row[data-root]").click();
-  await frame.getByRole("tablist", { name: "Request details" }).getByRole("tab", { name: "Request body" }).click();
-  const body = frame.getByRole("tabpanel", { name: "Request body" }).locator("pre");
+  const body = frame.getByRole("tablist", { name: "Request details" }).getByRole("tab", { name: "Request body" });
+  // Low in the short panel's details: scrolled to first (Playwright's own scroll doesn't settle in the widget's frame).
+  await body.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await body.click();
+  const text = frame.getByRole("tabpanel", { name: "Request body" }).locator("pre");
 
-  await expect(body).toContainText(TOKEN);
-  await expectWhole(body);
+  await expect(text).toContainText(TOKEN);
+  await expectWhole(text);
 });
 
 test("on the console's page too, a dump's long value wraps inside its box", async ({ page }) => {

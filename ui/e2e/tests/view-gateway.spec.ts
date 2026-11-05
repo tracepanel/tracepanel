@@ -23,7 +23,7 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
     const clipped = await hops.evaluateAll((rows) =>
       rows.map((row) => {
         const name = row.querySelector(":scope > .tp-map-name");
-        const badge = name?.querySelector(":scope > .tp-status");
+        const badge = name?.querySelector(":scope > .tp-status, :scope > .tp-map-slot > .tp-status");
         const [box, edge] = [name?.getBoundingClientRect(), badge?.getBoundingClientRect()];
         const whole = badge ? badge.scrollWidth <= badge.clientWidth : false;
         return {
@@ -44,7 +44,7 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
       const name = row.querySelector(":scope > .tp-map-name");
       const box = name?.getBoundingClientRect();
       const whole = (selector: string) => {
-        const part = name?.querySelector(`:scope > ${selector}`);
+        const part = name?.querySelector(`:scope > ${selector}, :scope > .tp-map-slot > ${selector}`);
         const edge = part?.getBoundingClientRect();
         return {
           text: part?.textContent,

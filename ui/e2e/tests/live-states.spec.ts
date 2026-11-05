@@ -184,7 +184,7 @@ function shownWords(mark: Locator): Promise<"all" | "none" | "cut"> {
   return mark.evaluate((element) => {
     const box = element.getBoundingClientRect();
     const words = element.querySelector(".tp-no-answer-text")?.getBoundingClientRect();
-    const name = element.parentElement?.getBoundingClientRect();
+    const name = element.closest(".tp-map-name")?.getBoundingClientRect();
     if (!(words && name)) return "cut";
     if (words.top >= box.bottom) return "none";
     return words.right <= Math.min(box.right, name.right) + 0.5 ? "all" : "cut";
