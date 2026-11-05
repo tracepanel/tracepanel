@@ -3642,3 +3642,9 @@ div.dt-map-row[data-kind="code"] {
 .dt-code-details > dl {
   justify-self: stretch;
 }
+/* The list's end while older rows are left: a quiet line that asks for them as it comes into view. */
+.dt-requests-more {
+  padding: 0.5rem 0.875rem;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+}

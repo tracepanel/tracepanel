@@ -36,12 +36,19 @@ function loadTab(ids: readonly string[]): Promise<TabTraces> {
  * The tab's rows, which of them the agent has stored (the others are the widget's own, still on their way), and the
  * task runs each request led to, as the workers record them.
  */
-export function useTabRows(history: TabHistory | null): {
+export function useTabRows(
+  whole: TabHistory | null,
+  roots = Number.POSITIVE_INFINITY,
+): {
   rows: TraceRow[];
   stored: ReadonlySet<string>;
   counts: ReadonlyMap<string, RowCounts> | undefined;
   runs: Runs;
+  /** Older rows than these are in the tab's history: a scroll down shows them. */
+  more: boolean;
 } {
+  const history = useMemo(() => (whole ? latest(whole, roots) : null), [whole, roots]);
+  const more = (whole?.entries.length ?? 0) > (history?.entries.length ?? 0);
   const ids = idsOf(history);
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
@@ -53,7 +60,20 @@ export function useTabRows(history: TabHistory | null): {
   const stored = useMemo(() => new Set(traces.map((trace) => trace.id)), [traces]);
   known.current = stored;
   const rowCounts = useMemo(() => (counts ? new Map<string, RowCounts>(Object.entries(counts)) : undefined), [counts]);
-  return { rows: history ? arrange(history, traces) : [], stored, runs, counts: rowCounts };
+  return { rows: history ? arrange(history, traces) : [], stored, runs, counts: rowCounts, more };
+}
+
+/** The tab's history with its last `roots` rows of their own and what is under them: what the list asks for. */
+function latest(history: TabHistory, roots: number): TabHistory {
+  const own = history.entries.filter((entry) => entry.parent === null);
+  if (own.length <= roots) return history;
+  const kept = new Set(own.slice(-roots).map((entry) => entry.id));
+  const entries = history.entries.filter((entry) => {
+    if (entry.parent === null ? !kept.has(entry.id) : !kept.has(entry.parent)) return false;
+    kept.add(entry.id);
+    return true;
+  });
+  return { ...history, entries };
 }
 
 /** How often the tab's rows are asked for. */

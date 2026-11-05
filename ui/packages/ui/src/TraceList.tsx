@@ -1,5 +1,5 @@
 import { CircleXIcon, TriangleAlertIcon } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
 import { indentOf } from "./CallCode";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
@@ -118,6 +118,8 @@ export interface TraceListProps {
   rows: readonly TraceRow[];
   /** Right under the selected row, across the list: what it opens to. Its chain then lives there, not in rows. */
   openContent?: ReactNode;
+  /** Older rows to show: called as the list's end scrolls into view. */
+  onMore?: (() => void) | undefined;
   selectedId?: string | null | undefined;
   /** The page currently open in the browser tab. */
   currentId?: string | null | undefined;
@@ -189,6 +191,27 @@ function withChain(trace: TraceSummary, counts: RowCounts | undefined): TraceSum
   };
 }
 
+/** The list's end: in view, it asks for older rows (and again, once they came, while it still is). */
+function MoreRows({ onMore }: { onMore: () => void }) {
+  const end = useRef<HTMLLIElement>(null);
+  const latest = useRef(onMore);
+  latest.current = onMore;
+  useEffect(() => {
+    const node = end.current;
+    if (!node) return;
+    const observer = new IntersectionObserver((seen) => {
+      if (seen.some((each) => each.isIntersecting)) latest.current();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <li ref={end} className="dt-requests-more">
+      Older requests…
+    </li>
+  );
+}
+
 export function TraceList({
   rows,
   selectedId,
@@ -200,6 +223,7 @@ export function TraceList({
   opensOn,
   onSelect,
   openContent,
+  onMore,
 }: TraceListProps) {
   const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
   const longest = Math.max(1, ...rows.map((row) => row.trace.duration));
@@ -227,6 +251,8 @@ export function TraceList({
       {shownRows(rows, chains, openContent !== undefined).map(({ row, fold, under }) => (
         <ListItem key={row.key ?? row.trace.id} row={row} fold={fold} under={under} {...props} />
       ))}
+      {/* Anew with each page: an end still in view once the rows came asks again. */}
+      {onMore ? <MoreRows key={rows.length} onMore={onMore} /> : null}
     </ul>
   );
 }

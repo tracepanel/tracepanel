@@ -315,7 +315,10 @@ function PanelWaterfall({
   view,
   clearing,
   setClearing,
+  onMore,
 }: {
+  /** Shows older rows of the tab's history, where there are more. */
+  onMore: (() => void) | undefined;
   route: Route;
   selectedId: string | null;
   rows: readonly TraceRow[];
@@ -380,6 +383,7 @@ function PanelWaterfall({
                   compact={true}
                   services={manyApps(rows)}
                   rows={records}
+                  onMore={onMore}
                   selectedId={rootId}
                   currentId={currentId}
                   chains={chains}
@@ -452,9 +456,14 @@ function PanelWaterfall({
 
 const NO_ROWS: readonly TraceRow[] = [];
 
+/** How many of the tab's rows the list shows at first, and adds as it is scrolled to its end. */
+const LIST_PAGE = 50;
+
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
-  const { rows, stored, runs, counts } = useTabRows(history);
+  // The latest rows first, older ones as the list is scrolled to its end: the list asks for, and counts, only those.
+  const [roots, setRoots] = useState(LIST_PAGE);
+  const { rows, stored, runs, counts, more } = useTabRows(history, PANEL_V2 ? roots : undefined);
   const listed = withRuns(rows, runs);
   // The list says what each chain adds up to: the waterfall needs no chain loaded per row for its numbers.
   const rowChains = useRowChains(PANEL_V2 && counts ? NO_ROWS : listed, stored);
@@ -525,6 +534,7 @@ function PanelApp({ route }: { route: Route }) {
         selectedId={selectedId}
         rows={rows}
         listRows={recordsOf(inOrder(true, shown.rows), selectedId).reverse()}
+        onMore={more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined}
         stored={stored}
         chains={chains}
         opensOn={opensOn}
