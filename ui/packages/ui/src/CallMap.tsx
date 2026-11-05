@@ -592,7 +592,7 @@ export function CallMap({
                 issueBySpan: issues,
                 selected,
                 onSelect: select,
-                selectOnly: external,
+                opensOnly: external,
                 rootMark: wiring.rootMark,
                 collapsed,
                 onToggle: toggle,

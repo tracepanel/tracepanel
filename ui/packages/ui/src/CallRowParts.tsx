@@ -17,8 +17,8 @@ import { FailedStatus, KindBadge, StateBadge, StatusBadge, TaskName } from "./pr
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 
 export interface RowContext {
-  /** A click only selects: the arrow alone folds. */
-  selectOnly?: boolean | undefined;
+  /** A click on a closed row opens it, on an open one only selects it: the arrow alone closes. */
+  opensOnly?: boolean | undefined;
   /** Beside the root row's name: what the whole record found, as its closed row says it. */
   rootMark?: ReactNode;
   trace: Trace;
@@ -466,7 +466,7 @@ export function HiddenLogs({ count, onShow }: { count: number | undefined; onSho
 /** First click selects the row (and opens it); a second click closes its details (and folds it). */
 function clickSpan(ctx: RowContext, key: string, fold: boolean | undefined): void {
   // Closed and not selected yet, or open and selected: the click folds it too.
-  if (!ctx.selectOnly && fold === (ctx.selected === key)) ctx.onToggle(key);
+  if (ctx.opensOnly ? fold === false : fold === (ctx.selected === key)) ctx.onToggle(key);
   ctx.onSelect(key);
 }
 

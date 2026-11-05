@@ -482,7 +482,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
         aria-expanded={open}
         onClick={() => {
           ctx.onSelect(node.key);
-          if (!ctx.selectOnly) ctx.onToggle(`open:${node.key}`);
+          if (!(ctx.opensOnly && open)) ctx.onToggle(`open:${node.key}`);
         }}
         onKeyDown={foldKeys(open, () => ctx.onToggle(`open:${node.key}`))}
       >
