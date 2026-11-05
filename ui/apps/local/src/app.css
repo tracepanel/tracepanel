@@ -2344,8 +2344,13 @@ body {
 .panel-wf-details-close {
   position: absolute;
   z-index: 2;
-  top: 0.3125rem;
-  right: 0.5rem;
+  top: 0.4375rem;
+  right: 0.625rem;
+  color: var(--dt-text-3);
+}
+.panel-wf-details-close svg {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 /* Closed details: the rows take the panel, their bars most of it, the split between them gone. */
 .panel-wf[data-no-details] .panel-wf-split {

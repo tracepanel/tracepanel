@@ -456,7 +456,7 @@ function PanelWaterfall({
         </div>
         <DetailsSplitter {...details.handle} />
         <aside className="panel-wf-details" aria-label="Details">
-          <DetailsClose onClose={() => showDetails(false)} />
+          <DetailsClose dock={dock} onClose={() => showDetails(false)} />
           <div ref={setDetailsHost} className="contents" />
         </aside>
       </div>

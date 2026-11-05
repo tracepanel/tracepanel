@@ -1,5 +1,5 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { SearchIcon, XIcon } from "lucide-react";
+import { PanelBottomCloseIcon, PanelRightCloseIcon, SearchIcon } from "lucide-react";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
 
 const STEP = 0.02;
@@ -192,10 +192,18 @@ export function useDetailsShown(): [boolean, (shown: boolean) => void] {
 }
 
 /** Closes the details, at the end of their tabs: the rows and their bars take the panel until a row is picked. */
-export function DetailsClose({ onClose }: { onClose: () => void }) {
+export function DetailsClose({ dock, onClose }: { dock: string; onClose: () => void }) {
+  // Not a second ×: the panel's own closes it; this folds the details away to their side.
+  const Icon = dock === "right" ? PanelBottomCloseIcon : PanelRightCloseIcon;
   return (
-    <button type="button" className="icon-button panel-wf-details-close" aria-label="Close details" onClick={onClose}>
-      <XIcon />
+    <button
+      type="button"
+      className="icon-button panel-wf-details-close"
+      aria-label="Hide details"
+      title="Hide details"
+      onClick={onClose}
+    >
+      <Icon />
     </button>
   );
 }
