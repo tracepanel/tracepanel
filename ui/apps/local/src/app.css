@@ -2125,29 +2125,17 @@ body {
   display: none;
 }
 
-/* Its rows, closed and open, are one list: one height, one type, one quiet line between. */
-.panel[data-v2] .dt-requests[data-compact] {
-  background: transparent;
-}
-.panel[data-v2] .dt-requests[data-compact] .dt-request-row {
-  min-height: 1.75rem;
-  padding-block: 0;
-  background: transparent;
-}
-.panel[data-v2] .dt-requests[data-compact] .dt-request-row:hover {
-  background: var(--dt-hover);
-}
 .dt-requests-open {
   border-block: 0;
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
-.dt-trace[data-variant="waterfall"] .dt-map-row {
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 4rem;
+.panel-wf .dt-map-row {
+  grid-template-columns: var(--wf-names, minmax(0, 1fr)) minmax(0, 1fr) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 4rem;
+  grid-template-columns: var(--wf-names, minmax(0, 1fr)) minmax(0, 1fr) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2165,20 +2153,6 @@ body {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--dt-border);
 }
-.dt-details-head h3 {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  font-size: var(--dt-size-md, 0.9375rem);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dt-details-time {
-  margin-left: auto;
-  font-family: var(--dt-mono);
-  font-variant-numeric: tabular-nums;
-}
 .dt-details-head .dt-breakdown-legend {
   flex-basis: 100%;
   margin: 0.25rem 0 0;
@@ -2188,30 +2162,97 @@ body {
   display: none;
 }
 
-/* A closed record: its arrow, as the tree's rows have, and how long ago; a page left behind steps back. */
-.dt-request-closed {
-  display: inline-flex;
+/* A closed record is its tree's first row, on the list's grid, how long ago beside its name. */
+.dt-record {
+  grid-column: 1 / -1;
+}
+.dt-record-ago {
   flex: none;
   color: var(--dt-text-3);
-}
-.dt-request-closed > svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-.dt-request-ago {
-  flex: none;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs, 0.75rem);
+  font-size: 0.75rem;
   white-space: nowrap;
 }
-.panel[data-v2] .dt-request-row[data-earlier][data-kind="page"] {
-  opacity: 0.72;
+
+/* The call tree and its bars, split by a line that moves; the panel's own controls end at that line. */
+.panel-top {
+  padding-left: 0;
 }
-.panel[data-v2] .dt-request-row[data-earlier][data-kind="page"]:hover {
-  opacity: 1;
+.panel-top-tree {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.75rem;
+  width: var(--wf-names, auto);
+  min-width: max-content;
+  padding: 0 0.625rem 0 0.875rem;
+}
+.panel-top-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+.panel-wf-tree {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+.panel-wf-split {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--wf-names, 50%) + 0.3125rem);
+  width: 0.5625rem;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-wf-split::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--dt-border);
+  content: "";
+}
+.panel-wf-split:is(:hover, :focus-visible, :active)::before {
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--dt-accent);
+}
+.panel-wf-split:focus-visible {
+  outline: none;
 }
 
-/* The details' head says what it is and how long it took. */
-.dt-trace[data-variant="details"] .dt-map-details-title {
+/* The details start at the top: their tabs against the bar above. */
+.panel-wf-details > .dt-trace {
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+.panel-wf-details .dt-tabs {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* What the tree beside them already says goes from the details and its rows: one place for one thing. */
+.panel-wf .dt-map-row .dt-alias,
+.panel-wf-details .dt-alias,
+.panel-wf-details .dt-map-details-title[data-span-title],
+.panel-wf-details .dt-scope-row,
+.panel-wf-details .dt-scope-summary-text {
+  display: none;
+}
+/* A section's name on a pill track, where it has one section to switch to, is no switch. */
+.panel-wf-details section > .inline-flex:has(> :only-child) {
+  display: none;
+}
+.panel-wf-details .dt-scope-summary {
+  justify-content: flex-end;
+}
+.panel-wf .dt-map-row .dt-request-queries {
   display: none;
 }

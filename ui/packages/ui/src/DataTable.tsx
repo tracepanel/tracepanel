@@ -1,3 +1,4 @@
+import { createContext, useContext } from "react";
 // A list of records as every list of the console shows them: a boxed table whose columns the reader drags wider,
 // hides, brings back from the columns menu and moves, kept per browser per list. The logs table is the same, with
 // rows of its own (LogTable).
@@ -47,9 +48,12 @@ function Cells<T>({ item, shown, density }: { item: T; shown: readonly DataColum
  * the rows `children` draws from them: each row a `TableRow` (or the console's own row) around `cells(item)`. The
  * column without a width takes what the others leave: the list's main column, `required`, so it can't be hidden.
  */
+/** Columns a place has no room or use for, by id. */
+export const HiddenColumns = createContext<ReadonlySet<string> | null>(null);
+
 export function DataTable<T>({
   table,
-  columns,
+  columns: allColumns,
   stickyHeader = true,
   density = "default",
   boxed = true,
@@ -65,6 +69,8 @@ export function DataTable<T>({
   boxed?: boolean | undefined;
   children: (rows: DataRows<T>) => ReactNode;
 }) {
+  const hiddenHere = useContext(HiddenColumns);
+  const columns = hiddenHere ? allColumns.filter((column) => !hiddenHere.has(column.id)) : allColumns;
   const { ref, columns: arranged, widths } = useColumnWidths(useColumns(table, columns), MENU_REM);
   const shown = arranged.shown;
   const rows: DataRows<T> = {

@@ -135,7 +135,7 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   const [origin] = origins;
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">
+      <p className="dt-map-details-title" data-span-title="">
         {node.spans.length} similar {groupNoun(first)} · took {duration(node.end - node.start)} ·{" "}
         {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
       </p>
@@ -159,7 +159,7 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
 function SpanTitle({ span, trace, parent }: { span: Span; trace: Trace; parent: Span | undefined }) {
   const offset = duration(Math.max(span.start - trace.start, 0));
   return (
-    <p className="dt-map-details-title">
+    <p className="dt-map-details-title" data-span-title="">
       {spanKindLabel(span.kind, trace.attrs, parent?.kind)} · started at +{offset} · took {duration(span.duration)}
     </p>
   );

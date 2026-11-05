@@ -1,5 +1,6 @@
 import { TriangleAlertIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
+import { indentOf } from "./CallCode";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
@@ -16,6 +17,7 @@ import {
   WAITING_MS,
   waitingSummary,
 } from "./lib/chainRows";
+import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
 import { cutNote, NO_ANSWER } from "./lib/live";
 import { pageParts, redirectNote } from "./lib/page";
@@ -27,11 +29,13 @@ import {
   FailedStatus,
   IssueChip,
   KindBadge,
+  KindWords,
   MethodBadge,
   StatusSlot,
   TailPath,
   TaskName,
   Times,
+  WATERFALL_KINDS,
 } from "./primitives";
 import type { IssueKind, TraceSummary } from "./types";
 import { untracedNote } from "./Untraced";
@@ -265,6 +269,13 @@ function ListItem({
       </li>
     );
   }
+  if (openContent !== undefined) {
+    return (
+      <li>
+        <ClosedRecord row={{ ...row, trace }} fresh={fresh} onSelect={onSelect} />
+      </li>
+    );
+  }
   return (
     <li>
       <ListRow
@@ -280,7 +291,6 @@ function ListItem({
         services={services}
         opens={opensOn?.(trace)}
         onSelect={onSelect}
-        closed={openContent !== undefined}
       />
       <RowOpens
         openContent={openContent}
@@ -313,6 +323,53 @@ function RowOpens({
 }
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
+/** A record that opens in place, closed: its tree's first row, how long ago in place of its bar's scale. */
+function ClosedRecord({
+  row: { trace, open, until, target: _target, opens: target },
+  fresh,
+  onSelect,
+}: {
+  row: TraceRow;
+  fresh: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const page = trace.kind === "page" ? pageParts(trace.name) : null;
+  return (
+    <button
+      type="button"
+      className="dt-map-row dt-record"
+      data-kind={trace.kind}
+      data-new={fresh ? "" : undefined}
+      onClick={() => onSelect(target ?? trace.id)}
+    >
+      <span className="dt-map-name" style={indentOf(0)}>
+        <span className="dt-map-lead">
+          <span className="dt-map-caret" data-toggle="">
+            <ChevronRightIcon />
+          </span>
+          <KindWords.Provider value={WATERFALL_KINDS}>
+            <KindBadge
+              kind={page ? page.badge.toLowerCase() : spanKindLabel(trace.kind, {})}
+              muted={true}
+              className="dt-map-kind"
+            />
+          </KindWords.Provider>
+          <span className="dt-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
+          <span className="dt-record-ago">{ago(trace.start)}</span>
+        </span>
+        <StatusSlot status={page ? null : trace.http_status} />
+        <span className="dt-map-chips">
+          <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
+        </span>
+      </span>
+      <span />
+      <span className="dt-map-time">
+        <RowTime trace={trace} open={open} until={until} />
+      </span>
+    </button>
+  );
+}
+
 function ListRow({
   row: { trace, depth = 0, trigger, target, run, open, until, redirectedFrom, opens: target_, call, host, failed },
   fold,
@@ -326,10 +383,7 @@ function ListRow({
   services,
   opens,
   onSelect,
-  closed,
 }: {
-  /** A record that opens in place: its arrow, and how long ago it was, so two of one name read apart. */
-  closed?: boolean | undefined;
   row: TraceRow;
   /** Its chain's rows under it (the narrow list): open or folded, a caret; a placeholder for a row without. */
   fold?: RowFold | null | undefined;
@@ -361,19 +415,11 @@ function ListRow({
       title={callTitle(trace, call, cut, host, failed) ?? opens}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
-      data-earlier={closed && !current ? "" : undefined}
       onClick={() => onSelect(target_ ?? trace.id)}
     >
       <span className="dt-request-main">
-        {closed ? (
-          <span className="dt-request-closed" aria-hidden="true">
-            <ChevronRightIcon />
-          </span>
-        ) : (
-          <RowCaret fold={fold} />
-        )}
+        <RowCaret fold={fold} />
         <RowName trace={trace} trigger={trigger} target={target} redirectedFrom={redirectedFrom} />
-        {closed ? <span className="dt-request-ago">{ago(trace.start)}</span> : null}
         <RowApp trace={trace} shown={services} />
         <RowMarks cut={open ? null : cut} untraced={call === "untraced" ? host : undefined} />
         {current ? <ThisPage compact={compact} /> : null}

@@ -565,6 +565,7 @@ export function CallMap({
                 issueBySpan: issues,
                 selected,
                 onSelect: select,
+                selectOnly: external,
                 collapsed,
                 onToggle: toggle,
                 marks,

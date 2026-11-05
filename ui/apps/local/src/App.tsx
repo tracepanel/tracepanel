@@ -40,6 +40,7 @@ import {
 } from "./panelList";
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
+import { NamesSplitter, useNamesSplit } from "./panelSplit";
 import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -200,7 +201,7 @@ function useEscapeCloses(): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (!goBackInPanel(currentTrace())) tellWidget("tracepanel:close");
+      if (PANEL_V2 || !goBackInPanel(currentTrace())) tellWidget("tracepanel:close");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -327,8 +328,9 @@ function PanelWaterfall({
     return () => cancelAnimationFrame(frame);
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
+  const split = useNamesSplit();
   return (
-    <div className="panel" data-v2="">
+    <div className="panel" data-v2="" style={split.style}>
       <SearchPalette
         open={searching}
         onOpenChange={setSearching}
@@ -339,49 +341,54 @@ function PanelWaterfall({
         }
       />
       <header className="panel-top">
-        <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
-        {toolbar}
+        <div className="panel-top-tree">
+          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+          <div className="panel-top-controls">{toolbar}</div>
+        </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
       <div className="panel-wf" data-dock={dock}>
-        <div className="panel-wf-rows" ref={list}>
-          {empty ? (
-            <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
-          ) : (
-            <TraceList
-              compact={true}
-              services={manyApps(rows)}
-              rows={listRows}
-              selectedId={selectedId}
-              currentId={currentId}
-              chains={chains}
-              opensOn={opensOn}
-              onSelect={(id) => go({ name: "trace", id })}
-              openContent={
-                selectedId ? (
-                  <TraceScreen
-                    key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
-                    id={selectedId}
-                    source={source}
-                    arriving={arrivingIn(rows, stored, selectedId)}
-                    running={runningIn(rows, selectedId)}
-                    variant="waterfall"
-                    detailsHost={detailsHost}
-                    actionsHost={actionsHost}
-                    initialTab={trace ? tabOf(trace.tab) : undefined}
-                    initialUnder={trace?.under}
-                    initialSlice={sliced.slice}
-                    onSliceChange={sliced.onChange}
-                    onTabShown={view.onTabShown}
-                    initialMemory={view.initialMemory}
-                    onMemoryChange={view.onMemoryChange}
-                    links={PANEL_LINKS}
-                    explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
-                  />
-                ) : null
-              }
-            />
-          )}
+        <div className="panel-wf-tree" ref={split.areaRef}>
+          <NamesSplitter {...split.handle} />
+          <div className="panel-wf-rows" ref={list}>
+            {empty ? (
+              <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
+            ) : (
+              <TraceList
+                compact={true}
+                services={manyApps(rows)}
+                rows={listRows}
+                selectedId={selectedId}
+                currentId={currentId}
+                chains={chains}
+                opensOn={opensOn}
+                onSelect={(id) => go({ name: "trace", id })}
+                openContent={
+                  selectedId ? (
+                    <TraceScreen
+                      key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
+                      id={selectedId}
+                      source={source}
+                      arriving={arrivingIn(rows, stored, selectedId)}
+                      running={runningIn(rows, selectedId)}
+                      variant="waterfall"
+                      detailsHost={detailsHost}
+                      actionsHost={actionsHost}
+                      initialTab={trace ? tabOf(trace.tab) : undefined}
+                      initialUnder={trace?.under}
+                      initialSlice={sliced.slice}
+                      onSliceChange={sliced.onChange}
+                      onTabShown={view.onTabShown}
+                      initialMemory={view.initialMemory}
+                      onMemoryChange={view.onMemoryChange}
+                      links={PANEL_LINKS}
+                      explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
+                    />
+                  ) : null
+                }
+              />
+            )}
+          </div>
         </div>
         <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
       </div>

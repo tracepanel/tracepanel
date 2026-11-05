@@ -325,6 +325,18 @@ const KINDS = new Set(["task", "job", "ws", "gql", "rpc", "page"]);
 /** Shorter words for the kinds, where rows are tight (the panel's waterfall). */
 export const KindWords = createContext<Readonly<Record<string, string>> | null>(null);
 
+/** The waterfall's words for them. */
+export const WATERFALL_KINDS: Readonly<Record<string, string>> = {
+  request: "req",
+  transaction: "tx",
+  function: "fn",
+  graphql: "gql",
+  template: "tpl",
+  framework: "fw",
+  handler: "fn",
+  "http.client": "http",
+};
+
 export function KindBadge({
   kind,
   muted = false,

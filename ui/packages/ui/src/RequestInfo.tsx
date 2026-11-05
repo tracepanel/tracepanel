@@ -231,6 +231,8 @@ export interface RequestInfoProps {
   /** The trace's head line on top of the tab (badge, name, outcome, time; what handled it): where the page's header
    *  isn't there to say them (the panel). */
   hero?: boolean | undefined;
+  /** The traces it is linked to, unless a tree beside it already draws them. */
+  linked?: boolean | undefined;
 }
 
 /**
@@ -409,7 +411,7 @@ function linkedRows(trace: Trace, related: Related | undefined, links: TraceLink
 }
 
 /** Overview of the traced request or task run: what ran, how it went, who caused it; every id copies. */
-export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfoProps) {
+export function RequestInfo({ trace, related, links, hero: wanted, linked: linkedShown = true }: RequestInfoProps) {
   const hero = wanted === true;
   const document = text(trace.attrs["graphql.document"]);
   // The document is shown formatted in its own part: not again, on one line, among the attributes.
@@ -418,7 +420,7 @@ export function RequestInfo({ trace, related, links, hero: wanted }: RequestInfo
   const graphql = document ? [{ id: "graphql", label: "GraphQL", content: <GraphqlCode document={document} /> }] : [];
   // The traces it is linked to come after its own: what queued it, what it called, what it delivered to.
   // A task run's workflow lists the runs before and after it: the other rows leave those out.
-  const linked = linkedRows(trace, related, links);
+  const linked = linkedShown ? linkedRows(trace, related, links) : [];
   return (
     <div className="@container grid gap-5 p-4">
       {hero ? <Hero trace={trace} /> : null}

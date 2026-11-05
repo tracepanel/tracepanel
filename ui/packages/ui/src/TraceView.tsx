@@ -31,6 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./components/ui/dropdown-menu";
+import { HiddenColumns } from "./DataTable";
 import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
 import { HeadFacts } from "./HeadFacts";
@@ -46,13 +47,13 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { type Member, type SpanScope, scopedIssues, scopedSpans, scopeWindow } from "./lib/scope";
+import { type Member, type SpanScope, scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
-import { KindWords, RoutePath, StatusBadge, TraceBadge, WaitingIcon } from "./primitives";
+import { KindWords, RoutePath, StatusBadge, TraceBadge, WATERFALL_KINDS, WaitingIcon } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
@@ -388,77 +389,55 @@ function useWaterfallTabs(
   waterfall: boolean,
   trace: Trace,
   chain: TraceScope,
-  findings: readonly Issue[],
   tabs: readonly { id: TabId }[],
   active: TabId,
   setActive: (tab: TabId) => void,
 ) {
   useEffect(() => {
-    if (waterfall && !tabs.some((tab) => tab.id === active)) setActive("tree");
+    if (waterfall && !tabs.some((tab) => tab.id === active)) setActive(tabs[0]?.id ?? "tree");
   }, [waterfall, tabs, active, setActive]);
   return (scope: SpanScope | null) => {
     chain.setScope(scope);
-    setActive(scope ? pickedTab(chain, scope) : rootTab(trace, findings));
+    // The tab stays as rows are picked, as long as the row has it; a failed record's own row says its error.
+    if (!scope && trace.errors.length > 0) setActive("error");
   };
 }
 
 /** A row's tabs: nothing about the whole request or its app, and none at all for a row with nothing under it. */
-function tabsOfRow<T extends { id: string }>(tabs: readonly T[], chain: TraceScope): readonly T[] {
+function tabsOfRow<T extends { id: string; label: string; icon?: unknown }>(
+  tabs: readonly T[],
+  chain: TraceScope,
+): readonly T[] {
   const scope = chain.scope;
-  if (!scope) return tabs;
+  if (!scope) return wholeRecordTabs(tabs);
   if (isLeafRow(chain, scope)) return tabs.filter((tab) => tab.id === "tree");
   return tabs.filter((tab) => tab.id !== "request" && tab.id !== "app");
+}
+
+/** The record's own row: its one Details tab is what it was, the request's or the page's. */
+function wholeRecordTabs<T extends { id: string; label: string; icon?: unknown }>(tabs: readonly T[]): readonly T[] {
+  const tree = tabs.find((tab) => tab.id === "tree");
+  return tabs
+    .filter((tab) => tab.id !== "tree")
+    .map((tab) => (tab.id === "request" ? { ...tab, label: "Details", icon: tree?.icon } : tab));
 }
 
 function isLeafRow(chain: TraceScope, scope: SpanScope): boolean {
   return scopedSpans(chain.members, scope, () => true).length <= 1 && chain.scoped.length === 0;
 }
 
-function pickedTab(chain: TraceScope, scope: SpanScope): TabId {
-  const more = scopedSpans(chain.members, scope, () => true).length > 1;
-  const wrong = scopedIssues(chain.members, scope, chain.chainIssues).some((issue) => issue.kind !== "error");
-  return more && wrong ? "issues" : "tree";
-}
-
-function rootTab(trace: Trace, findings: readonly Issue[]): TabId {
-  if (trace.errors.length > 0) return "error";
-  return findings.length > 0 ? "issues" : "request";
-}
-
-const WATERFALL_KINDS: Readonly<Record<string, string>> = {
-  request: "req",
-  transaction: "tx",
-  function: "fn",
-  graphql: "gql",
-  template: "tpl",
-  framework: "fw",
-  handler: "fn",
-  "http.client": "http",
-};
-
-/** What is selected and how long it took; the root's also where its time went. */
-function DetailsHead({ trace, chain }: { trace: Trace; chain: TraceScope }) {
-  const scope = chain.scope;
-  if (scope) {
-    const [from, to] = scopeWindow(chain.members, scope);
-    return (
-      <header className="dt-details-head">
-        <h3>{scope.label}</h3>
-        <span className="dt-details-time">{duration(to - from)}</span>
-      </header>
-    );
-  }
+/** Where the record's time went, on its Details: the selected row itself says the rest. */
+function DetailsHead({ trace }: { trace: Trace }) {
   return (
     <header className="dt-details-head">
-      <h3>{trace.name}</h3>
-      {outcomeOf(trace)}
-      <span className="dt-details-time">{duration(trace.duration)}</span>
       <ShareList trace={trace} />
     </header>
   );
 }
 
 /** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
+const DETAILS_HIDES: ReadonlySet<string> = new Set(["share"]);
+
 function WaterfallParts({
   traceId,
   rows,
@@ -490,12 +469,14 @@ function WaterfallParts({
       {hosts.actions && explore ? createPortal(explore, hosts.actions) : null}
       {hosts.details
         ? createPortal(
-            <div className="dt-trace" data-variant="details">
-              {tabs}
-              {head}
-              <div ref={onSlot} className="dt-details-row" hidden={!showRow} />
-              {panel}
-            </div>,
+            <HiddenColumns.Provider value={DETAILS_HIDES}>
+              <div className="dt-trace" data-variant="details">
+                {tabs}
+                {head}
+                <div ref={onSlot} className="dt-details-row" hidden={!showRow} />
+                {panel}
+              </div>
+            </HiddenColumns.Provider>,
             hosts.details,
           )
         : null}
@@ -620,15 +601,17 @@ function RequestPane({
   related,
   links,
   panel,
+  waterfall,
 }: {
   open: boolean;
   trace: Trace;
   related: Related | undefined;
   links: TraceLinks | undefined;
   panel: boolean;
+  waterfall: boolean;
 }) {
   if (!open) return null;
-  return <RequestInfo trace={trace} related={related} links={links} hero={panel} />;
+  return <RequestInfo trace={trace} related={related} links={links} hero={panel && !waterfall} linked={!waterfall} />;
 }
 
 /**
@@ -972,7 +955,7 @@ export function TraceView({
     profiled: chain.members.some((member) => member.trace.profile !== undefined),
   });
   const tabs = waterfall ? tabsOfRow(allTabs, chain) : allTabs;
-  const onPicked = useWaterfallTabs(waterfall, trace, chain, findings, tabs, active, setActive);
+  const onPicked = useWaterfallTabs(waterfall, trace, chain, tabs, active, setActive);
   // A tab the link asked for that only the chain has (the DB tab of a browser's view): opened once the chain came.
   const asked = useAskedTab(initialTab, tabs, setActive);
 
@@ -1011,7 +994,14 @@ export function TraceView({
     // The calls no trace answered: said on their rows in the call tree and the calls tabs alike.
     <UntracedCalls value={chain.untraced}>
       <div role="tabpanel" className="dt-tabpanel">
-        <RequestPane open={active === "request"} trace={trace} related={related} links={links} panel={compact} />
+        <RequestPane
+          open={active === "request"}
+          trace={trace}
+          related={related}
+          links={links}
+          panel={compact}
+          waterfall={waterfall}
+        />
         <AppPane open={active === "app"} app={app} links={links} />
         {waterfall ? null : treePane}
         <IssuesPane
@@ -1065,7 +1055,7 @@ export function TraceView({
         <UntracedCalls value={chain.untraced}>
           <WaterfallParts
             traceId={trace.id}
-            head={<DetailsHead trace={trace} chain={chain} />}
+            head={!chain.scope && active === "request" ? <DetailsHead trace={trace} /> : null}
             rows={treePane}
             tabs={tabs.length > 1 ? tabsBar : null}
             panel={panel}
