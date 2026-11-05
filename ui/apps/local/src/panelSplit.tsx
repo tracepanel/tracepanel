@@ -1,5 +1,5 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, XIcon } from "lucide-react";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
 
 const STEP = 0.02;
@@ -176,5 +176,26 @@ export function PanelFilter({ value, onChange }: { value: string; onChange: (val
       />
       {value ? null : <kbd>⌘K</kbd>}
     </label>
+  );
+}
+
+const DETAILS_SHOWN_KEY = "tracepanel:panel-details-shown";
+
+/** Whether the details are beside the rows, or closed for the rows and their bars to take the panel. Remembered. */
+export function useDetailsShown(): [boolean, (shown: boolean) => void] {
+  const [shown, setShown] = useState(() => readItem(DETAILS_SHOWN_KEY) !== "0");
+  const keep = (next: boolean) => {
+    setShown(next);
+    writeItem(DETAILS_SHOWN_KEY, next ? null : "0");
+  };
+  return [shown, keep];
+}
+
+/** Closes the details, at the end of their tabs: the rows and their bars take the panel until a row is picked. */
+export function DetailsClose({ onClose }: { onClose: () => void }) {
+  return (
+    <button type="button" className="icon-button panel-wf-details-close" aria-label="Close details" onClick={onClose}>
+      <XIcon />
+    </button>
   );
 }

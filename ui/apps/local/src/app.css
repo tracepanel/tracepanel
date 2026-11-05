@@ -2252,7 +2252,7 @@ body {
 }
 
 /* The details start at the top: their tabs against the bar above. */
-.panel-wf-details > .dt-trace {
+.panel-wf-details > .contents > .dt-trace {
   margin: 0;
   padding: 0;
   gap: 0;
@@ -2335,6 +2335,25 @@ body {
 }
 .panel-wf-details-split:focus-visible {
   outline: none;
+}
+
+/* The details' close, at the end of their tabs' line. */
+.panel-wf-details {
+  position: relative;
+}
+.panel-wf-details-close {
+  position: absolute;
+  z-index: 2;
+  top: 0.3125rem;
+  right: 0.5rem;
+}
+/* Closed details: the rows take the panel, their bars most of it, the split between them gone. */
+.panel-wf[data-no-details] .panel-wf-split {
+  display: none;
+}
+.panel-wf[data-no-details] .dt-map-row,
+.panel-wf[data-no-details] .dt-map-head {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 4rem;
 }
 
 /* A row with nothing to say: no details at all, the rows take the room. */

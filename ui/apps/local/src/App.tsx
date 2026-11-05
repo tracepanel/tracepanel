@@ -44,7 +44,15 @@ import {
 } from "./panelList";
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
-import { DetailsSplitter, MapSplitter, PanelFilter, useDetailsSplit, useMapWidth } from "./panelSplit";
+import {
+  DetailsClose,
+  DetailsSplitter,
+  MapSplitter,
+  PanelFilter,
+  useDetailsShown,
+  useDetailsSplit,
+  useMapWidth,
+} from "./panelSplit";
 import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -349,6 +357,7 @@ function PanelWaterfall({
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
   const details = useDetailsSplit(dock);
+  const [detailsShown, showDetails] = useDetailsShown();
   const map = useMapWidth();
   const [filter, setFilter] = useState("");
   // The waterfall stays put: a link to a trace in the open record's chain picks its row there. Only a trace outside
@@ -371,10 +380,18 @@ function PanelWaterfall({
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
-      <div className="panel-wf" data-dock={dock} data-no-details={empty ? "" : undefined}>
+      <div className="panel-wf" data-dock={dock} data-no-details={empty || !detailsShown ? "" : undefined}>
         <div className="panel-wf-tree">
           {empty ? null : <MapSplitter {...map.handle} />}
-          <div className="panel-wf-rows" ref={list}>
+          <div
+            className="panel-wf-rows"
+            ref={list}
+            // Closed details open again with a row picked (not with a fold opened or closed).
+            onClickCapture={(event) => {
+              const target = event.target as Element;
+              if (!detailsShown && target.closest(".dt-map-row") && !target.closest("[data-toggle]")) showDetails(true);
+            }}
+          >
             {empty ? (
               <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
             ) : (
@@ -438,7 +455,10 @@ function PanelWaterfall({
           </div>
         </div>
         <DetailsSplitter {...details.handle} />
-        <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
+        <aside className="panel-wf-details" aria-label="Details">
+          <DetailsClose onClose={() => showDetails(false)} />
+          <div ref={setDetailsHost} className="contents" />
+        </aside>
       </div>
       <ClearDialog
         mode="panel"
