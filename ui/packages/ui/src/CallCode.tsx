@@ -174,8 +174,6 @@ function partNote(part: CodePart, code: CodeOwner): string {
 /** What a code or wait row's details say of it. */
 export interface CodeInfo {
   name: string;
-  waiting: boolean;
-  time: string;
   /** The span whose own time it is. */
   inside: string;
   app: string;
@@ -193,8 +191,6 @@ function codeInfo(part: CodePart, code: CodeOwner, span: Span, name: string): Co
   const service = code.trace.attrs["service.name"];
   return {
     name,
-    waiting: part.waiting,
-    time: part.time,
     inside: span.name,
     app: typeof service === "string" ? service : "",
     from: part.pieces[0]?.from ?? 0,
@@ -216,15 +212,13 @@ export function CodeDetails({ info, onProfile }: { info: CodeInfo; onProfile?: (
       ? `from its start to ${duration(info.to)}`
       : `${duration(info.from)} – ${duration(info.to)} from its start`;
   const rows: PropRow[] = [
-    { label: "Kind", value: info.waiting ? "Waiting" : "Code" },
-    { label: "Time", value: info.time },
     { label: "Inside", value: info.inside, mono: true, copy: info.inside },
     ...(info.app ? [{ label: "App", value: info.app }] : []),
     { label: "When", value: info.stretches > 1 ? `${when}, in ${info.stretches} stretches` : when },
   ];
   return (
     <div className="dt-code-details">
-      <p className="dt-note">{info.note}</p>
+      <p className="m-0 text-sm text-muted-foreground">{info.note}</p>
       <FactGrid rows={rows} />
       {info.profiled && onProfile ? (
         <Button variant="outline" size="sm" onClick={onProfile}>
@@ -232,7 +226,7 @@ export function CodeDetails({ info, onProfile }: { info: CodeInfo; onProfile?: (
           Open profile
         </Button>
       ) : !info.profiled && info.profiles ? (
-        <p className="dt-note">
+        <p className="m-0 text-sm text-muted-foreground">
           To see which of your functions ran, profile the request with the{" "}
           <FlameIcon className="inline size-3.5 align-[-2px]" aria-label="flame" /> in the panel.
         </p>
@@ -397,6 +391,7 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
           const windows = stretchesOf(part.pieces);
           pick(row, span.id, codeInfo(part, ctx.code, span, name), {
             trace: ctx.code.trace.id,
+            kind: part.waiting ? "wait" : "code",
             windows,
             note: partNote(part, ctx.code),
           });

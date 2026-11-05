@@ -23,6 +23,8 @@ export interface Member {
 /** A code or wait row's time: whose trace, when in it, and what it is, said in its details. */
 export interface CodeStretch {
   trace: string;
+  /** "code" or "wait", as its row's badge says. */
+  kind: string;
   windows: Windows;
   note: string;
 }

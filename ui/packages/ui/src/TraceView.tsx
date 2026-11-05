@@ -21,7 +21,7 @@ import { createPortal } from "react-dom";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
 import { CallMap } from "./CallMap";
-import type { ProfilesIn, TraceProfileOpener } from "./CallRowParts";
+import { type ProfilesIn, rowKind, type TraceProfileOpener } from "./CallRowParts";
 import type { Explain, ExplainOf } from "./CallTable";
 import { ScopedCalls, ScopedIssues } from "./ChainTabs";
 import { Button } from "./components/ui/button";
@@ -53,7 +53,7 @@ import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
-import { KindWords, RoutePath, StatusBadge, TraceBadge, WATERFALL_KINDS, WaitingIcon } from "./primitives";
+import { KindBadge, KindWords, RoutePath, StatusBadge, TraceBadge, WATERFALL_KINDS, WaitingIcon } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
 import { sqlKey } from "./SqlList";
@@ -500,12 +500,35 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
   const [from, to] = scopeWindow(chain.members, scope);
   // A code or wait row's time is its stretches', not its span's.
   const took = scope.at ? scope.at.windows.reduce((sum, [start, end]) => sum + end - start, 0) : to - from;
+  const kind = scope.at?.kind ?? scopeKind(chain.members, scope);
   return (
     <h3 className="dt-details-title">
-      <span>{scope.label}</span>
+      {kind ? (
+        <KindWords.Provider value={WATERFALL_KINDS}>
+          <KindBadge kind={kind} muted={true} className="dt-map-kind" />
+        </KindWords.Provider>
+      ) : null}
+      <span className="dt-details-name">{scope.label}</span>
       <span className="dt-details-took">{duration(took)}</span>
     </h3>
   );
+}
+
+/** The badge of what a scope picked, as its row in the tree has it: its first span's, or its trace's root's. */
+function scopeKind(members: readonly Member[], scope: SpanScope): string | null {
+  const [target] = scope.targets;
+  for (const member of members) {
+    const spans = member.trace.spans;
+    const span =
+      member.id === target ? spans.find((each) => each.parent_id === null) : spans.find((each) => each.id === target);
+    if (span)
+      return rowKind(
+        span,
+        member.trace,
+        spans.find((each) => each.id === span.parent_id),
+      );
+  }
+  return null;
 }
 
 const FOCUS_WAIT_MS = 1_500;

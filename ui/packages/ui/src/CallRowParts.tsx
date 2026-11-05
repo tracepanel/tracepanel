@@ -357,7 +357,7 @@ export function SpanFold({
 }
 
 /** A row's kind as its badge says it: a browser's view or action as its list names it (view, click, bg). */
-function rowKind(span: Span, trace: Trace, parent: Span | undefined): string {
+export function rowKind(span: Span, trace: Trace, parent: Span | undefined): string {
   if (span.kind === "page") return pageParts(span.name).badge.toLowerCase();
   return spanKindLabel(span.kind, trace.attrs, parent?.kind);
 }
