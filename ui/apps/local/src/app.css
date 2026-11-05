@@ -2351,3 +2351,16 @@ body {
 .panel-wf-details .dt-scope-head:not(:has(.dt-scope-summary-end)) {
   display: none;
 }
+
+/* Profile beside the tree: the bar and the flame say it. The row says the time; one app needs no table or name. */
+.panel-wf-details .dt-profile-sums-wrap:has(tbody > tr:only-child),
+.panel-wf-details
+  .dt-profile-sums-wrap:has(tbody > tr:only-child)
+  ~ .dt-app-profile
+  [data-split-head]
+  > span:first-child,
+.panel-wf-details [data-split-head] > span:first-child:not(.flex),
+.panel-wf-details [data-split-head] [data-cover],
+.panel-wf-details [data-split-head] [data-sampled] {
+  display: none;
+}
