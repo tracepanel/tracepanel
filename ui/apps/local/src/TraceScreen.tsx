@@ -62,7 +62,9 @@ export interface TraceScreenProps {
   explore?: ((trace: Trace) => ExploreItem[]) | undefined;
   onTabChange?: TraceViewProps["onTabChange"];
   onTabShown?: TraceViewProps["onTabShown"];
-  variant?: "full" | "compact" | "strip" | undefined;
+  variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
+  detailsHost?: HTMLElement | null | undefined;
+  actionsHost?: HTMLElement | null | undefined;
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];
@@ -136,7 +138,7 @@ function serviceName(trace: Trace): string {
 /** The service whose App tab the panel shows (its variants are compact and strip); none on a page. */
 function serviceOf(trace: Trace | null | undefined, variant: TraceScreenProps["variant"]): string | null {
   const service = trace?.attrs["service.name"];
-  const panel = variant === "compact" || variant === "strip";
+  const panel = variant === "compact" || variant === "strip" || variant === "waterfall";
   return panel && typeof service === "string" ? service : null;
 }
 

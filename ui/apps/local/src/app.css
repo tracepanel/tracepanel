@@ -2063,3 +2063,64 @@ body {
     transition: none;
   }
 }
+
+/* The panel as one waterfall: a bar over the rows, the selected row's details beside them (under them docked right). */
+.panel-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.75rem;
+  height: 2.5rem;
+  padding: 0 0.5rem 0 0.875rem;
+  border-bottom: 1px solid var(--dt-border);
+  background: var(--dt-chrome, var(--dt-bg));
+}
+
+.panel-top > .bar-actions {
+  margin-left: auto;
+}
+
+.panel-wf {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 38%);
+  min-height: 0;
+}
+
+.panel-wf[data-dock="right"] {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 45%);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panel-wf-rows,
+.panel-wf-details {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.panel-wf-details {
+  border-left: 1px solid var(--dt-border);
+}
+
+.panel-wf[data-dock="right"] .panel-wf-details {
+  border-top: 1px solid var(--dt-border);
+  border-left: 0;
+}
+
+.dt-requests-open {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border-block: 1px solid var(--dt-border);
+}
+
+.dt-trace[data-variant="waterfall"] .dt-map-head {
+  height: 0;
+  overflow: hidden;
+  padding-block: 0;
+  border: 0;
+}
+
+.dt-details-row[hidden] {
+  display: none;
+}

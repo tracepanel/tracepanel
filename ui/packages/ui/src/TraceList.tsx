@@ -1,5 +1,5 @@
 import { TriangleAlertIcon } from "lucide-react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
@@ -111,6 +111,8 @@ export interface CallGroup {
 
 export interface TraceListProps {
   rows: readonly TraceRow[];
+  /** Right under the selected row, across the list: what it opens to. Its chain then lives there, not in rows. */
+  openContent?: ReactNode;
   selectedId?: string | null | undefined;
   /** The page currently open in the browser tab. */
   currentId?: string | null | undefined;
@@ -183,12 +185,13 @@ export function TraceList({
   chains,
   opensOn,
   onSelect,
+  openContent,
 }: TraceListProps) {
   const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
-  const props = { chains, withOpens, selectedId, currentId, newIds, compact, services, opensOn, onSelect };
+  const props = { openContent, chains, withOpens, selectedId, currentId, newIds, compact, services, opensOn, onSelect };
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
-      {shownRows(rows, chains).map(({ row, fold, under }) => (
+      {shownRows(rows, chains, openContent !== undefined).map(({ row, fold, under }) => (
         <ListItem key={row.key ?? row.trace.id} row={row} fold={fold} under={under} {...props} />
       ))}
     </ul>
@@ -199,7 +202,7 @@ export function TraceList({
  * The rows on screen, each with its fold: those under a folded view, action or group of calls (deeper than it) hidden
  * until it opens again. `under`: a view, action or group with rows of its own right under it (its calls).
  */
-function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined) {
+function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined, flat = false) {
   const shown: { row: TraceRow; fold: RowFold | null | undefined; under: boolean }[] = [];
   let hiddenBelow: number | null = null;
   for (const [at, row] of rows.entries()) {
@@ -207,7 +210,7 @@ function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined) {
     if (hiddenBelow !== null && depth > hiddenBelow) continue;
     hiddenBelow = null;
     const under = (row.trace.kind === "page" || row.group !== undefined) && (rows[at + 1]?.depth ?? 0) > depth;
-    const fold = chains ? rowFold(chains, row.trace.id, row.folded, under) : undefined;
+    const fold = chains && (under || !flat) ? rowFold(chains, row.trace.id, row.folded, under) : undefined;
     if (fold?.open === false) hiddenBelow = depth;
     shown.push({ row, fold, under });
   }
@@ -228,6 +231,7 @@ function ListItem({
   services,
   opensOn,
   onSelect,
+  openContent,
 }: Omit<TraceListProps, "rows"> & {
   row: TraceRow;
   fold: RowFold | null | undefined;
@@ -269,7 +273,10 @@ function ListItem({
         opens={opensOn?.(trace)}
         onSelect={onSelect}
       />
-      {withOpens && fold?.open !== false ? (
+      {trace.id === selectedId && openContent !== undefined ? (
+        <div className="dt-requests-open">{openContent}</div>
+      ) : null}
+      {withOpens && openContent === undefined && fold?.open !== false ? (
         <RowChain
           rowId={trace.id}
           level={(row.depth ?? 0) + 1}
