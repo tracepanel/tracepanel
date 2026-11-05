@@ -12,9 +12,11 @@ import { foldKeys } from "./lib/keys";
 import { cutNote, isCut } from "./lib/live";
 import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
+import { WAITING } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
 import type { CodeStretch } from "./lib/scope";
 import type { Slice, Windows } from "./lib/slice";
+import { segmentsOf } from "./lib/timeShares";
 import { FailedStatus, KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 
@@ -257,8 +259,69 @@ export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
 /** A span's bar; a call cut short runs to where it was cut, fading out there, never a 0-width mark. */
 export function OwnBar({ span, ctx }: { span: Span; ctx: RowContext }) {
   const cut = cutLength(span, ctx.trace);
+  const pieces = cut === null && !ctx.within ? piecesOf(span, ctx.code.trace, ctx.trace) : null;
+  if (pieces) return <PiecesBar pieces={pieces} />;
   return (
     <Bar trace={ctx.trace} start={span.start} length={cut ?? span.duration} cut={cut !== null} within={ctx.within} />
+  );
+}
+
+/** A piece of a span's bar: where in the trace (% of it), and what ran then. */
+interface Piece {
+  left: number;
+  width: number;
+  category: Category;
+  waiting: boolean;
+}
+
+/** Narrower than this (% of the trace), a piece joins the one before it: never a sliver of a colour. */
+const PIECE_MIN = 0.6;
+
+/**
+ * A span's time in what ran under it, as the strip draws the trace's (lib/timeShares): its own code, its queries,
+ * its calls, its waits, each in its share's colour. None for a span with one kind of time: its plain bar says it.
+ */
+function piecesOf(span: Span, owner: Trace, trace: Trace): Piece[] | null {
+  // The span's own trace has its segments (a call's trace, under the page's): on this trace's clock from its start.
+  const total = Math.max(trace.duration, 1);
+  const offset = owner.start - trace.start;
+  const from = span.start - owner.start;
+  const to = from + span.duration;
+  const pieces: Piece[] = [];
+  for (const segment of segmentsOf(owner)) {
+    const start = Math.max(segment.from, from);
+    const end = Math.min(segment.to, to);
+    if (end <= start) continue;
+    const piece = {
+      left: ((start + offset) / total) * 100,
+      width: ((end - start) / total) * 100,
+      category: segment.share === WAITING ? ("waiting" as Category) : segment.category,
+      waiting: segment.share === WAITING,
+    };
+    const last = pieces.at(-1);
+    const touches = last && Math.abs(last.left + last.width - piece.left) < 0.05;
+    if (last && touches && (last.category === piece.category || piece.width < PIECE_MIN)) {
+      last.width = piece.left + piece.width - last.left;
+    } else pieces.push(piece);
+  }
+  return pieces.length > 1 ? pieces : null;
+}
+
+function PiecesBar({ pieces }: { pieces: readonly Piece[] }) {
+  return (
+    <span className="dt-map-track" aria-hidden="true">
+      {pieces.map((piece) => (
+        <span
+          key={piece.left}
+          className="dt-map-bar"
+          data-piece=""
+          data-category={piece.category}
+          data-quiet={piece.waiting ? "" : undefined}
+          data-waiting={piece.waiting ? "" : undefined}
+          style={{ left: `${piece.left}%`, width: `${Math.max(piece.width, 0.2)}%` }}
+        />
+      ))}
+    </span>
   );
 }
 

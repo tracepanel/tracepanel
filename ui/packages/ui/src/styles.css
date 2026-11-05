@@ -3665,3 +3665,15 @@ div.dt-map-row[data-kind="code"] {
   bottom: 0;
   border-left: 1px solid color-mix(in srgb, var(--dt-border) 55%, transparent);
 }
+/* A bar in pieces (what ran under its span): one bar, its ends rounded, no seams between its colours. */
+.dt-map-bar[data-piece] {
+  border-radius: 0;
+}
+.dt-map-bar[data-piece]:first-child {
+  border-top-left-radius: 999px;
+  border-bottom-left-radius: 999px;
+}
+.dt-map-bar[data-piece]:last-child {
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+}
