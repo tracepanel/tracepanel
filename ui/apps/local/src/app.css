@@ -2553,16 +2553,29 @@ body {
   opacity: 1;
 }
 
-/* Profile's head holds only Time / Memory, at the end of the row; the app's tabs come up beside it. */
+/* Profile's switches share one row: Time / Memory first, then the app's tabs, Your code / All frames at its end. */
+.panel-wf-details [role="tabpanel"] {
+  position: relative;
+}
 .panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) {
   padding: 0.75rem 1rem 0;
 }
-.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) .dt-scope-summary {
+.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]):has(+ .dt-profile-one) {
+  position: absolute;
+  z-index: 1;
+  top: 1rem;
+  left: 1rem;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]):has(+ .dt-profile-one) .dt-scope-summary {
   margin: 0;
   padding: 0;
 }
-.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) ~ .dt-profile-one > [role="tablist"] {
-  top: -2.5rem;
+.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) + .dt-profile-one > [role="tablist"] {
+  left: 10.25rem;
 }
 
 /* One tight column for the word before a call's name. */
