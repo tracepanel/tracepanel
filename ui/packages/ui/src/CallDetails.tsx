@@ -220,6 +220,32 @@ function RootDetails({ node: { span }, trace }: DetailsProps<"span">) {
   );
 }
 
+/** Beside the tree, a span with no fields of its own says where it was: when, under what, how much of the record. */
+function SpanPlace({
+  span,
+  trace,
+  parent,
+  bare,
+}: {
+  span: Span;
+  trace: Trace;
+  parent: Span | undefined;
+  bare: boolean;
+}) {
+  const beside = useContext(KindWords) !== null;
+  if (!(bare && beside)) return null;
+  const share = (span.duration / Math.max(trace.duration, 1)) * 100;
+  return (
+    <Fields
+      rows={[
+        { name: "Started", value: `+${duration(Math.max(span.start - trace.start, 0))}` },
+        { name: "Of the trace", value: `${share < 1 ? "<1" : Math.round(share)}% of ${duration(trace.duration)}` },
+        ...(parent ? [{ name: "Under", value: parent.name }] : []),
+      ]}
+    />
+  );
+}
+
 /** A call's own fields in words first (its topic, its URL, where in the code); every attribute after them. */
 function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">) {
   const parent = trace.spans.find((each) => each.id === span.parent_id);
@@ -229,6 +255,7 @@ function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">)
       <SpanHead span={span} trace={trace} parent={parent} attrs={withDocument(span.attrs)} />
       <NotTracedNote spanId={span.id} />
       {summary.length ? <Fields rows={summary} /> : null}
+      <SpanPlace span={span} trace={trace} parent={parent} bare={summary.length === 0} />
       <QueryPlan span={span} onExplain={onExplain} />
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
       <AsReceived span={span} />
