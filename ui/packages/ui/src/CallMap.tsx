@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { CodeDetails, type CodeInfo } from "./CallCode";
 import { Details } from "./CallDetails";
 import { hopText, type ProfilesIn, type RowContext, type TraceProfileOpener, UnderSlot } from "./CallRowParts";
 import { appName, Rows } from "./CallRows";
@@ -36,7 +37,7 @@ import { type CatchUp, useChain } from "./hooks/useChain";
 import { CloseIcon } from "./icons";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { quietSpans } from "./lib/quiet";
-import type { SpanScope } from "./lib/scope";
+import type { CodeStretch, SpanScope } from "./lib/scope";
 import type { Slice, TimeRange, Windows } from "./lib/slice";
 import { splitByProfile } from "./lib/timeShares";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
@@ -476,7 +477,7 @@ function useRowPicked(
   trace: Trace,
   initialSpan: string | undefined,
   { detailsHost, onPicked }: { detailsHost?: HTMLElement | null | undefined; onPicked?: PickedHandler | undefined },
-  at: SpanScope["at"],
+  code: { info: CodeInfo; at: CodeStretch } | null,
 ) {
   const held = useSelection(initialSpan);
   const external = detailsHost !== undefined;
@@ -484,14 +485,15 @@ function useRowPicked(
   const selected = external ? (held.selected ?? rootKey) : held.selected;
   const picked = external && selected !== rootKey ? selected : null;
   const found = picked ? findNode(tree, picked, trace) : undefined;
-  // A code or wait row: its span's scope at its stretches, the root's too.
-  const node = found?.node ?? (at ? tree[0] : undefined);
-  const atKey = at ? `${at.trace}:${at.windows.join(";")}` : "";
+  // A code or wait row: its span's own time at its stretches, named as the row is, the root's too.
+  const node = found?.node ?? (code ? tree[0] : undefined);
+  const codeKey = code ? `${code.at.trace}:${code.at.windows.join(";")}` : "";
   // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not each new tree it is found in.
   useEffect(() => {
     const scope = node ? scopeOfNode(node) : undefined;
-    if (external) onPicked?.(scope ? { ...scope, ...(at ? { at } : {}) } : null);
-  }, [external, picked, atKey]);
+    const coded = scope && code ? { ...scope, label: code.info.name, only: true, at: code.at } : scope;
+    if (external) onPicked?.(coded ?? null);
+  }, [external, picked, codeKey]);
   // A row picked from elsewhere (an issue's link) may be off screen: it comes into view.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked is what moves the view.
   useEffect(() => {
@@ -555,6 +557,8 @@ export function CallMap({
   rootMark?: ReactNode;
   issuesIn?: RowContext["issuesIn"];
   onIssues?: RowContext["onIssues"];
+  /** Beside the tree: opens the Profile tab, a code row's profile. */
+  onProfileTab?: (() => void) | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
@@ -569,18 +573,22 @@ export function CallMap({
     () => withCallIssues(issueBySpan, related, chain.loaded),
     [issueBySpan, related, chain.loaded],
   );
-  const [codeRow, setCodeRow] = useState<{ row: string; at: NonNullable<SpanScope["at"]> } | null>(null);
-  const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring, codeRow?.at);
+  const [codeRow, setCodeRow] = useState<{ row: string; info: CodeInfo; at: CodeStretch } | null>(null);
+  const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring, codeRow);
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
   const [collapsed, toggle] = useFolded(tree, initialSpan);
-  const details = detailsOf(tree, selected, trace, {
-    links,
-    explainOf: wiring.explainOf,
-    onTraceProfile: wiring.onTraceProfile,
-    under: wiring.under,
-  });
+  const details = codeRow ? (
+    <CodeDetails info={codeRow.info} onProfile={wiring.onProfileTab} />
+  ) : (
+    detailsOf(tree, selected, trace, {
+      links,
+      explainOf: wiring.explainOf,
+      onTraceProfile: wiring.onTraceProfile,
+      under: wiring.under,
+    })
+  );
   const { categories, quiet } = useSpansTime(trace);
   const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
   const inline = side || external ? null : details;
@@ -606,9 +614,9 @@ export function CallMap({
                 opensOnly: external,
                 codeRow: codeRow?.row,
                 onCodeRow: external
-                  ? (row, span, at) => {
+                  ? (row, span, info, at) => {
                       select(span);
-                      setCodeRow({ row, at });
+                      setCodeRow({ row, info, at });
                     }
                   : undefined,
                 issuesIn: wiring.issuesIn,

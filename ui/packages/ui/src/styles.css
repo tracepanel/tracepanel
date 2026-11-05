@@ -3625,3 +3625,13 @@ div.dt-map-row[data-kind="code"] {
 .dt-pending {
   color: var(--dt-text-3);
 }
+/* A code or wait row's details beside the tree: what it is, its facts, its profile or how to get one. */
+.dt-code-details {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+.dt-code-details > dl {
+  justify-self: stretch;
+}

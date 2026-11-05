@@ -1,4 +1,5 @@
 import { type CSSProperties, createContext, type ReactNode, useContext } from "react";
+import type { CodeInfo } from "./CallCode";
 import { type Mark, type Node, type ServedRun, SKEW_NOTE_MIN, type SpanNode } from "./callTree";
 import { duration } from "./format";
 import { ChevronRightIcon } from "./icons";
@@ -12,6 +13,7 @@ import { cutNote, isCut } from "./lib/live";
 import { pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
 import { type Quiet, quietSpans } from "./lib/quiet";
+import type { CodeStretch } from "./lib/scope";
 import type { Slice, Windows } from "./lib/slice";
 import { FailedStatus, KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
@@ -21,7 +23,7 @@ export interface RowContext {
   opensOnly?: boolean | undefined;
   /** The code row picked (its span and which of its parts), where a code row is a row to pick. */
   codeRow?: string | null | undefined;
-  onCodeRow?: ((row: string, span: string, at: { trace: string; windows: Windows }) => void) | undefined;
+  onCodeRow?: ((row: string, span: string, info: CodeInfo, at: CodeStretch) => void) | undefined;
   /** How many findings are in these spans and what ran under them, where a row says a count, not a name. */
   issuesIn?: ((targets: readonly string[]) => number) | undefined;
   /** Opens the findings of the row just selected. */

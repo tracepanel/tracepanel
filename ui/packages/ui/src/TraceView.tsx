@@ -460,6 +460,12 @@ function tabsOfRow<T extends { id: string; label: string; icon?: unknown }>(
 ): readonly T[] {
   const scope = chain.scope;
   if (!scope) return wholeRecordTabs(tabs);
+  // A code or wait row: what it is, and its profile where its trace has one.
+  const at = scope.at;
+  if (at) {
+    const profiled = chain.members.some((member) => member.id === at.trace && member.trace.profile);
+    return tabs.filter((tab) => tab.id === "tree" || (profiled && tab.id === "profile"));
+  }
   if (isLeafRow(chain, scope)) return tabs.filter((tab) => tab.id === "tree");
   return tabs.filter((tab) => tab.id !== "request" && tab.id !== "app");
 }
@@ -492,10 +498,12 @@ const DETAILS_HIDES: ReadonlySet<string> = new Set(["share"]);
 /** What is selected and how long it took: the row itself may be scrolled away, or have come from a link. */
 function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
   const [from, to] = scopeWindow(chain.members, scope);
+  // A code or wait row's time is its stretches', not its span's.
+  const took = scope.at ? scope.at.windows.reduce((sum, [start, end]) => sum + end - start, 0) : to - from;
   return (
     <h3 className="dt-details-title">
       <span>{scope.label}</span>
-      <span className="dt-details-took">{duration(to - from)}</span>
+      <span className="dt-details-took">{duration(took)}</span>
     </h3>
   );
 }
@@ -503,7 +511,7 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
 const FOCUS_WAIT_MS = 1_500;
 
 function rowStrip(chain: TraceScope): Trace | null {
-  return chain.scope ? stripTraceOf(chain.members, chain.scope) : null;
+  return chain.scope && !chain.scope.at ? stripTraceOf(chain.members, chain.scope) : null;
 }
 
 /** Heads the details: where the time of what is selected went. */
@@ -1078,6 +1086,7 @@ export function TraceView({
       plain={waterfall}
       detailsHost={waterfall ? detailsSlot : undefined}
       onPicked={waterfall ? onPicked : undefined}
+      onProfileTab={waterfall ? () => setActive("profile") : undefined}
       rootMark={waterfall ? <RecordIssues issues={chainFindings(chain, findings)} /> : undefined}
       issuesIn={
         waterfall

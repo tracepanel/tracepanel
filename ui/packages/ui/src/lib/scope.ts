@@ -20,12 +20,19 @@ export interface Member {
  * trace (a call's trace as a row). `only`: what is in those spans themselves, not in a span or a trace under them.
  * `label` says it on the scope's chip ("Book.author ×36").
  */
+/** A code or wait row's time: whose trace, when in it, and what it is, said in its details. */
+export interface CodeStretch {
+  trace: string;
+  windows: Windows;
+  note: string;
+}
+
 export interface SpanScope {
   targets: readonly string[];
   label: string;
   only: boolean;
   /** A code or wait row's: its trace's stretches (µs since that trace started), what its profile is of. */
-  at?: { trace: string; windows: Windows } | undefined;
+  at?: CodeStretch | undefined;
 }
 
 /** A record of a scope, with its trace and the app that logged it. */
