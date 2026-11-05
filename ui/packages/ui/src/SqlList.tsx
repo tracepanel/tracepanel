@@ -28,6 +28,7 @@ import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { AliasChip, IssueChip, SectionHeading, TemplateChip, Times } from "./primitives";
 import type { Segment } from "./Segmented";
 import { SqlCode } from "./SqlCode";
+import { sqlLiteral } from "./sql";
 import type { IssueKind, Span } from "./types";
 
 export interface SqlListProps {
@@ -151,16 +152,19 @@ function rowsOf(span: Span): string | null {
 
 /** "pk_1 = 12": the values a query ran with, by name where the driver says them; none where they stay local. */
 function paramsOf(span: Span): string | null {
+  const values = valuesOf(span);
+  return values ? `(${values.map(sqlLiteral).join(", ")})` : null;
+}
+
+/** The values a query ran with, where they were recorded (a snapshot's are dropped). */
+function valuesOf(span: Span): unknown[] | undefined {
   const values = span.attrs["db.params"];
-  if (!Array.isArray(values) || values.length === 0) return null;
+  return Array.isArray(values) && values.length > 0 ? values : undefined;
+}
+
+function namesOf(span: Span): unknown[] | undefined {
   const names = span.attrs["db.param_names"];
-  return values
-    .map((value, at) => {
-      const name = Array.isArray(names) ? names[at] : undefined;
-      const text = typeof value === "string" ? `'${value}'` : JSON.stringify(value);
-      return name === undefined ? text : `${String(name)} = ${text}`;
-    })
-    .join(", ");
+  return Array.isArray(names) ? names : undefined;
 }
 
 /** Where each query of a group was made, one line each, with its time. */
@@ -225,7 +229,13 @@ function QueryDetails({
   return (
     <>
       {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
-      <SqlCode sql={String(first.attrs["db.statement"] ?? first.name)} vendor={vendorOf(first)} />
+      <SqlCode
+        sql={String(first.attrs["db.statement"] ?? first.name)}
+        vendor={vendorOf(first)}
+        // One run: the values it ran with, in place.
+        values={spans.length === 1 ? valuesOf(first) : undefined}
+        names={spans.length === 1 ? namesOf(first) : undefined}
+      />
       <QueryFields span={first} />
       <QueryPlan span={first} onExplain={onExplain} />
       <CalledFromList spans={spans} focus={focus} />

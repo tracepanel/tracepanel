@@ -2527,12 +2527,20 @@ body {
 }
 /* Its time as the tree's time column says it. */
 .dt-details-took {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 0.25rem;
   margin-left: auto;
   color: var(--dt-text-2);
   font-size: var(--dt-size-xs);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+.dt-details-took svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  color: var(--dt-text-3);
 }
 
 /* The filter reads as a field: its own quiet fill and edge, smaller than the bar. */

@@ -422,9 +422,9 @@ function GroupName({
   return (
     <>
       <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
-      {/* How many, before what: read first, never pushed off by a long name. */}
-      <Times count={node.spans.length} />
       <OpText text={callTemplate(first)} kind={first?.kind} />
+      {/* How many, right after what: never pushed away from its name. */}
+      <Times count={node.spans.length} />
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
       <GroupStatus answer={answer} />

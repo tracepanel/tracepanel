@@ -122,10 +122,19 @@ function ErrorDetails({ node }: DetailsProps<"error">) {
   );
 }
 
-/** A SQL call's statement, formatted. */
+/** A SQL call's statement, formatted, with the values it ran with in place where they were recorded. */
 function Statement({ span, attrs }: { span: Span; attrs: Attrs }) {
   if (span.kind !== "sql") return null;
-  return <SqlCode sql={String(attrs["db.statement"] ?? span.name)} vendor={String(attrs["db.vendor"] ?? "")} />;
+  const values = attrs["db.params"];
+  const names = attrs["db.param_names"];
+  return (
+    <SqlCode
+      sql={String(attrs["db.statement"] ?? span.name)}
+      vendor={String(attrs["db.vendor"] ?? "")}
+      values={Array.isArray(values) ? values : undefined}
+      names={Array.isArray(names) ? names : undefined}
+    />
+  );
 }
 
 function GroupDetails({ node, onExplain }: DetailsProps<"group">) {

@@ -2558,6 +2558,13 @@ details[data-focused] > .dt-sql-group {
   font-size: var(--dt-size-xs);
   font-weight: 600;
 }
+/* Beside its name: the name keeps its width, the rest of the row goes after the count. */
+.dt-map-text:has(+ .dt-map-times) {
+  flex-grow: 0;
+}
+.dt-map-text + .dt-map-times {
+  margin-right: auto;
+}
 .dt-map-track {
   position: relative;
   height: 0.75rem;

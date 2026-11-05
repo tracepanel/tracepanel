@@ -39,6 +39,7 @@ import { Hint } from "./Hint";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
 import { type TraceScope, useTraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
+import { ClockIcon } from "./icons";
 import { RunningMark } from "./LiveMarks";
 import { LogsPane } from "./LogList";
 import { addedUp, groupNoun, onTheClock } from "./lib/calls";
@@ -509,7 +510,10 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
         </KindWords.Provider>
       ) : null}
       <span className="dt-details-name">{scope.label}</span>
-      <span className="dt-details-took">{duration(took)}</span>
+      <span className="dt-details-took">
+        <ClockIcon />
+        {duration(took)}
+      </span>
     </h3>
   );
 }
