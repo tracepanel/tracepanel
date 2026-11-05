@@ -1,9 +1,10 @@
 import { cn } from "@tracepanel/ui/lib/utils";
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
 import {
   CallLine,
   CallLines,
   CallTable,
+  countColumn,
   DetailsTitle,
   type Explain,
   groupTitle,
@@ -15,6 +16,7 @@ import {
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
+import { HiddenColumns } from "./DataTable";
 import { duration } from "./format";
 import { callFields, templatePlace } from "./lib/callFields";
 import { queryFingerprint } from "./lib/fingerprint";
@@ -138,10 +140,11 @@ function LibraryCaller({ caller, className }: { caller: string; className?: stri
 /** Where each query of a group was made, one line each, with its time. */
 function CalledFromList({ spans, focus }: { spans: readonly Span[]; focus: ReadonlySet<string> | undefined }) {
   const heading = spans.length === 1 ? "Called from" : `Called ${spans.length} times from`;
+  const bare = useContext(HiddenColumns) !== null && spans.length === 1;
   return (
     <CallLines heading={<SectionHeading>{heading}</SectionHeading>}>
       {spans.map((span, index) => (
-        <CallLine key={span.id} index={index} focused={focus?.has(span.id) ?? false} time={span.duration}>
+        <CallLine key={span.id} index={index} focused={focus?.has(span.id) ?? false} time={span.duration} bare={bare}>
           <CalledFrom span={span} className="truncate" />
         </CallLine>
       ))}
@@ -179,11 +182,13 @@ function QueryDetails({
   onExplain: Explain | undefined;
   links: TraceLinks | undefined;
 }) {
+  // Beside the tree the open row has just said how many and how long.
+  const beside = useContext(HiddenColumns) !== null;
   const [first] = spans;
   if (!first) return null;
   return (
     <>
-      <DetailsTitle>{title}</DetailsTitle>
+      {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
       <SqlCode sql={String(first.attrs["db.statement"] ?? first.name)} vendor={vendorOf(first)} />
       <QueryFields span={first} />
       <QueryPlan span={first} onExplain={onExplain} />
@@ -225,7 +230,7 @@ export const SQL_MODES: readonly Segment<SqlMode>[] = [
   { id: "timeline", label: "In order" },
 ];
 
-function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Group>[] {
+function groupColumns(groups: readonly Group[], scope: ListTime, beside: boolean): DataColumn<Group>[] {
   return [
     {
       id: "query",
@@ -234,13 +239,22 @@ function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Gro
       cell: (group) => (
         <QueryName
           name={group.name}
-          count={group.spans.length}
+          count={beside ? 1 : group.spans.length}
           alias={group.spans[0]?.attrs["db.alias"]}
           from={group.spans.find((span) => templatePlace(span.attrs))?.attrs}
-          issue={group.issue}
+          issue={beside && group.issue === "n+1" ? undefined : group.issue}
         />
       ),
     },
+    // Beside the tree, the count has its own column, and it says the N+1.
+    ...(beside
+      ? [
+          countColumn<Group>(
+            (group) => group.spans.length,
+            (group) => group.issue === "n+1",
+          ),
+        ]
+      : []),
     ...timeColumns<Group>((group) => group.time, groups, scope, QUERY),
   ];
 }
@@ -295,6 +309,7 @@ interface Placed {
 }
 
 export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clock }: SqlListProps) {
+  const beside = useContext(HiddenColumns) !== null;
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
@@ -307,7 +322,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
       {mode === "grouped" ? (
         <CallTable
           table="trace-sql"
-          columns={groupColumns(groups, scope)}
+          columns={groupColumns(groups, scope, beside)}
           items={groups}
           focus={focus}
           row={{

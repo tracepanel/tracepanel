@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
 import {
   CallLine,
   CallLines,
   CallTable,
+  countColumn,
   DetailsTitle,
   groupTitle,
   type ListTime,
@@ -12,6 +13,7 @@ import {
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
+import { HiddenColumns } from "./DataTable";
 import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
@@ -48,6 +50,18 @@ const HTTP_METHOD = /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|TRACE|CONNECT) (.+
 /** What a group repeats: an HTTP call's method in its badge, as every list shows a request's, then the rest. */
 function Template({ template }: { template: string }) {
   const http = HTTP_METHOD.exec(template);
+  const beside = useContext(HiddenColumns) !== null;
+  // Beside the tree every call has a word in the method's place, so the names line up.
+  if (beside && template.startsWith("GraphQL ")) {
+    return (
+      <span className="flex min-w-0 shrink-[1000] items-center gap-2.5">
+        <span className="dt-method" data-method="GQL">
+          GQL
+        </span>{" "}
+        <span className="truncate font-mono">{template.slice("GraphQL ".length)}</span>
+      </span>
+    );
+  }
   if (!http) return <span className="shrink-[1000] truncate font-mono">{template}</span>;
   return (
     <span className="flex min-w-0 shrink-[1000] items-center gap-2.5">
@@ -105,10 +119,10 @@ function textsOf(span: Span): { url: string; origin: string; failure: string } {
   };
 }
 
-function Call({ span, index, focused }: { span: Span; index: number; focused: boolean }) {
+function Call({ span, index, focused, bare }: { span: Span; index: number; focused: boolean; bare: boolean }) {
   const { url, origin, failure } = textsOf(span);
   return (
-    <CallLine index={index} focused={focused} time={span.duration}>
+    <CallLine index={index} focused={focused} time={span.duration} bare={bare}>
       <span className="grid min-w-0 grid-cols-[3rem_minmax(0,1fr)] items-center gap-3">
         <span className="font-mono tabular-nums" title={failure}>
           <Status span={span} />
@@ -127,20 +141,36 @@ function Call({ span, index, focused }: { span: Span; index: number; focused: bo
 
 /** A group's name in its row: what its calls repeat, how many, how they went, its issue. */
 function GroupName({ group }: { group: Group }) {
+  // Beside the tree, the count has its own column, and it says the N+1.
+  const beside = useContext(HiddenColumns) !== null;
+  const issue = beside && group.issue === "n+1" ? undefined : group.issue;
   return (
     <span className="flex min-w-0 items-center gap-2">
       <Template template={group.template} />
-      <Times count={group.spans.length} />
+      {beside ? null : <Times count={group.spans.length} />}
       {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
       <GroupNotTraced spans={group.spans} />
-      {group.issue ? <IssueChip kind={group.issue} /> : null}
+      {issue ? <IssueChip kind={issue} /> : null}
     </span>
   );
 }
 
-function columns(groups: readonly Group[], scope: ListTime, noun: readonly [string, string]): DataColumn<Group>[] {
+function columns(
+  groups: readonly Group[],
+  scope: ListTime,
+  noun: readonly [string, string],
+  beside: boolean,
+): DataColumn<Group>[] {
   return [
     { id: "call", label: "Call", required: true, cell: (group) => <GroupName group={group} /> },
+    ...(beside
+      ? [
+          countColumn<Group>(
+            (group) => group.spans.length,
+            (group) => group.issue === "n+1",
+          ),
+        ]
+      : []),
     ...timeColumns<Group>((group) => group.time, groups, scope, noun),
   ];
 }
@@ -155,12 +185,15 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
   const [first] = group.spans;
   const count = group.spans.length;
   const title = groupTitle(group.time, nounOf(first), groupNoun(first));
+  // Beside the tree the open row has just said how many and how long.
+  const beside = useContext(HiddenColumns) !== null;
+  const bare = beside && count === 1;
   return (
     <>
-      <DetailsTitle>{title}</DetailsTitle>
-      <CallLines heading={<SectionHeading>{count === 1 ? "Call" : `${count} calls`}</SectionHeading>}>
+      {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
+      <CallLines heading={bare ? null : <SectionHeading>{count === 1 ? "Call" : `${count} calls`}</SectionHeading>}>
         {group.spans.map((span, index) => (
-          <Call key={span.id} span={span} index={index} focused={focus?.has(span.id) ?? false} />
+          <Call key={span.id} span={span} index={index} focused={focus?.has(span.id) ?? false} bare={bare} />
         ))}
       </CallLines>
     </>
@@ -169,13 +202,14 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
 
 /** One system's calls, grouped by what they repeat (an endpoint, a key pattern) like queries by statement. */
 export function CallsList({ spans, issueBySpan, focus, table = "trace-calls", clock }: CallsListProps) {
+  const beside = useContext(HiddenColumns) !== null;
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
   return (
     <CallTable
       table={table}
-      columns={columns(groups, scope, nounOf(spans[0]))}
+      columns={columns(groups, scope, nounOf(spans[0]), beside)}
       items={groups}
       focus={focus}
       row={{

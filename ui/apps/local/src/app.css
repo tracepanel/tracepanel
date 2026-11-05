@@ -2232,9 +2232,7 @@ body {
   content: "";
 }
 .panel-wf-split:is(:hover, :focus-visible, :active)::before {
-  left: calc(50% - 1px);
-  width: 2px;
-  background: var(--dt-text-3);
+  background: var(--dt-border);
 }
 .panel-wf-split:focus-visible {
   outline: none;
@@ -2390,9 +2388,7 @@ body {
   content: "";
 }
 .panel-wf:not([data-dock="right"]) .panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
-  left: calc(50% - 1px);
-  width: 2px;
-  background: var(--dt-text-3);
+  background: var(--dt-divider-active, var(--dt-border));
 }
 
 /* The filter over the rows: a quiet field in the bar, no box until it is used. */
@@ -2471,7 +2467,8 @@ body {
 .dt-record-ago {
   margin-left: auto;
 }
-.panel-wf .dt-map-row [title*="profile" i] {
+.panel-wf .dt-map-row :is(button, span):has(> svg.lucide-flame),
+.panel-wf .dt-map-row svg.lucide-flame {
   display: none !important;
 }
 
@@ -2566,4 +2563,12 @@ body {
 }
 .panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) ~ .dt-profile-one > [role="tablist"] {
   top: -2.5rem;
+}
+
+/* One tight column for the word before a call's name. */
+.panel-wf-details td .dt-method,
+.panel-wf-details [role="row"] .dt-method {
+  flex: none;
+  width: 2.5rem;
+  min-width: 2.5rem;
 }
