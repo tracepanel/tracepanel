@@ -331,7 +331,7 @@ function PanelWaterfall({
   const trace = route.name === "trace" ? route : null;
   const opened = rows.find((row) => row.trace.id === selectedId);
   // Still running, there is nothing to say about it yet: no details, the rows take the room.
-  const detailsEmpty = useDetailsEmpty(detailsHost) || runningIn(rows, selectedId) !== undefined;
+  const detailsEmpty = useDetailsEmpty(detailsHost) || empty || runningIn(rows, selectedId) !== undefined;
   const split = useNamesSplit(detailsEmpty);
   const details = useDetailsSplit(dock);
   return (
@@ -354,7 +354,7 @@ function PanelWaterfall({
       </header>
       <div className="panel-wf" data-dock={dock} data-no-details={detailsEmpty ? "" : undefined} style={details.style}>
         <div className="panel-wf-tree" ref={split.areaRef}>
-          <NamesSplitter {...split.handle} />
+          {empty ? null : <NamesSplitter {...split.handle} />}
           <div className="panel-wf-rows" ref={list}>
             {empty ? (
               <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
