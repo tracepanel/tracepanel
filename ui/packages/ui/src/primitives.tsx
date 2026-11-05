@@ -52,17 +52,12 @@ export function StatusBadge({ status, dot = false }: { status: number | null | u
   const dotted = useContext(KindWords) !== null || dot;
   if (status === null || status === undefined) return null;
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";
-  // Beside the bars a success is a dot, its code on hover: only what went otherwise says its number.
+  // Beside the bars a success says its code quietly, no pill: what went otherwise stands out in its tone.
   if (dotted && tone === "ok") {
     return (
-      <span
-        className="tp-status"
-        data-tone={tone}
-        data-dot=""
-        title={String(status)}
-        role="img"
-        aria-label={String(status)}
-      />
+      <span className="tp-status" data-tone={tone} data-quiet="">
+        {status}
+      </span>
     );
   }
   return (
