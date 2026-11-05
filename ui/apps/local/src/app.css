@@ -2131,12 +2131,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .panel-wf .dt-map-row {
-  grid-template-columns: var(--wf-names, minmax(0, 1fr)) var(--wf-bars, minmax(0, 1fr)) 4rem;
+  grid-template-columns: minmax(0, 1fr) var(--wf-map) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: var(--wf-names, minmax(0, 1fr)) var(--wf-bars, minmax(0, 1fr)) 4rem;
+  grid-template-columns: minmax(0, 1fr) var(--wf-map) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2174,7 +2174,7 @@ body {
   white-space: nowrap;
 }
 
-/* The call tree and its bars, split by a line that moves. */
+/* The call tree and its bars: the bars are a map, one fixed width; the names take the rest. */
 /* The bar has the panel's two parts: the rows', its controls ending at the details' line; the details', its actions. */
 .panel-top {
   gap: 0;
@@ -2206,38 +2206,22 @@ body {
   width: auto;
 }
 .panel-wf-tree {
+  --wf-map: 10rem;
   position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
 }
-.panel-wf-split {
+.panel-wf-tree::after {
   position: absolute;
   z-index: 3;
   top: 0;
+  right: calc(var(--wf-map) + 5.9375rem);
   bottom: 0;
-  left: calc(var(--wf-names, 50%) + 0.3125rem);
-  width: 0.5625rem;
-  transform: translateX(-50%);
-  cursor: col-resize;
-  touch-action: none;
-}
-.panel-wf-split::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
   width: 1px;
   background: var(--dt-border);
   content: "";
-}
-.panel-wf-split:is(:hover, :focus-visible, :active)::before {
-  left: calc(50% - 1px);
-  width: 2px;
-  background: var(--dt-accent);
-}
-.panel-wf-split:focus-visible {
-  outline: none;
+  pointer-events: none;
 }
 
 /* The details start at the top: their tabs against the bar above. */
@@ -2400,9 +2384,52 @@ body {
   background: var(--dt-accent);
 }
 
-/* Search first in the bar, at the bar's own height. */
-.panel-top-rows > button {
-  flex: 0 1 16rem;
+/* Search in the bar: a quiet word that is a button, no field. */
+.panel-search {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
   height: 1.75rem;
-  min-width: 7rem;
+  padding: 0 0.5rem;
+  border-radius: 0.375rem;
+  color: var(--dt-text-3);
+  font-size: 0.8125rem;
+  transition:
+    color 0.12s,
+    background-color 0.12s;
+}
+.panel-search:hover {
+  background: var(--dt-hover);
+  color: var(--dt-text);
+}
+.panel-search > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.panel-search > kbd {
+  margin-left: 0.25rem;
+  font: inherit;
+  font-size: 0.6875rem;
+  opacity: 0.75;
+}
+
+.panel-wf[data-no-details] .panel-wf-tree::after {
+  display: none;
+}
+/* The record's time strip heads its details: no card, the column's own width. */
+.dt-details-head {
+  display: block;
+}
+.dt-details-head > * {
+  margin: 0;
+}
+
+/* Closed records' bars compare the records, on a scale of their own: quiet, one colour. */
+.dt-record-share {
+  background: var(--dt-text-3);
+  opacity: 0.35;
+}
+.dt-record:hover .dt-record-share {
+  opacity: 0.6;
 }

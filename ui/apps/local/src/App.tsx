@@ -18,6 +18,7 @@ import {
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { readItem } from "@tracepanel/ui/lib/storage";
+import { SearchIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ClearDialog } from "./ClearDialog";
@@ -43,12 +44,12 @@ import {
 } from "./panelList";
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
-import { DetailsSplitter, NamesSplitter, useDetailsSplit, useNamesSplit } from "./panelSplit";
+import { DetailsSplitter, useDetailsSplit } from "./panelSplit";
 import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 import { ShareAction } from "./ShareDialog";
-import { NAV, SearchButton, ThemeToggle } from "./Sidebar";
+import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { tabOf } from "./TracePage";
 import { TraceScreen } from "./TraceScreen";
@@ -332,11 +333,10 @@ function PanelWaterfall({
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
   const opened = rows.find((row) => row.trace.id === selectedId);
-  const split = useNamesSplit();
   const running = runningIn(rows, selectedId);
   const details = useDetailsSplit(dock);
   return (
-    <div className="panel" data-v2="" style={{ ...split.style, ...details.style }}>
+    <div className="panel" data-v2="" style={details.style}>
       <SearchPalette
         open={searching}
         onOpenChange={setSearching}
@@ -349,14 +349,17 @@ function PanelWaterfall({
       <header className="panel-top" data-dock={dock}>
         <div className="panel-top-rows">
           <LogoMark className="size-5" />
-          <SearchButton rail={false} onSearch={() => setSearching(true)} />
+          <button type="button" className="panel-search" onClick={() => setSearching(true)}>
+            <SearchIcon />
+            Search
+            <kbd>⌘K</kbd>
+          </button>
           <div className="panel-top-controls">{toolbar}</div>
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
       <div className="panel-wf" data-dock={dock} data-no-details={empty ? "" : undefined}>
-        <div className="panel-wf-tree" ref={split.areaRef}>
-          {empty ? null : <NamesSplitter {...split.handle} />}
+        <div className="panel-wf-tree">
           <div className="panel-wf-rows" ref={list}>
             {empty ? (
               <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>

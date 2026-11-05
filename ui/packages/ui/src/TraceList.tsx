@@ -192,7 +192,20 @@ export function TraceList({
   openContent,
 }: TraceListProps) {
   const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
-  const props = { openContent, chains, withOpens, selectedId, currentId, newIds, compact, services, opensOn, onSelect };
+  const longest = Math.max(1, ...rows.map((row) => row.trace.duration));
+  const props = {
+    longest,
+    openContent,
+    chains,
+    withOpens,
+    selectedId,
+    currentId,
+    newIds,
+    compact,
+    services,
+    opensOn,
+    onSelect,
+  };
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
       {shownRows(rows, chains, openContent !== undefined).map(({ row, fold, under }) => (
@@ -235,8 +248,11 @@ function ListItem({
   services,
   opensOn,
   onSelect,
+  longest,
   openContent,
 }: Omit<TraceListProps, "rows"> & {
+  /** The longest record listed: closed records' bars are shares of it. */
+  longest?: number;
   row: TraceRow;
   fold: RowFold | null | undefined;
   under: boolean;
@@ -272,7 +288,12 @@ function ListItem({
   if (openContent !== undefined) {
     return (
       <li>
-        <RecordRow row={{ ...row, trace }} fresh={fresh} onSelect={onSelect} />
+        <RecordRow
+          row={{ ...row, trace }}
+          fresh={fresh}
+          onSelect={onSelect}
+          share={trace.duration / (longest ?? trace.duration)}
+        />
       </li>
     );
   }
@@ -332,7 +353,10 @@ export function RecordRow({
   fresh,
   onSelect,
   live = false,
+  share,
 }: {
+  /** Closed: its time as a share of the longest listed, so the records compare at a glance. */
+  share?: number | undefined;
   row: TraceRow;
   fresh: boolean;
   onSelect: (id: string) => void;
@@ -369,7 +393,12 @@ export function RecordRow({
           <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
         </span>
       </span>
-      <span className="dt-map-track">{live ? <span className="dt-map-bar dt-record-live" /> : null}</span>
+      <span className="dt-map-track">
+        {live ? <span className="dt-map-bar dt-record-live" /> : null}
+        {share === undefined ? null : (
+          <span className="dt-map-bar dt-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
+        )}
+      </span>
       <span className="dt-map-time">
         <RowTime trace={trace} open={open} until={until} />
       </span>

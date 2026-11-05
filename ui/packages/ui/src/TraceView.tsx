@@ -58,7 +58,6 @@ import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
-import { ShareList } from "./TimeLegend";
 import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
@@ -431,15 +430,6 @@ function isLeafRow(chain: TraceScope, scope: SpanScope): boolean {
 function RecordIssues({ issues }: { issues: readonly { kind: IssueKind }[] }) {
   const found = issues.filter((issue) => issue.kind !== "error");
   return <CompactChips kinds={found.map((issue) => issue.kind)} issues={found.length} />;
-}
-
-/** Where the record's time went, on its Details: the selected row itself says the rest. */
-function DetailsHead({ trace }: { trace: Trace }) {
-  return (
-    <header className="dt-details-head">
-      <ShareList trace={trace} />
-    </header>
-  );
 }
 
 /** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
@@ -1063,7 +1053,13 @@ export function TraceView({
         <UntracedCalls value={chain.untraced}>
           <WaterfallParts
             traceId={trace.id}
-            head={!chain.scope && active === "request" ? <DetailsHead trace={trace} /> : null}
+            head={
+              !chain.scope && active === "request" ? (
+                <header className="dt-details-head">
+                  <TimeStrip trace={trace} related={related} onSelect={openAt} />
+                </header>
+              ) : null
+            }
             rows={treePane}
             tabs={tabs.length > 1 ? tabsBar : null}
             panel={panel}
