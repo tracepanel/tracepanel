@@ -452,6 +452,36 @@ function pickedOf(slice: Slice, trace: Trace, categories: ReadonlyMap<string, Ca
 }
 
 /** The request as a call tree: what ran inside what, in order, and how long each part took. */
+function HostedDetails({ host, details }: { host: HTMLElement | null | undefined; details: ReactNode }) {
+  return host && details ? createPortal(details, host) : null;
+}
+
+/**
+ * The selected row. With its details hosted out of the tree (`detailsHost`) a row is always selected, the root at
+ * first, a click never closes them, and the host hears the row's scope.
+ */
+function useRowPicked(
+  tree: Node[],
+  trace: Trace,
+  initialSpan: string | undefined,
+  { detailsHost, onPicked }: { detailsHost?: HTMLElement | null | undefined; onPicked?: PickedHandler | undefined },
+) {
+  const held = useSelection(initialSpan);
+  const external = detailsHost !== undefined;
+  const rootKey = tree[0]?.key ?? null;
+  const selected = external ? (held.selected ?? rootKey) : held.selected;
+  const picked = external && selected !== rootKey ? selected : null;
+  const found = picked ? findNode(tree, picked, trace) : undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not each new tree it is found in.
+  useEffect(() => {
+    if (external) onPicked?.(found ? (scopeOfNode(found.node) ?? null) : null);
+  }, [external, picked]);
+  const select = external ? (key: string) => (key === selected ? undefined : held.pick(key)) : held.select;
+  return { selected, select, close: held.close, external };
+}
+
+type PickedHandler = (scope: SpanScope | null) => void;
+
 export function CallMap({
   trace,
   issueBySpan,
@@ -492,7 +522,7 @@ export function CallMap({
   /** Where the selected row's details go, out of the tree: a row is then always selected, the root at first. */
   detailsHost?: HTMLElement | null | undefined;
   /** The selected row's scope, in a tree with a `detailsHost`: null for its root. */
-  onPicked?: ((scope: SpanScope | null) => void) | undefined;
+  onPicked?: PickedHandler | undefined;
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
@@ -505,19 +535,7 @@ export function CallMap({
     () => withCallIssues(issueBySpan, related, chain.loaded),
     [issueBySpan, related, chain.loaded],
   );
-  const held = useSelection(initialSpan);
-  const external = wiring.detailsHost !== undefined;
-  const rootKey = tree[0]?.key ?? null;
-  const selected = external ? (held.selected ?? rootKey) : held.selected;
-  const select = external ? (key: string) => (key === selected ? undefined : held.pick(key)) : held.select;
-  const close = held.close;
-  const picked = external ? (selected && selected !== rootKey ? selected : null) : null;
-  const pickedScope = picked ? findNode(tree, picked, trace) : undefined;
-  const onPicked = wiring.onPicked;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not each new tree it is found in.
-  useEffect(() => {
-    if (external) onPicked?.(pickedScope ? (scopeOfNode(pickedScope.node) ?? null) : null);
-  }, [external, picked]);
+  const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring);
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
@@ -535,7 +553,7 @@ export function CallMap({
   return (
     <div className="dt-map" ref={map}>
       {head}
-      {external && wiring.detailsHost && details ? createPortal(details, wiring.detailsHost) : null}
+      <HostedDetails host={wiring.detailsHost} details={details} />
       <MapBody details={side && !external ? details : null} onClose={close}>
         <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
           <div className="dt-map-rows" ref={rows}>

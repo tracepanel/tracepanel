@@ -11,6 +11,7 @@ import {
   sliceParams,
   type TabId,
   TraceList,
+  type TraceRow,
   type ViewMemory,
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
@@ -263,6 +264,130 @@ function PanelActions({
   );
 }
 
+/** The panel as one waterfall: the tab's records as rows, the one selected open to its call tree, details beside them. */
+function PanelWaterfall({
+  route,
+  selectedId,
+  rows,
+  listRows,
+  stored,
+  chains,
+  opensOn,
+  currentId,
+  toolbar,
+  actions,
+  dock,
+  empty,
+  sliced,
+  view,
+  searching,
+  setSearching,
+  clearing,
+  setClearing,
+}: {
+  route: Route;
+  selectedId: string | null;
+  rows: readonly TraceRow[];
+  listRows: readonly TraceRow[];
+  stored: ReadonlySet<string>;
+  chains: ListChains;
+  opensOn: ReturnType<typeof opensOnTab>;
+  currentId: string | null;
+  toolbar: ReactNode;
+  actions: (explore: ReactNode) => ReactNode;
+  dock: Dock;
+  empty: boolean;
+  sliced: ReturnType<typeof usePanelSlice>;
+  view: ReturnType<typeof usePanelView>;
+  searching: boolean;
+  setSearching: (open: boolean) => void;
+  clearing: boolean;
+  setClearing: (open: boolean) => void;
+}) {
+  const [detailsHost, setDetailsHost] = useState<HTMLElement | null>(null);
+  const [actionsHost, setActionsHost] = useState<HTMLElement | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  // The record opened, at the top of the rows: closing the one above it would move it away from the click.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the record opened, not each thing it draws.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() =>
+      list.current?.querySelector(".dt-requests-open")?.parentElement?.scrollIntoView({ block: "start" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [selectedId]);
+  const trace = route.name === "trace" ? route : null;
+  return (
+    <div className="panel" data-v2="">
+      <SearchPalette
+        open={searching}
+        onOpenChange={setSearching}
+        source={source}
+        items={NAV}
+        openRoute={(target) =>
+          target.name === "trace" ? go(target) : window.open(`${base}${href(target)}`, "_blank", "noopener")
+        }
+      />
+      <header className="panel-top">
+        <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+        {toolbar}
+        <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
+      </header>
+      <div className="panel-wf" data-dock={dock}>
+        <div className="panel-wf-rows" ref={list}>
+          {empty ? (
+            <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
+          ) : (
+            <TraceList
+              compact={true}
+              services={manyApps(rows)}
+              rows={listRows}
+              selectedId={selectedId}
+              currentId={currentId}
+              chains={chains}
+              opensOn={opensOn}
+              onSelect={(id) => go({ name: "trace", id })}
+              openContent={
+                selectedId ? (
+                  <TraceScreen
+                    key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
+                    id={selectedId}
+                    source={source}
+                    arriving={arrivingIn(rows, stored, selectedId)}
+                    running={runningIn(rows, selectedId)}
+                    variant="waterfall"
+                    detailsHost={detailsHost}
+                    actionsHost={actionsHost}
+                    initialTab={trace ? tabOf(trace.tab) : undefined}
+                    initialUnder={trace?.under}
+                    initialSlice={sliced.slice}
+                    onSliceChange={sliced.onChange}
+                    onTabShown={view.onTabShown}
+                    initialMemory={view.initialMemory}
+                    onMemoryChange={view.onMemoryChange}
+                    links={PANEL_LINKS}
+                    explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
+                  />
+                ) : null
+              }
+            />
+          )}
+        </div>
+        <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
+      </div>
+      <ClearDialog
+        mode="panel"
+        open={clearing}
+        onOpenChange={setClearing}
+        source={source}
+        onCleared={(permanent) => {
+          tellWidget("tracepanel:clear", { all: permanent });
+          go({ name: "home" });
+        }}
+      />
+    </div>
+  );
+}
+
 /** The panel as one waterfall (docs: panel v2). `localStorage["tracepanel:panel-v1"] = "1"` brings the old one back. */
 const PANEL_V2 = readItem("tracepanel:panel-v1") !== "1";
 
@@ -293,19 +418,7 @@ function PanelApp({ route }: { route: Route }) {
   const view = usePanelView(route, selectedId, sliced.params);
   const [clearing, setClearing] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [detailsHost, setDetailsHost] = useState<HTMLElement | null>(null);
-  const [actionsHost, setActionsHost] = useState<HTMLElement | null>(null);
   useSearchKey(setSearching);
-  const wfRows = useRef<HTMLDivElement>(null);
-  // The record opened, at the top of the rows: closing the one above it would move it away from the click.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the record opened, not each thing it draws.
-  useEffect(() => {
-    if (!PANEL_V2) return;
-    const frame = requestAnimationFrame(() =>
-      wfRows.current?.querySelector(".dt-requests-open")?.parentElement?.scrollIntoView({ block: "start" }),
-    );
-    return () => cancelAnimationFrame(frame);
-  }, [selectedId]);
   const onFollow = (value: boolean) => {
     setFollow(value);
     writeFollow(value);
@@ -344,90 +457,41 @@ function PanelApp({ route }: { route: Route }) {
   );
   const tabCount = `${tabRows.length} ${tabRows.length === 1 ? "request" : "requests"}`;
   if (PANEL_V2) {
-    const open = selectedId ? (
-      <TraceScreen
-        key={route.name === "trace" ? `${route.tab ?? ""}|${route.under ?? ""}` : ""}
-        id={selectedId}
-        source={source}
-        arriving={arrivingIn(rows, stored, selectedId)}
-        running={runningIn(rows, selectedId)}
-        variant="waterfall"
-        detailsHost={detailsHost}
-        actionsHost={actionsHost}
-        initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
-        initialUnder={route.name === "trace" ? route.under : undefined}
-        initialSlice={sliced.slice}
-        onSliceChange={sliced.onChange}
-        onTabShown={view.onTabShown}
-        initialMemory={view.initialMemory}
-        onMemoryChange={view.onMemoryChange}
-        links={PANEL_LINKS}
-        explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
-      />
-    ) : null;
     return (
-      <div className="panel" data-v2="">
-        <SearchPalette
-          open={searching}
-          onOpenChange={setSearching}
-          source={source}
-          items={NAV}
-          openRoute={(target) =>
-            target.name === "trace" ? go(target) : window.open(`${base}${href(target)}`, "_blank", "noopener")
-          }
-        />
-        <header className="panel-top">
-          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
-          <BackTo view={back} rows={listed} bare={false} />
-          <span className="flex shrink-0 items-center gap-1">
-            <ListToggles
-              follow={follow}
-              onFollow={onFollow}
-              onClear={() => setClearing(true)}
-              clearLabel={`Clear ${tabCount}`}
-            />
-          </span>
-          <div className="bar-actions">
-            <PanelActions
-              user={switchUser}
-              consoleAt={consoleAt}
-              explore={<span ref={setActionsHost} className="contents" />}
-              traceId={selectedId}
-              dock={dock}
-            />
-          </div>
-        </header>
-        <div className="panel-wf" data-dock={dock}>
-          <div className="panel-wf-rows" ref={wfRows}>
-            {history && tabRows.length === 0 ? (
-              <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
-            ) : (
-              <TraceList
-                compact={true}
-                services={manyApps(rows)}
-                rows={inOrder(true, shown.rows)}
-                selectedId={selectedId}
-                currentId={currentId}
-                chains={chains}
-                opensOn={opensOn}
-                onSelect={(id) => go({ name: "trace", id })}
-                openContent={open}
+      <PanelWaterfall
+        route={route}
+        selectedId={selectedId}
+        rows={rows}
+        listRows={inOrder(true, shown.rows)}
+        stored={stored}
+        chains={chains}
+        opensOn={opensOn}
+        currentId={currentId}
+        toolbar={
+          <>
+            <BackTo view={back} rows={listed} bare={false} />
+            <span className="flex shrink-0 items-center gap-1">
+              <ListToggles
+                follow={follow}
+                onFollow={onFollow}
+                onClear={() => setClearing(true)}
+                clearLabel={`Clear ${tabCount}`}
               />
-            )}
-          </div>
-          <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
-        </div>
-        <ClearDialog
-          mode="panel"
-          open={clearing}
-          onOpenChange={setClearing}
-          source={source}
-          onCleared={(permanent) => {
-            tellWidget("tracepanel:clear", { all: permanent });
-            go({ name: "home" });
-          }}
-        />
-      </div>
+            </span>
+          </>
+        }
+        actions={(explore) => (
+          <PanelActions user={switchUser} consoleAt={consoleAt} explore={explore} traceId={selectedId} dock={dock} />
+        )}
+        dock={dock}
+        empty={history !== null && tabRows.length === 0}
+        sliced={sliced}
+        view={view}
+        searching={searching}
+        setSearching={setSearching}
+        clearing={clearing}
+        setClearing={setClearing}
+      />
     );
   }
 

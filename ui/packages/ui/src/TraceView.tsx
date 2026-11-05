@@ -46,7 +46,7 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { type Member, scopedIssues, scopedSpans } from "./lib/scope";
+import { type Member, type SpanScope, scopedIssues, scopedSpans } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
@@ -370,6 +370,79 @@ function placeExplore(
   actions: TraceViewProps["actions"],
 ): { explore: ReactNode; actions: ReactNode } {
   return typeof actions === "function" ? { explore: null, actions: actions(explore) } : { explore, actions };
+}
+
+/**
+ * Which tab shows for the row picked: a row with more under it opens on what is wrong there, a single call on its own
+ * details, the root on its error, its issues or its request. A tab the row has nothing for gives way to its details.
+ */
+function useWaterfallTabs(
+  waterfall: boolean,
+  trace: Trace,
+  chain: TraceScope,
+  findings: readonly Issue[],
+  tabs: readonly { id: TabId }[],
+  active: TabId,
+  setActive: (tab: TabId) => void,
+) {
+  useEffect(() => {
+    if (waterfall && !tabs.some((tab) => tab.id === active)) setActive("tree");
+  }, [waterfall, tabs, active, setActive]);
+  return (scope: SpanScope | null) => {
+    chain.setScope(scope);
+    setActive(scope ? pickedTab(chain, scope) : rootTab(trace, findings));
+  };
+}
+
+function pickedTab(chain: TraceScope, scope: SpanScope): TabId {
+  const more = scopedSpans(chain.members, scope, () => true).length > 1;
+  const wrong = scopedIssues(chain.members, scope, chain.chainIssues).some((issue) => issue.kind !== "error");
+  return more && wrong ? "issues" : "tree";
+}
+
+function rootTab(trace: Trace, findings: readonly Issue[]): TabId {
+  if (trace.errors.length > 0) return "error";
+  return findings.length > 0 ? "issues" : "request";
+}
+
+/** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
+function WaterfallParts({
+  traceId,
+  rows,
+  tabs,
+  panel,
+  explore,
+  hosts,
+  showRow,
+  onSlot,
+}: {
+  traceId: string;
+  rows: ReactNode;
+  tabs: ReactNode;
+  panel: ReactNode;
+  explore: ReactNode;
+  hosts: { details: HTMLElement | null | undefined; actions: HTMLElement | null | undefined };
+  showRow: boolean;
+  onSlot: (slot: HTMLElement | null) => void;
+}) {
+  return (
+    <>
+      <article className="dt-trace" data-variant="waterfall" data-trace={traceId}>
+        {rows}
+      </article>
+      {hosts.actions && explore ? createPortal(explore, hosts.actions) : null}
+      {hosts.details
+        ? createPortal(
+            <div className="dt-trace" data-variant="details">
+              {tabs}
+              <div ref={onSlot} className="dt-details-row" hidden={!showRow} />
+              {panel}
+            </div>,
+            hosts.details,
+          )
+        : null}
+    </>
+  );
 }
 
 export interface TraceViewProps {
@@ -840,10 +913,7 @@ export function TraceView({
     logs: waterfall ? chain.scoped.length : chain.logs.length,
     profiled: chain.members.some((member) => member.trace.profile !== undefined),
   });
-  // Under a row that has none of what the tab lists, the tab is gone: its details instead.
-  useEffect(() => {
-    if (waterfall && !tabs.some((tab) => tab.id === active)) setActive("tree");
-  }, [waterfall, tabs, active]);
+  const onPicked = useWaterfallTabs(waterfall, trace, chain, findings, tabs, active, setActive);
   // A tab the link asked for that only the chain has (the DB tab of a browser's view): opened once the chain came.
   const asked = useAskedTab(initialTab, tabs, setActive);
 
@@ -862,26 +932,7 @@ export function TraceView({
       open={waterfall ? true : active === "tree"}
       plain={waterfall}
       detailsHost={waterfall ? detailsSlot : undefined}
-      onPicked={
-        waterfall
-          ? (scope) => {
-              chain.setScope(scope);
-              setActive(
-                scope
-                  ? // A row with more under it opens on what is wrong there; a single call on its own details.
-                    scopedSpans(chain.members, scope, () => true).length > 1 &&
-                    scopedIssues(chain.members, scope, chain.chainIssues).some((issue) => issue.kind !== "error")
-                    ? "issues"
-                    : "tree"
-                  : trace.errors.length
-                    ? "error"
-                    : findings.length
-                      ? "issues"
-                      : "request",
-              );
-            }
-          : undefined
-      }
+      onPicked={waterfall ? onPicked : undefined}
       onSelect={openAt}
       trace={trace}
       issueBySpan={tabbed.issueBySpan}
@@ -949,25 +1000,20 @@ export function TraceView({
   const placed = placeExplore(exploreMenu, actions);
   const tabsBar = <Tabs label="Trace details" tabs={tabs} active={active} onChange={openTab} />;
 
-  // The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons.
   if (waterfall) {
     return (
       <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
         <UntracedCalls value={chain.untraced}>
-          <article className="dt-trace" data-variant="waterfall" data-trace={trace.id}>
-            {treePane}
-          </article>
-          {actionsHost && exploreMenu ? createPortal(exploreMenu, actionsHost) : null}
-          {detailsHost
-            ? createPortal(
-                <div className="dt-trace" data-variant="details">
-                  {tabsBar}
-                  <div ref={setDetailsSlot} className="dt-details-row" hidden={active !== "tree"} />
-                  {panel}
-                </div>,
-                detailsHost,
-              )
-            : null}
+          <WaterfallParts
+            traceId={trace.id}
+            rows={treePane}
+            tabs={tabsBar}
+            panel={panel}
+            explore={exploreMenu}
+            hosts={{ details: detailsHost, actions: actionsHost }}
+            showRow={active === "tree"}
+            onSlot={setDetailsSlot}
+          />
         </UntracedCalls>
       </ViewScopes>
     );

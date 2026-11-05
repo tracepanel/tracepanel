@@ -273,21 +273,37 @@ function ListItem({
         opens={opensOn?.(trace)}
         onSelect={onSelect}
       />
-      {trace.id === selectedId && openContent !== undefined ? (
-        <div className="dt-requests-open">{openContent}</div>
-      ) : null}
-      {withOpens && openContent === undefined && fold?.open !== false ? (
-        <RowChain
-          rowId={trace.id}
-          level={(row.depth ?? 0) + 1}
-          rows={under}
-          chains={withOpens}
-          selectedId={selectedId}
-          onSelect={onSelect}
-        />
-      ) : null}
+      <RowOpens
+        selected={trace.id === selectedId}
+        openContent={openContent}
+        chain={
+          withOpens && fold?.open !== false
+            ? { rowId: trace.id, level: (row.depth ?? 0) + 1, rows: under, chains: withOpens }
+            : undefined
+        }
+        selectedId={selectedId}
+        onSelect={onSelect}
+      />
     </li>
   );
+}
+
+/** Under a row: what it opens to where the list has that (only under the selected one), else its trace's chain. */
+function RowOpens({
+  selected,
+  openContent,
+  chain,
+  selectedId,
+  onSelect,
+}: {
+  selected: boolean;
+  openContent: ReactNode;
+  chain: { rowId: string; level: number; rows: boolean; chains: ListChains } | undefined;
+  selectedId: TraceListProps["selectedId"];
+  onSelect: TraceListProps["onSelect"];
+}) {
+  if (openContent !== undefined) return selected ? <div className="dt-requests-open">{openContent}</div> : null;
+  return chain ? <RowChain {...chain} selectedId={selectedId} onSelect={onSelect} /> : null;
 }
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
