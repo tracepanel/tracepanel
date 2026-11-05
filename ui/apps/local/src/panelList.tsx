@@ -19,6 +19,8 @@ import {
 } from "@tracepanel/ui";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
+import { cn } from "@tracepanel/ui/lib/utils";
+import { ArrowUpToLineIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNewIds } from "./hooks";
 import { ProfileToggle } from "./ProfileToggle";
@@ -29,9 +31,30 @@ import { base, source } from "./panelSource";
 import { consoleLinks, go } from "./routes";
 import { graphqlOperation, requestPath } from "./sections";
 
+/** The panel as one waterfall; the older one stays behind this for now. */
+export const PANEL_V2 = readItem("tracepanel:panel-v1") !== "1";
+
 /** Follow new: open each request as it arrives. */
 function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
   const byPointer = useRef(false);
+  if (PANEL_V2) {
+    return (
+      <Hint
+        title={follow ? "Following new requests" : "Follow new requests"}
+        detail="Opens each request as it arrives."
+      >
+        <button
+          type="button"
+          className={cn("icon-button", follow && "text-brand hover:text-brand")}
+          aria-label="Follow new"
+          aria-pressed={follow}
+          onClick={() => onFollow(!follow)}
+        >
+          <ArrowUpToLineIcon />
+        </button>
+      </Hint>
+    );
+  }
   return (
     <label
       className="toggle"

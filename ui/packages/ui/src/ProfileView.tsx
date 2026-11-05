@@ -830,7 +830,10 @@ function Flame({
               box={box}
               tone={toneOf(palette, box.node.frame ? packageOf(box.node.frame) : "")}
               faded={box.node.frame !== null && faded(lit, colored(palette, packageOf(box.node.frame)))}
-              onZoom={() => setFocus(box.node)}
+              onZoom={() => {
+                setFocus(box.node);
+                setHover(null);
+              }}
               onHover={(event) => track(event, box.node)}
               onLeave={() => setHover(null)}
             />

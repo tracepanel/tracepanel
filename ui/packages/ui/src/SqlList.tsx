@@ -4,6 +4,7 @@ import {
   CallLine,
   CallLines,
   CallTable,
+  calledFrom,
   countColumn,
   DetailsTitle,
   type Explain,
@@ -14,6 +15,7 @@ import {
   QueryPlan,
   type RowTime,
   rowTime,
+  sameOrigin,
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
@@ -140,15 +142,31 @@ function LibraryCaller({ caller, className }: { caller: string; className?: stri
   );
 }
 
+/** What a query's line says when its heading has said where it ran: the rows it returned. */
+function rowsOf(span: Span): string | null {
+  const rows = span.attrs["db.response.returned_rows"];
+  return rows === undefined ? null : `${rows} ${rows === 1 ? "row" : "rows"}`;
+}
+
 /** Where each query of a group was made, one line each, with its time. */
 function CalledFromList({ spans, focus }: { spans: readonly Span[]; focus: ReadonlySet<string> | undefined }) {
-  const heading = spans.length === 1 ? "Called from" : `Called ${spans.length} times from`;
-  const bare = useContext(HiddenColumns) !== null && spans.length === 1;
+  const beside = useContext(HiddenColumns) !== null;
+  const oneOrigin = beside ? sameOrigin(spans) : null;
+  const heading = oneOrigin
+    ? calledFrom(spans.length, oneOrigin)
+    : spans.length === 1
+      ? "Called from"
+      : `Called ${spans.length} times from`;
+  const bare = beside && spans.length === 1;
   return (
     <CallLines heading={<SectionHeading>{heading}</SectionHeading>}>
       {spans.map((span, index) => (
         <CallLine key={span.id} index={index} focused={focus?.has(span.id) ?? false} time={span.duration} bare={bare}>
-          <CalledFrom span={span} className="truncate" />
+          {oneOrigin ? (
+            <span className="text-muted-foreground">{rowsOf(span)}</span>
+          ) : (
+            <CalledFrom span={span} className="truncate" />
+          )}
         </CallLine>
       ))}
     </CallLines>

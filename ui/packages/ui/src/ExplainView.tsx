@@ -80,7 +80,7 @@ function PlanFacts({ plan }: { plan: ExplainPlan }) {
   const warnings = plan.lines.filter((line) => line.warning).length;
   return (
     <>
-      <span className="text-sm text-muted-foreground">
+      <span className="dt-plan-where text-sm text-muted-foreground">
         {plan.vendor} · {plan.alias}
         {plan.analyzed ? " · analyzed" : ""}
       </span>

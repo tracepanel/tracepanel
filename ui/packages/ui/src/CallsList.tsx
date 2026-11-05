@@ -3,6 +3,7 @@ import {
   CallLine,
   CallLines,
   CallTable,
+  calledFrom,
   countColumn,
   DetailsTitle,
   groupTitle,
@@ -11,12 +12,14 @@ import {
   listTime,
   type RowTime,
   rowTime,
+  sameOrigin,
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
 import { HiddenColumns } from "./DataTable";
 import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
 import { callTemplate, groupNoun } from "./lib/calls";
+import { cn } from "./lib/utils";
 import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
 import { GroupNotTraced, NotTraced } from "./Untraced";
@@ -101,9 +104,9 @@ function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
 }
 
 /** One call's outcome: its HTTP status as every list shows one, else whether it failed. */
-function Status({ span }: { span: Span }) {
+function Status({ span, dot }: { span: Span; dot: boolean }) {
   const { status, tone } = callAnswer(span);
-  if (status !== null) return <StatusBadge status={status} />;
+  if (status !== null) return <StatusBadge status={status} dot={dot} />;
   return tone === "error" ? <span className="text-destructive">failed</span> : <span>—</span>;
 }
 
@@ -120,20 +123,39 @@ function textsOf(span: Span): { url: string; origin: string; failure: string } {
   };
 }
 
-function Call({ span, index, focused, bare }: { span: Span; index: number; focused: boolean; bare: boolean }) {
+function Call({
+  span,
+  index,
+  focused,
+  bare,
+  saidOrigin = false,
+}: {
+  span: Span;
+  index: number;
+  focused: boolean;
+  bare: boolean;
+  /** Its list's heading says where its calls were made. */
+  saidOrigin?: boolean | undefined;
+}) {
   const { url, origin, failure } = textsOf(span);
+  const beside = useContext(HiddenColumns) !== null;
   return (
     <CallLine index={index} focused={focused} time={span.duration} bare={bare}>
-      <span className="grid min-w-0 grid-cols-[3rem_minmax(0,1fr)] items-center gap-3">
+      <span
+        className={cn(
+          "grid min-w-0 items-center gap-3",
+          beside ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[3rem_minmax(0,1fr)]",
+        )}
+      >
         <span className="font-mono tabular-nums" title={failure}>
-          <Status span={span} />
+          <Status span={span} dot={beside} />
         </span>
         <span className="grid min-w-0">
           <span className="flex min-w-0 items-center gap-2">
             <code className="truncate font-mono">{url}</code>
             <NotTraced spanId={span.id} />
           </span>
-          <code className="truncate font-mono text-muted-foreground">{origin}</code>
+          {saidOrigin ? null : <code className="truncate font-mono text-muted-foreground">{origin}</code>}
         </span>
       </span>
     </CallLine>
@@ -189,12 +211,20 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
   // Beside the tree the open row has just said how many and how long.
   const beside = useContext(HiddenColumns) !== null;
   const bare = beside && count === 1;
+  const oneOrigin = beside ? sameOrigin(group.spans) : null;
   return (
     <>
       {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
-      <CallLines heading={bare ? null : <SectionHeading>{count === 1 ? "Call" : `${count} calls`}</SectionHeading>}>
+      <CallLines heading={bare ? null : <SectionHeading>{calledFrom(count, oneOrigin)}</SectionHeading>}>
         {group.spans.map((span, index) => (
-          <Call key={span.id} span={span} index={index} focused={focus?.has(span.id) ?? false} bare={bare} />
+          <Call
+            key={span.id}
+            span={span}
+            index={index}
+            focused={focus?.has(span.id) ?? false}
+            bare={bare}
+            saidOrigin={oneOrigin !== null && !bare}
+          />
         ))}
       </CallLines>
     </>

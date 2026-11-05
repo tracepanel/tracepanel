@@ -219,6 +219,19 @@ export function issueOfRepeats(
   return first && kinds.every((kind) => kind === first) ? first : undefined;
 }
 
+/** Where calls were all made, when that is one place. */
+export function sameOrigin(spans: readonly Span[]): string | null {
+  const origins = new Set(spans.map((span) => String(span.attrs["code.origin"] ?? "")));
+  const [origin] = origins;
+  return origins.size === 1 && origin ? origin : null;
+}
+
+/** The heading over an open row's calls: how many, and where from when that is one place. */
+export function calledFrom(count: number, origin: string | null): string {
+  if (count === 1) return origin ? `Called from ${origin}` : "Call";
+  return origin ? `Called ${count} times from ${origin}` : `Called ${count} times`;
+}
+
 /** How many calls a row folds, in a column of its own: raised when they are an N+1. */
 export function countColumn<T>(count: (item: T) => number, repeats: (item: T) => boolean): DataColumn<T> {
   return {

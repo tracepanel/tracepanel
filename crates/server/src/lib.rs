@@ -248,12 +248,17 @@ async fn traces(State(reader): State<Shared>, Query(query): Params) -> Response 
     let limit = limit(&query);
     // The panel's list asks for the task runs its requests led to, to nest them under each.
     let runs = query.get("runs").is_some_and(|runs| runs == "1");
+    // And what each one's whole chain adds up to: a view's numbers are those of the calls under it.
+    let counts = query.get("counts").is_some_and(|counts| counts == "1");
     if !ids.is_empty() {
         return answer(
             read(&reader, move |reader| {
                 let mut listing = json!({"traces": reader.list_traces(&ids, limit)?, "next": null});
                 if runs {
                     listing["runs"] = reader.runs(&ids)?;
+                }
+                if counts {
+                    listing["counts"] = reader.chain_counts(&ids)?;
                 }
                 Ok(listing)
             })

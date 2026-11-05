@@ -18,7 +18,6 @@ import {
   type ViewMemory,
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
-import { readItem } from "@tracepanel/ui/lib/storage";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ClearDialog } from "./ClearDialog";
@@ -36,6 +35,7 @@ import {
   ListToggles,
   opensOnTab,
   PANEL_LINKS,
+  PANEL_V2,
   PageRequests,
   RequestSwitcher,
   readFollow,
@@ -440,14 +440,14 @@ function PanelWaterfall({
   );
 }
 
-/** The panel as one waterfall (docs: panel v2). `localStorage["tracepanel:panel-v1"] = "1"` brings the old one back. */
-const PANEL_V2 = readItem("tracepanel:panel-v1") !== "1";
+const NO_ROWS: readonly TraceRow[] = [];
 
 function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
-  const { rows, stored, runs } = useTabRows(history);
+  const { rows, stored, runs, counts } = useTabRows(history);
   const listed = withRuns(rows, runs);
-  const rowChains = useRowChains(listed, stored);
+  // The list says what each chain adds up to: the waterfall needs no chain loaded per row for its numbers.
+  const rowChains = useRowChains(PANEL_V2 && counts ? NO_ROWS : listed, stored);
   // Each view's calls from its chain in the rows they were in flight (withViewCalls): the list shows these.
   const settled = settledIn(rowChains.settled, rows, stored);
   const known = withLoads(useKnownApps(listed), listed, history?.runtime ?? undefined);
@@ -478,7 +478,7 @@ function PanelApp({ route }: { route: Route }) {
   const chains: ListChains = {
     apps: shown.apps,
     loading: rowChains.loading,
-    counts: rowChains.counts,
+    counts: (PANEL_V2 ? counts : undefined) ?? rowChains.counts,
     settled,
     cut: rowChains.cut,
     open: chainOpen,

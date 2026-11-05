@@ -48,9 +48,23 @@ export function FailedStatus({ failure }: { failure?: string | undefined }) {
   );
 }
 
-export function StatusBadge({ status }: { status: number | null | undefined }) {
+export function StatusBadge({ status, dot = false }: { status: number | null | undefined; dot?: boolean }) {
+  const dotted = useContext(KindWords) !== null || dot;
   if (status === null || status === undefined) return null;
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";
+  // Beside the bars a success is a dot, its code on hover: only what went otherwise says its number.
+  if (dotted && tone === "ok") {
+    return (
+      <span
+        className="dt-status"
+        data-tone={tone}
+        data-dot=""
+        title={String(status)}
+        role="img"
+        aria-label={String(status)}
+      />
+    );
+  }
   return (
     <span className="dt-status" data-tone={tone}>
       {status}

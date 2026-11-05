@@ -8,6 +8,7 @@ import {
   type TraceSummary,
   waitingUntil,
 } from "@tracepanel/ui";
+import type { RowCounts } from "@tracepanel/ui/lib/chainCounts";
 import { readJson, writeItem } from "@tracepanel/ui/lib/storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TabHistory, usePolling } from "./hooks";
@@ -19,6 +20,7 @@ import { type Counter, chainCounter, countsOf, cutsOf, type KnownApp, knownApps,
 interface TabTraces {
   traces: TraceSummary[];
   runs: Runs;
+  counts?: Record<string, RowCounts> | undefined;
 }
 
 const NO_TRACES: TabTraces = { traces: [], runs: NO_RUNS };
@@ -34,7 +36,12 @@ function loadTab(ids: readonly string[]): Promise<TabTraces> {
  * The tab's rows, which of them the agent has stored (the others are the widget's own, still on their way), and the
  * task runs each request led to, as the workers record them.
  */
-export function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: ReadonlySet<string>; runs: Runs } {
+export function useTabRows(history: TabHistory | null): {
+  rows: TraceRow[];
+  stored: ReadonlySet<string>;
+  counts: ReadonlyMap<string, RowCounts> | undefined;
+  runs: Runs;
+} {
   const ids = idsOf(history);
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
@@ -42,10 +49,11 @@ export function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stor
   // The last answer's: whether a row that just ended is still on its way, so the list asks sooner.
   const known = useRef<ReadonlySet<string>>(new Set());
   const soon = (history?.entries ?? []).some((entry) => justEnded(entry, known.current));
-  const { traces, runs } = usePolling(load, soon ? ARRIVING_POLL_MS : TAB_POLL_MS) ?? NO_TRACES;
+  const { traces, runs, counts } = usePolling(load, soon ? ARRIVING_POLL_MS : TAB_POLL_MS) ?? NO_TRACES;
   const stored = useMemo(() => new Set(traces.map((trace) => trace.id)), [traces]);
   known.current = stored;
-  return { rows: history ? arrange(history, traces) : [], stored, runs };
+  const rowCounts = useMemo(() => (counts ? new Map<string, RowCounts>(Object.entries(counts)) : undefined), [counts]);
+  return { rows: history ? arrange(history, traces) : [], stored, runs, counts: rowCounts };
 }
 
 /** How often the tab's rows are asked for. */

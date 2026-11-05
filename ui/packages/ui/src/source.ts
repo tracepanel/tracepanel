@@ -1,3 +1,4 @@
+import type { RowCounts } from "./lib/chainCounts";
 import type { Snapshot } from "./snapshot";
 import type {
   App,
@@ -52,6 +53,8 @@ const EMPTY_OVERVIEW: TracesOverview = {
 export interface TracesWithRuns {
   traces: TraceSummary[];
   runs: Record<string, TraceSummary[]>;
+  /** What each one's whole chain adds up to; none from an agent too old to say. */
+  counts?: Record<string, RowCounts> | undefined;
 }
 
 /** A search query the API rejected (unknown filter, bad value): `message` is meant for the user. */
@@ -233,9 +236,9 @@ export function httpSource(base: string | URL): DataSource {
       return (await getJson<{ traces: TraceSummary[] }>(url("traces", params)))?.traces ?? [];
     },
     async listTracesWithRuns(ids) {
-      const params = { ids: ids.join(","), limit: ids.length, runs: 1 };
+      const params = { ids: ids.join(","), limit: ids.length, runs: 1, counts: 1 };
       const body = (await getJson<Partial<TracesWithRuns>>(url("traces", params))) ?? {};
-      return { traces: body.traces ?? [], runs: body.runs ?? {} };
+      return { traces: body.traces ?? [], runs: body.runs ?? {}, counts: body.counts };
     },
     async searchTraces(q, before) {
       const body = await getJson<{ traces: TraceSummary[]; next: number | null }>(url("traces", { q, before }));

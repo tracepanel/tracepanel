@@ -16,6 +16,10 @@ pub(crate) const RELATED_LIMIT: i64 = 100;
 /// A connection per call: WAL lets readers run beside the writer.
 pub struct Reader {
     path: PathBuf,
+    /// What each chain found across apps, by its first trace and how many traces it had: the documents are read
+    /// once per chain as it stands, however often a list asks.
+    pub(crate) across_apps:
+        std::sync::Mutex<std::collections::HashMap<(String, usize), crate::scope::AcrossApps>>,
 }
 
 pub(crate) fn json_value(value: rusqlite::types::ValueRef<'_>) -> Value {
@@ -1108,6 +1112,7 @@ impl Reader {
     pub fn new(path: &Path) -> Self {
         Self {
             path: path.to_owned(),
+            across_apps: Default::default(),
         }
     }
 

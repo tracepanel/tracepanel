@@ -6,7 +6,7 @@ import { ago, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { NoAnswer, Pending, Running } from "./LiveMarks";
 import { ISSUE_LABELS } from "./labels";
-import type { ChainCounts } from "./lib/chainCounts";
+import type { RowCounts } from "./lib/chainCounts";
 import {
   type ChainApp,
   type ChainEntry,
@@ -150,7 +150,7 @@ export interface ListChains {
    * By the row's trace id: what its whole chain did (lib/chainCounts), as the pill and the trace's tabs count it. The
    * row says it, a view's too, whose own trace ran nothing.
    */
-  counts?: ReadonlyMap<string, ChainCounts> | undefined;
+  counts?: ReadonlyMap<string, RowCounts> | undefined;
   /**
    * The rows whose chain has loaded once: until then a row's numbers are pending, not a definite 0 that jumps once
    * its calls' traces are counted. Undefined where chains aren't loaded at all: a row's own numbers are all there is.
@@ -173,7 +173,7 @@ function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
 }
 
 /** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
-function withChain(trace: TraceSummary, counts: ChainCounts | undefined): TraceSummary {
+function withChain(trace: TraceSummary, counts: RowCounts | undefined): TraceSummary {
   if (!counts || counts.traces < 2) return trace;
   // biome-ignore lint/style/useNamingConvention: wire format.
   return { ...trace, queries: counts.queries, issues: counts.issues, issue_kinds: counts.kinds };
@@ -373,45 +373,45 @@ export function RecordRow({
 }) {
   const page = trace.kind === "page" ? pageParts(trace.name) : null;
   return (
-    <button
-      type="button"
-      className="dt-map-row dt-record"
-      data-kind={trace.kind}
-      data-live={live ? "" : undefined}
-      aria-current={live ? "true" : undefined}
-      data-new={fresh ? "" : undefined}
-      onClick={() => onSelect(target ?? trace.id)}
-    >
-      <span className="dt-map-name" style={indentOf(depth)}>
-        <span className="dt-map-lead">
-          <span className="dt-map-caret" data-toggle="">
-            <ChevronRightIcon />
-          </span>
-          <KindWords.Provider value={WATERFALL_KINDS}>
+    <KindWords.Provider value={WATERFALL_KINDS}>
+      <button
+        type="button"
+        className="dt-map-row dt-record"
+        data-kind={trace.kind}
+        data-live={live ? "" : undefined}
+        aria-current={live ? "true" : undefined}
+        data-new={fresh ? "" : undefined}
+        onClick={() => onSelect(target ?? trace.id)}
+      >
+        <span className="dt-map-name" style={indentOf(depth)}>
+          <span className="dt-map-lead">
+            <span className="dt-map-caret" data-toggle="">
+              <ChevronRightIcon />
+            </span>
             <KindBadge
               kind={page ? page.badge.toLowerCase() : spanKindLabel(trace.kind, {})}
               muted={true}
               className="dt-map-kind"
             />
-          </KindWords.Provider>
-          <span className="dt-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
-          {live ? null : <span className="dt-record-ago">{ago(trace.start)}</span>}
+            <span className="dt-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
+            {live ? null : <span className="dt-record-ago">{ago(trace.start)}</span>}
+          </span>
+          <StatusSlot status={page ? null : trace.http_status} />
+          <span className="dt-map-chips">
+            <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
+          </span>
         </span>
-        <StatusSlot status={page ? null : trace.http_status} />
-        <span className="dt-map-chips">
-          <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
+        <span className="dt-map-track">
+          {live ? <span className="dt-map-bar dt-record-live" /> : null}
+          {share === undefined ? null : (
+            <span className="dt-map-bar dt-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
+          )}
         </span>
-      </span>
-      <span className="dt-map-track">
-        {live ? <span className="dt-map-bar dt-record-live" /> : null}
-        {share === undefined ? null : (
-          <span className="dt-map-bar dt-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
-        )}
-      </span>
-      <span className="dt-map-time">
-        <RowTime trace={trace} open={open} until={until} />
-      </span>
-    </button>
+        <span className="dt-map-time">
+          <RowTime trace={trace} open={open} until={until} />
+        </span>
+      </button>
+    </KindWords.Provider>
   );
 }
 

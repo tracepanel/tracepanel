@@ -8,6 +8,9 @@ import { CALL_TABS, callsOfTab } from "./callTabs";
 import { plural } from "./plural";
 import { type Member, membersOf, scopedIssues, scopedSpans } from "./scope";
 
+/** What a row of a list says of its whole chain, as the agent's list answers it, or counted from the chain. */
+export type RowCounts = Pick<ChainCounts, "queries" | "issues" | "kinds" | "traces">;
+
 export interface ChainCounts {
   queries: number;
   calls: number;

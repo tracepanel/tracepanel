@@ -2263,8 +2263,7 @@ body {
 .panel-wf-details .dt-scope-summary {
   justify-content: flex-end;
 }
-.panel-wf .dt-map-row .dt-map-logs,
-.panel-wf .dt-map-row .dt-request-queries {
+.panel-wf .dt-map-row .dt-map-logs {
   display: none;
 }
 
@@ -2488,7 +2487,6 @@ body {
   min-width: 3rem;
 }
 @container panel-top (max-width: 40rem) {
-  .panel-top-controls label > span:last-child,
   .panel-top-controls span[class*="brand"],
   .panel-filter > kbd {
     display: none;
@@ -2624,4 +2622,24 @@ body {
 /* A row's marks end at the column's edge, whatever else the row holds. */
 .panel-wf .dt-map-row .dt-map-chips {
   justify-content: flex-end;
+}
+
+/* A success beside the bars: its tone's dot alone. */
+.panel-wf .dt-status[data-dot] {
+  display: inline-block;
+  flex: none;
+  width: 0.375rem;
+  height: 0.375rem;
+  min-width: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--dt-ok, #1a7f37);
+}
+.panel-wf .dt-status[data-dot]::before {
+  display: none;
+}
+
+/* The query's fields just above say which database. */
+.panel-wf-details .dt-plan-where {
+  display: none;
 }
