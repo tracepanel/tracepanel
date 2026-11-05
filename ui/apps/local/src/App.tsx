@@ -335,7 +335,7 @@ function PanelWaterfall({
   const split = useNamesSplit(detailsEmpty);
   const details = useDetailsSplit(dock);
   return (
-    <div className="panel" data-v2="" style={split.style}>
+    <div className="panel" data-v2="" style={{ ...split.style, ...details.style }}>
       <SearchPalette
         open={searching}
         onOpenChange={setSearching}
@@ -345,14 +345,14 @@ function PanelWaterfall({
           target.name === "trace" ? go(target) : window.open(`${base}${href(target)}`, "_blank", "noopener")
         }
       />
-      <header className="panel-top">
-        <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
-        <div className="bar-actions">
+      <header className="panel-top" data-dock={dock}>
+        <div className="panel-top-rows">
+          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
           <div className="panel-top-controls">{toolbar}</div>
-          {actions(<span ref={setActionsHost} className="contents" />)}
         </div>
+        <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
-      <div className="panel-wf" data-dock={dock} data-no-details={detailsEmpty ? "" : undefined} style={details.style}>
+      <div className="panel-wf" data-dock={dock} data-no-details={detailsEmpty ? "" : undefined}>
         <div className="panel-wf-tree" ref={split.areaRef}>
           {empty ? null : <NamesSplitter {...split.handle} />}
           <div className="panel-wf-rows" ref={list}>

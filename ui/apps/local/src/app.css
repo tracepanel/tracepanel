@@ -2175,11 +2175,35 @@ body {
 }
 
 /* The call tree and its bars, split by a line that moves. */
+/* The bar has the panel's two parts: the rows', its controls ending at the details' line; the details', its actions. */
+.panel-top {
+  gap: 0;
+  padding: 0;
+}
+.panel-top-rows {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0 0.625rem 0 0.875rem;
+}
 .panel-top-controls {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-right: 0.5rem;
+  margin-left: auto;
+}
+.panel-top > .bar-actions {
+  flex: none;
+  justify-content: flex-end;
+  width: var(--wf-details, 38%);
+  min-width: max-content;
+  margin-left: 0;
+  padding: 0 0.5rem 0 0.625rem;
+}
+.panel-top[data-dock="right"] > .bar-actions {
+  width: auto;
 }
 .panel-wf-tree {
   position: relative;
@@ -2322,14 +2346,6 @@ body {
   display: none;
 }
 
-/* The line between tree and bars runs up through the bar above; docked right, that bar has no room to spare. */
-.panel-wf-split {
-  top: -2.5rem;
-}
-.panel-wf[data-dock="right"] .panel-wf-split {
-  top: 0;
-}
-
 /* A record with no tree yet: a bar across its track that breathes, its time ticking. */
 .dt-record-live {
   left: 0;
@@ -2363,4 +2379,23 @@ body {
 .panel-wf-details [data-split-head] [data-cover],
 .panel-wf-details [data-split-head] [data-sampled] {
   display: none;
+}
+
+/* The details' line runs up through the bar above, between its two parts. */
+.panel-wf:not([data-dock="right"]) .panel-wf-details-split {
+  top: -2.5rem;
+}
+.panel-wf:not([data-dock="right"]) .panel-wf-details-split::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--dt-border);
+  content: "";
+}
+.panel-wf:not([data-dock="right"]) .panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--dt-accent);
 }
