@@ -1,6 +1,6 @@
 import { type ReactNode, useContext } from "react";
 import { AsReceived } from "./AsReceived";
-import { Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
+import { hopTimes, Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
 import { appName, type Linked, OpenRun } from "./CallRows";
 import { type Explain, QueryPlan } from "./CallTable";
 import type { Node, Remote, ServedRun } from "./callTree";
@@ -256,7 +256,7 @@ function HopDetails({
         <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
         <AsReceived span={span} />
       </section>
-      <ServedBy served={served} trace={trace} links={links} onTraceProfile={onTraceProfile} />
+      <ServedBy span={span} served={served} trace={trace} links={links} onTraceProfile={onTraceProfile} />
     </div>
   );
 }
@@ -275,16 +275,32 @@ function withDocument(attrs: Attrs, served?: Attrs | undefined): Attrs {
 
 /** What served a merged call: its app, its trace's name and findings, the ways to it and to its profile. */
 function ServedBy({
+  span,
   served,
   trace,
   links,
   onTraceProfile,
 }: {
+  span: Span;
   served: ServedRun;
   trace: Trace;
   links: TraceLinks | undefined;
   onTraceProfile: TraceProfileOpener | undefined;
 }) {
+  const waterfall = useContext(KindWords) !== null;
+  if (waterfall) {
+    const [split, note] = hopTimes(span, served).split("\n");
+    return (
+      <section className="grid gap-3" aria-label={`Served by ${appName(served) ?? "another app"}`}>
+        <ServedHeading served={served} />
+        <p className="dt-map-details-title" title={note}>
+          {split}
+        </p>
+        <OpenRun run={served.run} words={RUN_WORDS.call} links={links} remote={served.remote} whole={served.whole} />
+        <ProfileLink open={servedProfile(served, onTraceProfile)} />
+      </section>
+    );
+  }
   return (
     <section className="grid gap-3" aria-label={`Served by ${appName(served) ?? "another app"}`}>
       <ServedHeading served={served} />

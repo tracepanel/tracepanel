@@ -2253,6 +2253,7 @@ body {
 .panel-wf-details .dt-scope-summary {
   justify-content: flex-end;
 }
+.panel-wf .dt-map-row .dt-map-logs,
 .panel-wf .dt-map-row .dt-request-queries {
   display: none;
 }
@@ -2264,4 +2265,18 @@ body {
 }
 .dt-attrs-more[open] > summary {
   margin-bottom: 0.5rem;
+}
+
+/* Beside the bars, a kind's badge is one quiet look: the bar carries the colour, a log's level or an error stays. */
+.panel-wf
+  .dt-map-row:not([data-level="warning"], [data-level="error"], [data-level="critical"], [data-kind="error"])
+  .dt-map-kind[data-muted] {
+  color: var(--dt-text-3);
+  background: var(--dt-hover);
+}
+:root[data-theme="light"]
+  .panel-wf
+  .dt-map-row:not([data-level="warning"], [data-level="error"], [data-level="critical"], [data-kind="error"])
+  .dt-map-kind[data-muted] {
+  background: var(--dt-faint);
 }
