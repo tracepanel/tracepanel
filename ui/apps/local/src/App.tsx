@@ -52,7 +52,7 @@ import { ShareAction } from "./ShareDialog";
 import { NAV, ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { tabOf } from "./TracePage";
-import { TraceScreen } from "./TraceScreen";
+import { TraceLoading, TraceScreen } from "./TraceScreen";
 import { SwitchUser } from "./UserSwitcher";
 import { settledIn, withLoads, withoutFlying, withViewCalls } from "./viewCalls";
 
@@ -276,7 +276,7 @@ function filteredRecords(rows: readonly TraceRow[], filter: string, selectedId: 
   return rows.filter((row) => row.trace.id === selectedId || row.trace.name.toLowerCase().includes(wanted));
 }
 
-/** The tab's records: a view's calls are in its tree, so only the one a link opened stays a row of its own. */
+/** The tab's records, the caller puts the newest first: a view's calls are in its tree, so only the one a link opened stays a row of its own. */
 function recordsOf(rows: readonly TraceRow[], selectedId: string | null): TraceRow[] {
   let view = -1;
   return rows.filter((row) => {
@@ -336,7 +336,6 @@ function PanelWaterfall({
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
   const opened = rows.find((row) => row.trace.id === selectedId);
-  const running = runningIn(rows, selectedId);
   const details = useDetailsSplit(dock);
   const map = useMapWidth();
   const [filter, setFilter] = useState("");
@@ -381,16 +380,7 @@ function PanelWaterfall({
                           opened ? (
                             <>
                               <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
-                              {running && detailsHost
-                                ? createPortal(
-                                    <p className="dt-note p-4">
-                                      {running.view
-                                        ? "View still open: its trace is sent once it ends."
-                                        : "Request in flight: its trace opens here once its app has written it."}
-                                    </p>,
-                                    detailsHost,
-                                  )
-                                : null}
+                              {detailsHost ? createPortal(<TraceLoading variant="waterfall" />, detailsHost) : null}
                             </>
                           ) : undefined
                         }
@@ -504,7 +494,7 @@ function PanelApp({ route }: { route: Route }) {
         route={route}
         selectedId={selectedId}
         rows={rows}
-        listRows={recordsOf(inOrder(true, shown.rows), selectedId)}
+        listRows={recordsOf(inOrder(true, shown.rows), selectedId).reverse()}
         stored={stored}
         chains={chains}
         opensOn={opensOn}

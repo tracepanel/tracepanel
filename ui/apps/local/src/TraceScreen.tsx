@@ -264,7 +264,7 @@ function ownParts(
 }
 
 /** The loading bar: on the page inset as the trace's head will be, across the panel. */
-function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
+export function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
   // The trace's shape while it loads: its name, its tabs and the first rows where they will be, not a blank pane.
   return (
     <div className={cn("grid gap-5", variant === "full" ? "mx-4 pt-1" : "p-4")} role="status" aria-busy="true">

@@ -2363,11 +2363,6 @@ body {
   }
 }
 
-/* A list's head with nothing left in it takes no room: the list starts under the tabs. */
-.panel-wf-details .dt-scope-head:not(:has(.dt-scope-summary-end)) {
-  display: none;
-}
-
 /* Profile beside the tree: the bar and the flame say it. The row says the time; one app needs no table or name. */
 .panel-wf-details .dt-profile-sums-wrap:has(tbody > tr:only-child),
 .panel-wf-details
@@ -2458,8 +2453,9 @@ body {
   opacity: 0.6;
 }
 
-/* Queries and HTTP read alike: rows under the tabs. The tree beside them has the order; no column menu here. */
-.panel-wf-details .dt-scope-head {
+/* Queries and HTTP read alike: rows under the tabs. The tree beside them has the order; no column menu here.
+   Profile keeps its head for Time / Memory. */
+.panel-wf-details .dt-scope-head:not(:has([aria-label="Profile of"])) {
   display: none;
 }
 .panel-wf-details button[aria-label="Columns"] {
@@ -2506,17 +2502,15 @@ body {
 .panel-wf-details [data-one-app] [data-split-head] > span:first-child {
   display: none !important;
 }
+/* The app's tabs and Your code / All frames share one row: the head left empty holds only the latter. */
 .dt-profile-one {
-  display: grid;
-  gap: 0.75rem;
-  justify-items: start;
-  padding-top: 0.75rem;
+  position: relative;
 }
 .dt-profile-one > [role="tablist"] {
-  margin-inline: 1rem;
-}
-.dt-profile-one > .dt-app-profile {
-  justify-self: stretch;
+  position: absolute;
+  z-index: 1;
+  top: 1rem;
+  left: 1rem;
 }
 
 .dt-details-title {
@@ -2560,4 +2554,16 @@ body {
 .panel-filter > input::placeholder {
   color: var(--dt-text-3);
   opacity: 1;
+}
+
+/* Profile's head holds only Time / Memory, at the end of the row; the app's tabs come up beside it. */
+.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) {
+  padding: 0.75rem 1rem 0;
+}
+.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) .dt-scope-summary {
+  margin: 0;
+  padding: 0;
+}
+.panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) ~ .dt-profile-one > [role="tablist"] {
+  top: -2.5rem;
 }
