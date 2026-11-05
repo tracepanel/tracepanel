@@ -4,6 +4,7 @@ import {
   ExternalIcon,
   FILTERS,
   Hint,
+  isGone,
   type ListChains,
   Logo,
   LogoMark,
@@ -421,7 +422,11 @@ function PanelWaterfall({
   // that doesn't say what ran (an older one) keeps every record, and offers every kind.
   const ranKinds = [...(chains.counts?.values() ?? [])].map((each) => each.span_kinds);
   const knowsKinds = ranKinds.some((each) => each !== undefined);
-  const records = filteredRecords(listRows, filter, rootId).filter(
+  // Records the local store let go are no rows to open: one line says so at the list's end, and nothing older is
+  // asked for (older ones are gone too).
+  const kept = listRows.filter((row) => row.trace.id === rootId || !isGone(row, chains.counts));
+  const letGo = kept.length < listRows.length;
+  const records = filteredRecords(kept, filter, rootId).filter(
     (row) => !knowsKinds || showsKinds(chains.counts?.get(row.trace.id)?.span_kinds, kinds),
   );
   const opened = rows.find((row) => row.trace.id === rootId);
@@ -482,7 +487,7 @@ function PanelWaterfall({
                     compact={true}
                     services={manyApps(rows)}
                     rows={records}
-                    onMore={onMore}
+                    onMore={letGo ? undefined : onMore}
                     selectedId={rootId}
                     currentId={currentId}
                     chains={chains}
@@ -550,6 +555,11 @@ function PanelWaterfall({
                       ) : null
                     }
                   />
+                  {letGo ? (
+                    <p className="panel-let-go">
+                      Older requests of this tab are no longer in the local store: newer traces took their place.
+                    </p>
+                  ) : null}
                   {nothingElse ? (
                     <p className="panel-no-match">
                       {filter.trim()

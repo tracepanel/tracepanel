@@ -356,7 +356,7 @@ function ListItem({
           share={Math.min(trace.duration / (longest ?? trace.duration), 1)}
           pending={recordPending(row)}
           // Asked for its chain and none came: its traces have left the local store.
-          gone={chains?.counts !== undefined && counts === undefined && !row.open && !row.awaiting && !row.arriving}
+          gone={isGone(row, chains?.counts)}
         />
       </li>
     );
@@ -414,6 +414,11 @@ function RowOpens({
  */
 
 const GONE_NOTE = "Not in the local store anymore: newer traces took its place.";
+
+/** Asked for and not in the local store, nor on its way: newer traces took its place. */
+export function isGone(row: TraceRow, counts: ReadonlyMap<string, RowCounts> | undefined): boolean {
+  return counts !== undefined && !counts.has(row.trace.id) && !row.open && !row.awaiting && !row.arriving;
+}
 
 /** A record still waiting for its calls' traces: a view still open, or one whose calls' numbers are on their way. */
 export function recordPending(row: TraceRow): boolean {

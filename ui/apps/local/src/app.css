@@ -2808,3 +2808,11 @@ body {
   color: var(--tp-text-3);
   font-size: var(--tp-size-xs);
 }
+
+/* The list's end where the local store let older records go: said once, quietly, not a tail of rows to skip. */
+.panel-let-go {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  color: var(--tp-text-3);
+  font-size: var(--tp-size-xs);
+}

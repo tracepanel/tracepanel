@@ -83,6 +83,7 @@ export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
 export {
   type CallGroup,
+  isGone,
   type ListChains,
   PageName,
   RecordMarks,

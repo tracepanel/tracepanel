@@ -25,9 +25,28 @@ interface TabTraces {
 
 const NO_TRACES: TabTraces = { traces: [], runs: NO_RUNS };
 
+/**
+ * How many ids one ask names: the agent answers at most 100 traces an ask, and a URL of many more ids is too long for
+ * it (431). A tab scrolled far back (its records and every call under them) asks in parts.
+ */
+const IDS_PER_ASK = 100;
+
 /** The tab's traces as the agent has them, and the task runs each led to (none where the source can't say). */
-function loadTab(ids: readonly string[]): Promise<TabTraces> {
-  if (ids.length === 0) return Promise.resolve(NO_TRACES);
+async function loadTab(ids: readonly string[]): Promise<TabTraces> {
+  if (ids.length === 0) return NO_TRACES;
+  const parts: string[][] = [];
+  for (let at = 0; at < ids.length; at += IDS_PER_ASK) parts.push(ids.slice(at, at + IDS_PER_ASK));
+  const answers = await Promise.all(parts.map(loadPart));
+  return {
+    traces: answers.flatMap((answer) => answer.traces),
+    runs: Object.assign({}, ...answers.map((answer) => answer.runs)),
+    counts: answers.some((answer) => answer.counts)
+      ? Object.assign({}, ...answers.map((answer) => answer.counts ?? {}))
+      : undefined,
+  };
+}
+
+function loadPart(ids: readonly string[]): Promise<TabTraces> {
   if (source.listTracesWithRuns) return source.listTracesWithRuns(ids);
   return source.listTraces({ ids, limit: ids.length }).then((traces) => ({ traces, runs: NO_RUNS }));
 }
