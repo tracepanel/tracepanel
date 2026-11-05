@@ -2611,3 +2611,12 @@ body {
   top: 1rem;
   right: 1rem;
 }
+
+/* On a row, slow is said by its time, in the colour every slow time has: no word beside it. */
+.panel-wf .dt-map-row [data-kind^="slow"] {
+  display: none;
+}
+.panel-wf .dt-map-row:has([data-kind^="slow"]) .dt-map-time {
+  color: var(--dt-error);
+  font-weight: 600;
+}
