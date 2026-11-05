@@ -383,8 +383,11 @@ function PanelWaterfall({
         data-focus={focusTrace ? "" : undefined}
         data-no-details={empty || (!detailsShown && dock !== "right") ? "" : undefined}
       >
-        <div className="panel-top-rows">
+        {/* Its own item: a narrow bar puts it on the actions' line, the filter's under it. */}
+        <span className="panel-top-logo">
           <LogoMark className="size-5" />
+        </span>
+        <div className="panel-top-rows">
           <PanelFilter value={filter} onChange={setFilter} />
           {listTools}
           {/* At the rows' end, by the details' line: what the panel records, and the details shown or not. */}
