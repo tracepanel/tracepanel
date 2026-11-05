@@ -1,6 +1,15 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { ChevronsLeftIcon, ChevronsRightIcon, SearchIcon } from "lucide-react";
-import { type CSSProperties, type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 const STEP = 0.02;
 
@@ -137,9 +146,12 @@ export function useMapWidth({ key, first }: { key: string; first: number }) {
 
 /** The line between the tree and the bars: drag it, or arrows on it; a double click puts it back. */
 export function MapSplitter({ now, ...props }: ReturnType<typeof useMapWidth>["handle"]) {
+  const self = useRef<HTMLDivElement>(null);
+  useLinedUp(self, now);
   return (
     // biome-ignore lint/a11y/useSemanticElements: a splitter that moves, which an <hr> can't be.
     <div
+      ref={self}
       className="panel-wf-split"
       role="separator"
       aria-orientation="vertical"
@@ -151,6 +163,38 @@ export function MapSplitter({ now, ...props }: ReturnType<typeof useMapWidth>["h
       {...props}
     />
   );
+}
+
+/**
+ * The splitter centred on the rows' line, where it is drawn (each row's bars' column, its line a little before):
+ * measured, not worked out from the widths, so the pointer is on the line it drags.
+ */
+function useLinedUp(self: RefObject<HTMLDivElement | null>, width: number): void {
+  // Again as it is dragged: the bars' column moves with it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the width moves the line, the effect reads it from the DOM.
+  useLayoutEffect(() => {
+    const split = self.current;
+    const tree = split?.parentElement;
+    if (!split || !tree) return;
+    const place = () => {
+      const track = tree.querySelector(".tp-map-row > .tp-map-track");
+      if (!track) return;
+      const line = Number.parseFloat(getComputedStyle(track, "::before").left) || 0;
+      const x = track.getBoundingClientRect().left + line - tree.getBoundingClientRect().left;
+      split.style.left = `${Math.round(x) + 0.5}px`;
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(tree);
+    for (const each of tree.querySelectorAll(".panel-wf-rows, .tp-requests")) observer.observe(each);
+    // Rows come and go (a record opened, the list loading): the first row's bars may move with them.
+    const changes = new MutationObserver(place);
+    changes.observe(tree, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      changes.disconnect();
+    };
+  }, [self, width]);
 }
 
 /** The panel's filter over the waterfall: ⌘K to it, Esc clears it, and closes the panel only once it is empty. */

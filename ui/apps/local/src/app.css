@@ -2231,27 +2231,25 @@ body {
   position: absolute;
   z-index: 3;
   top: 0;
-  /* At the bars' column, which keeps 20rem for the names (their marks whole) whatever width was remembered. */
-  right: calc(min(var(--wf-map, 8rem), 100% - 24rem) + 6.3125rem);
+  /* On the rows' line (useLinedUp measures it), its middle on it. */
   bottom: 0;
   width: 0.5625rem;
-  transform: translateX(50%);
+  transform: translateX(-50%);
   cursor: col-resize;
   touch-action: none;
 }
-/* Its line is the rows' own (at their bars); it shows only under the pointer, to say it drags. */
+/* Its line lies over the rows' own, one line from top to bottom: it shows only under the pointer, to say it drags. */
 .panel-wf-split::before {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 50%;
+  left: calc(50% - 0.5px);
   width: 1px;
   background: transparent;
   content: "";
 }
-/* Under the pointer or dragged, the rows' own line says it: never a second one beside it. */
-.panel-wf-split:is(:hover, :focus-visible, :active) ~ .panel-wf-rows .tp-map-row > .tp-map-track::before {
-  border-left-color: var(--tp-text-3);
+.panel-wf-split:is(:hover, :focus-visible, :active)::before {
+  background: var(--tp-text-3);
 }
 .panel-wf-split:focus-visible {
   outline: none;
