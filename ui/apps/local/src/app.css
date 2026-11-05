@@ -2083,12 +2083,13 @@ body {
 .panel-wf {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) minmax(22rem, 38%);
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) var(--wf-details, 38%);
   min-height: 0;
 }
 
 .panel-wf[data-dock="right"] {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 45%);
+  grid-template-rows: minmax(0, 1fr) var(--wf-details, 45%);
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -2241,7 +2242,6 @@ body {
 /* What the tree beside them already says goes from the details and its rows: one place for one thing. */
 .panel-wf .dt-map-row .dt-alias,
 .panel-wf-details .dt-alias,
-.panel-wf-details .dt-map-details-title[data-span-title],
 .panel-wf-details .dt-scope-row,
 .panel-wf-details .dt-scope-summary-text {
   display: none;
@@ -2279,4 +2279,62 @@ body {
   .dt-map-row:not([data-level="warning"], [data-level="error"], [data-level="critical"], [data-kind="error"])
   .dt-map-kind[data-muted] {
   background: var(--dt-faint);
+}
+
+/* The line between the rows and the details moves too: across docked at the bottom, down docked at the right. */
+.panel-wf-details-split {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: calc(100% - var(--wf-details, 38%));
+  width: 0.5625rem;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-wf[data-dock="right"] .panel-wf-details-split {
+  top: calc(100% - var(--wf-details, 45%));
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: auto;
+  height: 0.5625rem;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+.panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--dt-accent);
+  content: "";
+}
+.panel-wf[data-dock="right"] .panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
+  top: calc(50% - 1px);
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: auto;
+  height: 2px;
+}
+.panel-wf-details-split:focus-visible {
+  outline: none;
+}
+
+/* A row with nothing to say: no details at all, the rows take the room. */
+.panel-wf[data-no-details] {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}
+.panel-wf[data-no-details] > .panel-wf-details,
+.panel-wf[data-no-details] > .panel-wf-details-split {
+  display: none;
+}
+
+/* The line between tree and bars runs up through the bar above, where the panel's controls end at it. */
+.panel-wf-split {
+  top: -2.5rem;
 }

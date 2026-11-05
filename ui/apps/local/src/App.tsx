@@ -40,7 +40,7 @@ import {
 } from "./panelList";
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
-import { NamesSplitter, useNamesSplit } from "./panelSplit";
+import { DetailsSplitter, NamesSplitter, useDetailsEmpty, useDetailsSplit, useNamesSplit } from "./panelSplit";
 import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -328,7 +328,9 @@ function PanelWaterfall({
     return () => cancelAnimationFrame(frame);
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
-  const split = useNamesSplit();
+  const detailsEmpty = useDetailsEmpty(detailsHost);
+  const split = useNamesSplit(detailsEmpty);
+  const details = useDetailsSplit(dock);
   return (
     <div className="panel" data-v2="" style={split.style}>
       <SearchPalette
@@ -347,7 +349,7 @@ function PanelWaterfall({
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
-      <div className="panel-wf" data-dock={dock}>
+      <div className="panel-wf" data-dock={dock} data-no-details={detailsEmpty ? "" : undefined} style={details.style}>
         <div className="panel-wf-tree" ref={split.areaRef}>
           <NamesSplitter {...split.handle} />
           <div className="panel-wf-rows" ref={list}>
@@ -390,6 +392,7 @@ function PanelWaterfall({
             )}
           </div>
         </div>
+        <DetailsSplitter {...details.handle} />
         <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
       </div>
       <ClearDialog
