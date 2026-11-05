@@ -2,7 +2,7 @@
 // app wrote it. Until then it is on its way, not "not found", and it opens by itself as it is stored.
 import type { Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
-import { openApp, panel, pill } from "../app.ts";
+import { openApp, panel, pill, records } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { trace } from "../seed.ts";
 
@@ -48,41 +48,34 @@ test("a view the panel follows while it is open shows as running, then on its wa
 }) => {
   await openApp(page, {}, { recording: true });
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
-  await expect(rows).toHaveCount(1);
+  await expect(records(page)).toHaveCount(1);
   const path = `/campaigns/${Date.now()}`;
   const doc = stored(path);
 
   // The SPA's route changes: the recording announces the new view, and sends it only once it ends.
   await announce(page, doc["id"], path, true);
 
-  await expect(rows).toHaveCount(2);
-  await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
-  const main = panel(page).getByRole("main");
-  // Open: running, its time ticking, in its row and its pane alike (lib/live), at once, not the trace before it.
-  await expect(main.getByText("View still open")).toBeVisible();
-  await expect(rows.nth(1)).toHaveAttribute("data-state", "running");
-  const ticking = main.locator('[data-state="running"]');
-  // Its time on a line of its own, above what it says: never run on into the text ("1.8 sIts trace…").
-  await expect(ticking).toHaveCSS("display", "flex");
-  const [time, text] = [await ticking.boundingBox(), await main.locator(".tp-empty-text").boundingBox()];
-  if (!(time && text)) throw new Error("no time or text");
-  expect(time.width).toBeCloseTo(text.width, 0);
-  const before = await ticking.innerText();
+  // The newest first: open, running, its time ticking in its row.
+  const view = records(page).first();
+  await expect(records(page)).toHaveCount(2);
+  await expect(view).toHaveText(new RegExp(`^view\\s*${path}`, "i"));
+  await expect(view).toHaveAttribute("aria-current", "true");
+  await expect(view).toHaveAttribute("data-live", "");
+  const before = await view.locator(".tp-map-time").innerText();
   // Longer than the panel's quick retries: still on its way, never "not found".
   await page.waitForTimeout(2500);
-  await expect(main.getByText("View still open")).toBeVisible();
-  await expect(ticking).not.toHaveText(before);
-  await expect(main.getByText("Trace not found")).toHaveCount(0);
+  await expect(view).toHaveAttribute("data-live", "");
+  await expect(view.locator(".tp-map-time")).not.toHaveText(before);
+  await expect(panel(page).getByText("Trace not found")).toHaveCount(0);
 
-  // Ended, not stored yet: on its way.
+  // Ended, not stored yet: on its way, no longer running.
   await announce(page, doc["id"], path, false);
-  await expect(main.getByText("Trace on its way")).toBeVisible();
-  await expect(rows.nth(1)).not.toHaveAttribute("data-state", "running");
+  await expect(view).not.toHaveAttribute("data-live", "");
   await store(doc);
 
-  await expect(main.getByRole("tab", { name: /^Call tree/ })).toBeVisible();
-  await expect(main.getByText("Trace on its way")).toHaveCount(0);
+  // Stored: its call tree opens by itself, its row the tree's first.
+  await expect(records(page).first()).toHaveAttribute("data-root", "");
+  await expect(panel(page).getByText("Trace not found")).toHaveCount(0);
 });
 
 test("the console's page of a trace started a moment ago waits for it", async ({ page }) => {
@@ -98,15 +91,15 @@ test("the console's page of a trace started a moment ago waits for it", async ({
   await expect(main.getByRole("heading", { level: 2, name: path })).toBeVisible();
 });
 
-// Each view's row: its badge, its path, its time.
-const VIEWS = [/^VIEW\s*\/app\/\d/, /^VIEW\s*\/app\/campaigns\d/, /^VIEW\s*\/app\/campaigns\/42\d/];
+// Each view's row, the newest first: its badge, its path.
+const VIEWS = [/^view\s*\/app\/campaigns\/42/i, /^view\s*\/app\/campaigns(?!\/)/i, /^view\s*\/app\//i];
 
 test("an SPA's route changes each add a view, the earlier ones staying; a reload replaces an empty one", async ({
   page,
 }) => {
   await openApp(page, {}, { recording: true });
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+  const rows = records(page);
   await expect(rows).toHaveCount(1);
 
   for (const path of ["/app/campaigns", "/app/campaigns/42"]) {
@@ -116,7 +109,7 @@ test("an SPA's route changes each add a view, the earlier ones staying; a reload
   }
 
   await expect(rows).toHaveText(VIEWS);
-  await expect(rows.nth(2)).toHaveAttribute("aria-current", "true");
+  await expect(rows.first()).toHaveAttribute("aria-current", "true");
 
   // The same page again with nothing done on it before (a reload): one row for it, not two.
   await announce(page, stored("/app/campaigns/42")["id"], "/app/campaigns/42", true);

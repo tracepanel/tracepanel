@@ -28,7 +28,8 @@ async function longQueries(page: Page): Promise<void> {
 }
 
 async function expectNoSideways(scope: Page | FrameLocator): Promise<void> {
-  const side = scope.locator(".tp-map-side");
+  // The page's pane beside its tree, the panel's details beside its own.
+  const side = scope.locator(".tp-map-side, .panel-wf-details");
   await expect(side).toContainText("CatalogController.java:109");
   expect(await side.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
 }

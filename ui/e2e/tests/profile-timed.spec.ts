@@ -2,7 +2,7 @@
 // how much of the trace it sampled and why the rest wasn't, waiting is its own share; the time strip, its legend and
 // the call tree split the code's own time into waiting and computing, name the wait and open the profile at that
 // stretch. A profile from before (no buckets) is the whole trace's, said so.
-import type { Locator, Page } from "@playwright/test";
+import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { DIGEST, HELD_REPORT } from "../seed.ts";
@@ -13,7 +13,7 @@ async function centre(locator: Locator): Promise<[number, number]> {
   return [box.x + box.width / 2, box.y + box.height / 2];
 }
 
-function codeRow(page: Page, kind: string) {
+function codeRow(page: Page | FrameLocator, kind: string) {
   return page.locator('.tp-map-row[data-kind="code"]').filter({ has: page.locator(".tp-map-kind", { hasText: kind }) });
 }
 
@@ -100,10 +100,10 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
   await page.getByRole("button", { name: "Load one" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.locator('.tp-map-row[data-kind="code"]').first().click();
+  await codeRow(frame, "wait").click();
 
+  // Its stretch's profile, beside the tree: the details' title names the row, the profile's own head is not repeated.
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(frame.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
 });
 
 test("a profile that doesn't say when its samples were taken is the whole trace's, said so", async ({ page }) => {

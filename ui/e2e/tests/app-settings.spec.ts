@@ -100,7 +100,8 @@ test("an app whose checks found nothing has no warnings, and its App tab no coun
   await pill(page).click();
   const tabs = panel(page).getByRole("tablist", { name: "Trace details" });
 
-  await expect(tabs.getByRole("tab")).toHaveText([/^Request/, "Call tree", "App"]);
+  await expect(tabs.getByRole("tab").first()).toHaveText(/^Details/);
+  await expect(tabs.getByRole("tab").last()).toHaveText("App");
 
   await tabs.getByRole("tab", { name: "App" }).click();
 
@@ -125,7 +126,8 @@ test("the panel's App tab shows the settings and versions of the app that served
 
   // App comes last: it is about the app, not this request. A request that logged nothing has no Logs tab. Its count is
   // what the app's checks found, red with an error among them.
-  await expect(tabs.getByRole("tab")).toHaveText([/^Request/, "Call tree", "App4"]);
+  await expect(tabs.getByRole("tab").first()).toHaveText(/^Details/);
+  await expect(tabs.getByRole("tab").last()).toHaveText("App4");
   await expect(tabs.getByRole("tab", { name: "App" }).locator(".tp-tab-count")).toHaveAttribute("data-tone", "error");
 
   await tabs.getByRole("tab", { name: "App" }).click();
@@ -148,7 +150,7 @@ test("the panel has no App tab for an app whose SDK doesn't say its settings", a
   await pill(page).click();
   const tabs = panel(page).getByRole("tablist", { name: "Trace details" });
 
-  await expect(tabs.getByRole("tab", { name: "Call tree" })).toBeVisible();
+  await expect(tabs.getByRole("tab", { name: /^Details/ })).toBeVisible();
   await expect(tabs.getByRole("tab", { name: "App" })).toHaveCount(0);
 });
 

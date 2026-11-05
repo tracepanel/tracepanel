@@ -115,7 +115,8 @@ test("in the docked panel a long query and a long request body wrap inside their
 
   await expectWhole(sql);
 
-  await frame.getByRole("tab", { name: /^Request/ }).click();
+  // The request's own row: its details are the request's parts.
+  await frame.locator(".tp-map-row[data-root]").click();
   await frame.getByRole("tablist", { name: "Request details" }).getByRole("tab", { name: "Request body" }).click();
   const body = frame.getByRole("tabpanel", { name: "Request body" }).locator("pre");
 
