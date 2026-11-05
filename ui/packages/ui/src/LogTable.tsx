@@ -72,6 +72,7 @@ function LevelDot({ level }: { level: string }) {
   return (
     <span
       role="img"
+      data-level-dot=""
       title={level}
       aria-label={level}
       className={cn("inline-block size-2 rounded-full", LEVEL_DOT[level] ?? LEVEL_DOT["debug"])}

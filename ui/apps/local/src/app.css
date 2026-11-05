@@ -2742,3 +2742,16 @@ body {
 .panel-wf .dt-map-row .dt-map-chips > span:has(> .dt-request-chips) {
   cursor: pointer;
 }
+
+/* The details' tables beside the tree: compact rows, a level's dot in a cell of its own size. */
+.panel-wf-details td {
+  padding-block: 0.3125rem;
+}
+.panel-wf-details th {
+  height: 2rem;
+}
+.panel-wf-details td:has([data-level-dot]) {
+  padding-inline: 0;
+  text-align: center;
+  text-overflow: clip;
+}

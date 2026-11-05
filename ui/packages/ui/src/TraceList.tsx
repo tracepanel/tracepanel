@@ -333,7 +333,13 @@ function ListItem({
   if (trace.id === selectedId && openContent !== undefined) {
     return (
       <li>
-        <div className="dt-requests-open">{openContent}</div>
+        {/* On the list's scale: its bars as long as its closed row's, what it called within them. */}
+        <div
+          className="dt-requests-open"
+          style={{ "--record-share": Math.min(trace.duration / (longest ?? trace.duration), 1) } as CSSProperties}
+        >
+          {openContent}
+        </div>
       </li>
     );
   }
