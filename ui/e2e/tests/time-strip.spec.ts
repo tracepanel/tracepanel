@@ -90,7 +90,7 @@ test("a transaction's time says on hover how long it was open and its SQL; its n
   await expect(code.locator(".tp-map-time")).toHaveText("1.6 s");
 });
 
-test("the strip is the Call tree tab's only, on the page and in the panel; the first tab has none", async ({
+test("the strip is the Call tree tab's only on the page, the first tab has none; the panel's details have it", async ({
   page,
 }) => {
   await page.goto(`/#/t/${await traceId(HELD_REPORT)}?tab=request`);
@@ -106,12 +106,8 @@ test("the strip is the Call tree tab's only, on the page and in the panel; the f
   await pill(page).click();
   const frame = panel(page);
 
+  // Beside the tree, the record's details open on its strip: the tree is the call tree itself.
   await expect(frame.getByRole("region", { name: "Time" }).locator(QUIET).first()).toBeVisible();
-
-  await frame.getByRole("tablist").first().getByRole("tab").first().click();
-
-  await expect(frame.getByRole("tabpanel").first()).toContainText("Task ID");
-  await expect(frame.getByRole("region", { name: "Time" })).toHaveCount(0);
 });
 
 test("only warnings and worse show by default; the Logs chip, or a row's note, shows every record", async ({

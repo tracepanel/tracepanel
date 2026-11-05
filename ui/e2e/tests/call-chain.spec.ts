@@ -261,7 +261,8 @@ async function bar(row: ReturnType<Page["getByRole"]>): Promise<{ left: number; 
 /** The row of a call merged with the trace it served, by its method and path. */
 function hop(scope: Page | ReturnType<typeof panel>, call: string) {
   const text = call.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  return scope.getByRole("button", { name: new RegExp(`^http\\.client ${text} served by`, "i") });
+  // The panel names a call by its method alone (its kind words are short there): the page by its kind too.
+  return scope.getByRole("button", { name: new RegExp(`^(http\\.client )?${text} served by`, "i") });
 }
 
 /** The server's part of a merged call's bar, left and right edge on the page. */
@@ -466,9 +467,9 @@ test("in the panel too, the click's call tree opens the chain, row for row as th
   const books = hop(frame, "GET /books");
 
   await expect(hop(frame, "GET /api/books")).toHaveAttribute("aria-expanded", "true");
-  await expect(frame.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i })).toContainText(
-    `×${AUTHORS}`,
-  );
+  await expect(
+    frame.getByRole("button", { name: /^(http(\.client)? )?GET 127\.0\.0\.1\/authors\/\{id\}/i }),
+  ).toContainText(`×${AUTHORS}`);
 
   await books.locator(".tp-map-caret[data-toggle]").click();
 
@@ -623,7 +624,9 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
   }
 
   const { click } = await links(page);
-  await page.goto(`/#/t/${click}?tab=calls`);
+  await page.goto(`/#/t/${click}?tab=tree`);
+  // Both fixtures link a BFF's trace to the click's one call: loaded afresh, the console has this one's.
+  await page.reload();
   await hop(page, "GET /books").locator(".tp-map-caret[data-toggle]").click();
   await page
     .getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i })
