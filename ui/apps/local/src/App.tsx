@@ -45,8 +45,8 @@ import {
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
 import {
-  DetailsClose,
   DetailsSplitter,
+  DetailsToggle,
   MapSplitter,
   PanelFilter,
   useDetailsShown,
@@ -381,7 +381,10 @@ function PanelWaterfall({
         <div className="panel-top-rows">
           <LogoMark className="size-5" />
           <PanelFilter value={filter} onChange={setFilter} />
-          <div className="panel-top-controls">{toolbar}</div>
+          <div className="panel-top-controls">
+            {toolbar}
+            {empty ? null : <DetailsToggle dock={dock} shown={detailsShown} onShown={showDetails} />}
+          </div>
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
@@ -460,10 +463,7 @@ function PanelWaterfall({
           </div>
         </div>
         <DetailsSplitter {...details.handle} />
-        <aside className="panel-wf-details" aria-label="Details">
-          <DetailsClose dock={dock} onClose={() => showDetails(false)} />
-          <div ref={setDetailsHost} className="contents" />
-        </aside>
+        <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
       </div>
       <ClearDialog
         mode="panel"

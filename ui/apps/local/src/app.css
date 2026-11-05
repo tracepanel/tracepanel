@@ -2141,7 +2141,9 @@ body {
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
 }
-.dt-trace[data-variant="waterfall"] .dt-map-kind {
+/* One width for a kind's badge on every row of the panel, the open record's and the others': no row jumps. */
+.dt-trace[data-variant="waterfall"] .dt-map-kind,
+.panel-wf .dt-map-lead > .dt-map-kind {
   min-width: 2.25rem;
   text-align: center;
 }
@@ -2253,7 +2255,7 @@ body {
 }
 
 /* The details start at the top: their tabs against the bar above. */
-.panel-wf-details > .contents > .dt-trace {
+.panel-wf-details > .dt-trace {
   margin: 0;
   padding: 0;
   gap: 0;
@@ -2338,25 +2340,6 @@ body {
   outline: none;
 }
 
-/* The details' close, at the end of their tabs' line. */
-.panel-wf-details {
-  position: relative;
-}
-.panel-wf-details-close {
-  position: absolute;
-  z-index: 2;
-  top: 0.5625rem;
-  right: 0.625rem;
-  color: var(--dt-text-3);
-}
-/* With no tabs above it, the title is the details' first line: its time stops short of the close. */
-.panel-wf-details:not(:has([aria-label="Trace details"])) .dt-details-title {
-  padding-right: 2.75rem;
-}
-.panel-wf-details-close svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
 /* Closed details: the rows take the panel, their bars most of it, the split between them gone. */
 .panel-wf[data-no-details] .panel-wf-split {
   display: none;

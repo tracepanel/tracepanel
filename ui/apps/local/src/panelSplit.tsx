@@ -1,5 +1,11 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { PanelBottomCloseIcon, PanelRightCloseIcon, SearchIcon } from "lucide-react";
+import {
+  PanelBottomCloseIcon,
+  PanelBottomOpenIcon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
+  SearchIcon,
+} from "lucide-react";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
 
 const STEP = 0.02;
@@ -191,19 +197,31 @@ export function useDetailsShown(): [boolean, (shown: boolean) => void] {
   return [shown, keep];
 }
 
-/** Closes the details, at the end of their tabs: the rows and their bars take the panel until a row is picked. */
-export function DetailsClose({ dock, onClose }: { dock: string; onClose: () => void }) {
-  // Not a second ×: the panel's own closes it; this folds the details away to their side.
-  const Icon = dock === "right" ? PanelBottomCloseIcon : PanelRightCloseIcon;
+/**
+ * Shows or hides the details, in the bar where the rows meet them: hidden, the rows and their bars take the panel. A
+ * row picked shows them again.
+ */
+export function DetailsToggle({
+  dock,
+  shown,
+  onShown,
+}: {
+  dock: string;
+  shown: boolean;
+  onShown: (shown: boolean) => void;
+}) {
+  const right = dock !== "right";
+  const Icon = shown
+    ? right
+      ? PanelRightCloseIcon
+      : PanelBottomCloseIcon
+    : right
+      ? PanelRightOpenIcon
+      : PanelBottomOpenIcon;
+  const label = shown ? "Hide details" : "Show details";
   return (
-    <button
-      type="button"
-      className="icon-button panel-wf-details-close"
-      aria-label="Hide details"
-      title="Hide details"
-      onClick={onClose}
-    >
-      <Icon />
+    <button type="button" className="icon-button" aria-label={label} title={label} onClick={() => onShown(!shown)}>
+      <Icon size={16} />
     </button>
   );
 }
