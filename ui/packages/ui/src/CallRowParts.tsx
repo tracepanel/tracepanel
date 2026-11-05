@@ -286,13 +286,51 @@ const PIECE_MIN = 0.6;
  * its calls, its waits, each in its share's colour. None for a span with one kind of time: its plain bar says it.
  */
 function piecesOf(span: Span, owner: Trace, trace: Trace): Piece[] | null {
+  // Once per span and clock: the rows draw again on every hover and tick, the trace's segments don't change.
+  const known = PIECES.get(owner)?.get(trace);
+  const key = span.id;
+  if (known?.has(key)) return known.get(key) ?? null;
+  const pieces = cutPieces(span, owner, trace);
+  const byTrace = PIECES.get(owner) ?? new WeakMap<Trace, Map<string, Piece[] | null>>();
+  const bySpan = byTrace.get(trace) ?? new Map<string, Piece[] | null>();
+  bySpan.set(key, pieces);
+  byTrace.set(trace, bySpan);
+  PIECES.set(owner, byTrace);
+  return pieces;
+}
+
+const PIECES = new WeakMap<Trace, WeakMap<Trace, Map<string, Piece[] | null>>>();
+const SORTED = new WeakMap<Trace, ReturnType<typeof segmentsOf>>();
+
+/** The owner's segments by their start, once: a span's are found from where it starts, not by a walk of all. */
+function sortedSegments(owner: Trace): ReturnType<typeof segmentsOf> {
+  let sorted = SORTED.get(owner);
+  if (!sorted) {
+    sorted = [...segmentsOf(owner)].sort((a, b) => a.from - b.from);
+    SORTED.set(owner, sorted);
+  }
+  return sorted;
+}
+
+function cutPieces(span: Span, owner: Trace, trace: Trace): Piece[] | null {
   // The span's own trace has its segments (a call's trace, under the page's): on this trace's clock from its start.
   const total = Math.max(trace.duration, 1);
   const offset = owner.start - trace.start;
   const from = span.start - owner.start;
   const to = from + span.duration;
   const pieces: Piece[] = [];
-  for (const segment of segmentsOf(owner)) {
+  const segments = sortedSegments(owner);
+  // The first segment that may reach into the span: a binary search on their starts, then on until past its end.
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if ((segments[mid]?.to ?? 0) <= from) low = mid + 1;
+    else high = mid;
+  }
+  for (let at = low; at < segments.length; at++) {
+    const segment = segments[at];
+    if (!segment || segment.from >= to) break;
     const start = Math.max(segment.from, from);
     const end = Math.min(segment.to, to);
     if (end <= start) continue;

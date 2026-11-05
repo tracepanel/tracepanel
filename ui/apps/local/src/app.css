@@ -2448,7 +2448,7 @@ body {
 .panel-filter > kbd {
   flex: none;
   font: inherit;
-  font-size: 0.6875rem;
+  font-size: var(--dt-size-2xs);
   opacity: 0.75;
 }
 
@@ -2745,7 +2745,7 @@ body {
 }
 .panel-wf-details th {
   height: 1.625rem !important;
-  font-size: 0.6875rem !important;
+  font-size: var(--dt-size-2xs) !important;
 }
 .panel-wf-details td:has([data-level-dot]) {
   padding-inline: 0 !important;

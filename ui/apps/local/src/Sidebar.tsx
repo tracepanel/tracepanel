@@ -386,8 +386,7 @@ function SearchButton({ rail, onSearch }: { rail: boolean; onSearch: () => void 
   );
 }
 
-const TITLE_ROW =
-  "h-5 px-3.5 pb-1 text-2xs leading-4 font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase";
+const TITLE_ROW = "h-5 px-3.5 pb-1 text-2xs leading-4 font-semibold tracking-[0.08em] text-muted-foreground uppercase";
 
 /** A group's title; as a rail its row stays, with a short line between groups, so the items keep their height. */
 function GroupTitle({ title, rail, divider }: { title: string | null; rail: boolean; divider: boolean }) {

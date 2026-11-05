@@ -9,8 +9,9 @@
   --dt-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   /* The type scale, in rem: the whole UI follows the root font size (the density in index.css, and the reader's
      own browser setting). Tailwind's text-2xs … text-4xl are these. */
-  --dt-size-2xs: 0.6875rem;
-  --dt-size-xs: 0.75rem;
+  /* Never under 11px, however dense the root (the panel's): smaller is unreadable, not compact. */
+  --dt-size-2xs: max(0.6875rem, 11px);
+  --dt-size-xs: max(0.75rem, 11px);
   --dt-size-sm: 0.8125rem;
   --dt-size-base: 0.875rem;
   --dt-size-md: 0.9375rem;
@@ -1244,7 +1245,7 @@ tr[data-new] {
   padding-right: 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 0.625rem;
+  font-size: var(--dt-size-2xs);
   line-height: 1rem;
 }
 .dt-lane {
@@ -1372,7 +1373,7 @@ tr[data-new] {
   border-radius: 0.1875rem;
   background: var(--dt-bg);
   color: var(--dt-text-2);
-  font-size: 0.6875rem;
+  font-size: var(--dt-size-2xs);
   line-height: 0.875rem;
   white-space: nowrap;
   pointer-events: none;
@@ -2416,6 +2417,15 @@ details[data-focused] > .dt-sql-group {
   margin: 0 -0.125rem;
   border-radius: 0.25rem;
   cursor: pointer;
+}
+/* Its target at least 24px (WCAG 2.5.8) around the small chevron: a miss beside it doesn't open the row instead. */
+.dt-map-caret[data-toggle] {
+  position: relative;
+}
+.dt-map-caret[data-toggle]::after {
+  position: absolute;
+  inset: calc((1.125rem - max(24px, 1.125rem)) / 2);
+  content: "";
 }
 .dt-map-caret[data-toggle]:hover {
   background: var(--dt-hover);
