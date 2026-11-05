@@ -158,9 +158,8 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
 
 function SpanTitle({ span, trace, parent }: { span: Span; trace: Trace; parent: Span | undefined }) {
   const offset = duration(Math.max(span.start - trace.start, 0));
-  // Beside the tree, how long it took, where the details have more to say; alone it is no reason for them.
+  // Beside the tree, how long it took: the row says what it was.
   if (useContext(KindWords) !== null) {
-    if (Object.keys(span.attrs).length === 0) return null;
     return <p className="dt-map-details-title">Took {duration(span.duration)}</p>;
   }
   return (

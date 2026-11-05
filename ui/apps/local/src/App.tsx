@@ -18,6 +18,7 @@ import {
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { readItem } from "@tracepanel/ui/lib/storage";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
@@ -41,7 +42,7 @@ import {
 } from "./panelList";
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
-import { DetailsSplitter, NamesSplitter, useDetailsEmpty, useDetailsSplit, useNamesSplit } from "./panelSplit";
+import { DetailsSplitter, NamesSplitter, useDetailsSplit, useNamesSplit } from "./panelSplit";
 import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -330,9 +331,8 @@ function PanelWaterfall({
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
   const opened = rows.find((row) => row.trace.id === selectedId);
-  // Still running, there is nothing to say about it yet: no details, the rows take the room.
-  const detailsEmpty = useDetailsEmpty(detailsHost) || empty || runningIn(rows, selectedId) !== undefined;
-  const split = useNamesSplit(detailsEmpty);
+  const split = useNamesSplit();
+  const running = runningIn(rows, selectedId);
   const details = useDetailsSplit(dock);
   return (
     <div className="panel" data-v2="" style={{ ...split.style, ...details.style }}>
@@ -352,7 +352,7 @@ function PanelWaterfall({
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
-      <div className="panel-wf" data-dock={dock} data-no-details={detailsEmpty ? "" : undefined}>
+      <div className="panel-wf" data-dock={dock} data-no-details={empty ? "" : undefined}>
         <div className="panel-wf-tree" ref={split.areaRef}>
           {empty ? null : <NamesSplitter {...split.handle} />}
           <div className="panel-wf-rows" ref={list}>
@@ -379,7 +379,19 @@ function PanelWaterfall({
                       variant="waterfall"
                       waiting={
                         opened ? (
-                          <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
+                          <>
+                            <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
+                            {running && detailsHost
+                              ? createPortal(
+                                  <p className="dt-note p-4">
+                                    {running.view
+                                      ? "View still open: its trace is sent once it ends."
+                                      : "Request in flight: its trace opens here once its app has written it."}
+                                  </p>,
+                                  detailsHost,
+                                )
+                              : null}
+                          </>
                         ) : undefined
                       }
                       detailsHost={detailsHost}

@@ -1,13 +1,5 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import {
-  type CSSProperties,
-  type KeyboardEvent,
-  type PointerEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, type KeyboardEvent, type PointerEvent, useCallback, useRef, useState } from "react";
 
 const KEY = "tracepanel:panel-tree";
 const LEAST = 0.2;
@@ -28,21 +20,16 @@ function remembered(): number {
  * The waterfall's split between its call tree and its bars: the tree's width, in pixels, in `--wf-names`, for
  * the rows and the bar above them; a share of the width, remembered, so it holds when the panel resizes.
  */
-export function useNamesSplit(frozen: boolean) {
+export function useNamesSplit() {
   const [share, setShare] = useState(remembered);
   const [width, setWidth] = useState(0);
-  // The tree keeps its width when the details step aside for a row: only the bars take their room.
-  const held = useRef(frozen);
-  held.current = frozen;
   const area = useRef<HTMLElement | null>(null);
   const watcher = useRef<ResizeObserver | null>(null);
   const areaRef = useCallback((node: HTMLElement | null) => {
     watcher.current?.disconnect();
     area.current = node;
     if (!node) return;
-    watcher.current = new ResizeObserver(() => {
-      if (!held.current) setWidth(node.clientWidth);
-    });
+    watcher.current = new ResizeObserver(() => setWidth(node.clientWidth));
     watcher.current.observe(node);
     setWidth(node.clientWidth);
   }, []);
@@ -64,7 +51,6 @@ export function useNamesSplit(frozen: boolean) {
     if (event.key === "ArrowLeft") keep(heldShare(share - STEP));
     else if (event.key === "ArrowRight") keep(heldShare(share + STEP));
   };
-  // Both columns in pixels: with the details stepping aside for a row, nothing in the rows moves or rescales.
   const names = Math.round(width * share);
   const style = width
     ? ({
@@ -102,20 +88,6 @@ export function NamesSplitter({ now, ...props }: ReturnType<typeof useNamesSplit
       {...props}
     />
   );
-}
-
-/** Whether the selected row has nothing to say: its details are there and empty, so the panel gives up their room. */
-export function useDetailsEmpty(host: HTMLElement | null): boolean {
-  const [empty, setEmpty] = useState(false);
-  useEffect(() => {
-    if (!host) return;
-    const check = () => setEmpty(host.querySelector(".dt-trace") !== null && !host.textContent?.trim());
-    check();
-    const watcher = new MutationObserver(check);
-    watcher.observe(host, { childList: true, subtree: true, characterData: true });
-    return () => watcher.disconnect();
-  }, [host]);
-  return empty;
 }
 
 const DETAILS_LEAST = 0.2;
