@@ -387,12 +387,14 @@ function PanelWaterfall({
           <LogoMark className="size-5" />
           <PanelFilter value={filter} onChange={setFilter} />
           {listTools}
-          <div className="panel-top-controls">
-            {toolbar}
-            {empty ? null : <DetailsToggle dock={dock} shown={detailsShown} onShown={showDetails} />}
-          </div>
+          <div className="panel-top-controls">{toolbar}</div>
         </div>
-        <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
+        <div className="bar-actions">
+          {/* What the panel records and shows, not the list: with its other actions. */}
+          <PanelProfile />
+          {empty ? null : <DetailsToggle dock={dock} shown={detailsShown} onShown={showDetails} />}
+          {actions(<span ref={setActionsHost} className="contents" />)}
+        </div>
       </header>
       <div className="panel-wf" data-dock={dock} data-no-details={empty || !detailsShown ? "" : undefined}>
         <div className="panel-wf-tree">
@@ -580,12 +582,7 @@ function PanelApp({ route }: { route: Route }) {
             clearLabel={`Clear ${tabCount}`}
           />
         }
-        toolbar={
-          <>
-            <BackTo view={back} rows={listed} bare={false} />
-            <PanelProfile />
-          </>
-        }
+        toolbar={<BackTo view={back} rows={listed} bare={false} />}
         actions={(explore) => (
           <PanelActions user={switchUser} consoleAt={consoleAt} explore={explore} traceId={selectedId} dock={dock} />
         )}
