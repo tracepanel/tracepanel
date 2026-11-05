@@ -1,5 +1,6 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { type CSSProperties, type KeyboardEvent, type PointerEvent, useState } from "react";
+import { SearchIcon } from "lucide-react";
+import { type CSSProperties, type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
 
 const STEP = 0.02;
 
@@ -77,5 +78,103 @@ export function DetailsSplitter({ down, now, ...props }: ReturnType<typeof useDe
       tabIndex={0}
       {...props}
     />
+  );
+}
+
+const MAP_KEY = "tracepanel:panel-map";
+const MAP_AT_FIRST = 128;
+const MAP_LEAST = 64;
+const MAP_MOST = 640;
+/** The time column, its gaps and the row's end, right of the bars. */
+const AFTER_MAP = 90;
+
+function heldMap(width: number): number {
+  return Math.round(Math.min(MAP_MOST, Math.max(MAP_LEAST, width)));
+}
+
+/** The bars' width, a small map at first: in `--wf-map`, the names take the rest. Remembered. */
+export function useMapWidth() {
+  const [width, setWidth] = useState(() => {
+    const stored = Number(readItem(MAP_KEY));
+    return stored > 0 ? heldMap(stored) : MAP_AT_FIRST;
+  });
+  const keep = (next: number) => {
+    setWidth(next);
+    writeItem(MAP_KEY, String(next));
+  };
+  return {
+    style: { "--wf-map": `${width}px` } as CSSProperties,
+    handle: {
+      now: width,
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      },
+      onPointerMove: (event: PointerEvent<HTMLElement>) => {
+        const box = event.currentTarget.parentElement?.getBoundingClientRect();
+        if (box && event.currentTarget.hasPointerCapture(event.pointerId)) {
+          setWidth(heldMap(box.right - AFTER_MAP - event.clientX));
+        }
+      },
+      onPointerUp: () => writeItem(MAP_KEY, String(width)),
+      onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+        if (event.key === "ArrowLeft") keep(heldMap(width + 16));
+        else if (event.key === "ArrowRight") keep(heldMap(width - 16));
+      },
+      onDoubleClick: () => keep(MAP_AT_FIRST),
+    },
+  };
+}
+
+/** The line between the tree and the bars: drag it, or arrows on it; a double click puts it back. */
+export function MapSplitter({ now, ...props }: ReturnType<typeof useMapWidth>["handle"]) {
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a splitter that moves, which an <hr> can't be.
+    <div
+      className="panel-wf-split"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the time bars"
+      aria-valuemin={MAP_LEAST}
+      aria-valuemax={MAP_MOST}
+      aria-valuenow={now}
+      tabIndex={0}
+      {...props}
+    />
+  );
+}
+
+/** The panel's filter over the waterfall: ⌘K to it, Esc clears it, and closes the panel only once it is empty. */
+export function PanelFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      input.current?.focus();
+      input.current?.select();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <label className="panel-filter">
+      <SearchIcon aria-hidden="true" />
+      <input
+        ref={input}
+        type="text"
+        value={value}
+        placeholder="Filter"
+        aria-label="Filter the rows"
+        spellCheck={false}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || !value) return;
+          event.preventDefault();
+          onChange("");
+        }}
+      />
+      {value ? null : <kbd>⌘K</kbd>}
+    </label>
   );
 }

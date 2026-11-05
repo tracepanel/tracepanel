@@ -613,3 +613,43 @@ export function rootOf(trace: Trace): string {
 export function childrenOf(node: Node): Node[] {
   return node.type === "span" || node.type === "task" ? node.children : [];
 }
+
+function rowText(node: Node): string {
+  switch (node.type) {
+    case "span":
+    case "waiting":
+      return spanText(node.span);
+    case "group":
+      return node.spans.map(spanText).join(" ");
+    case "log":
+      return JSON.stringify(node.log);
+    case "error":
+      return JSON.stringify(node.error);
+    case "task":
+      return node.run.name;
+  }
+}
+
+function spanText(span: Span): string {
+  const { "db.statement": statement, "db.query.text": query, "url.full": url, "http.url": old } = span.attrs;
+  return [span.name, statement, query, url, old].filter((part) => typeof part === "string").join(" ");
+}
+
+function keptBy(node: Node, query: string): Node | null {
+  // A match keeps what is under it; else only the way down to a match.
+  if (rowText(node).toLowerCase().includes(query)) return node;
+  if (node.type === "group") return node.members.some((member) => keptBy(member, query)) ? node : null;
+  if (node.type !== "span" && node.type !== "task") return null;
+  const children = node.children.flatMap((child) => keptBy(child, query) ?? []);
+  return children.length > 0 ? { ...node, children } : null;
+}
+
+/** The tree cut down to the rows a query finds and the way to them. Its root stays: it is the record's own row. */
+export function filteredTree(tree: readonly Node[], query: string): Node[] {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return [...tree];
+  return tree.map((root) => {
+    if (root.type !== "span" && root.type !== "task") return root;
+    return { ...root, children: root.children.flatMap((child) => keptBy(child, wanted) ?? []) };
+  });
+}

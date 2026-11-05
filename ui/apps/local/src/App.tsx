@@ -9,6 +9,7 @@ import {
   memoryFromParams,
   parseSlice,
   RecordRow,
+  RowFilter,
   type Slice,
   sliceParams,
   type TabId,
@@ -18,7 +19,6 @@ import {
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
 import { readItem } from "@tracepanel/ui/lib/storage";
-import { SearchIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ClearDialog } from "./ClearDialog";
@@ -44,7 +44,7 @@ import {
 } from "./panelList";
 import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
-import { DetailsSplitter, useDetailsSplit } from "./panelSplit";
+import { DetailsSplitter, MapSplitter, PanelFilter, useDetailsSplit, useMapWidth } from "./panelSplit";
 import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
@@ -269,6 +269,13 @@ function PanelActions({
   );
 }
 
+/** The records a filter finds by their names; the one open stays, its rows are filtered in place. */
+function filteredRecords(rows: readonly TraceRow[], filter: string, selectedId: string | null): readonly TraceRow[] {
+  const wanted = filter.trim().toLowerCase();
+  if (!wanted) return rows;
+  return rows.filter((row) => row.trace.id === selectedId || row.trace.name.toLowerCase().includes(wanted));
+}
+
 /** The tab's records: a view's calls are in its tree, so only the one a link opened stays a row of its own. */
 function recordsOf(rows: readonly TraceRow[], selectedId: string | null): TraceRow[] {
   let view = -1;
@@ -296,8 +303,6 @@ function PanelWaterfall({
   empty,
   sliced,
   view,
-  searching,
-  setSearching,
   clearing,
   setClearing,
 }: {
@@ -315,8 +320,6 @@ function PanelWaterfall({
   empty: boolean;
   sliced: ReturnType<typeof usePanelSlice>;
   view: ReturnType<typeof usePanelView>;
-  searching: boolean;
-  setSearching: (open: boolean) => void;
   clearing: boolean;
   setClearing: (open: boolean) => void;
 }) {
@@ -335,85 +338,78 @@ function PanelWaterfall({
   const opened = rows.find((row) => row.trace.id === selectedId);
   const running = runningIn(rows, selectedId);
   const details = useDetailsSplit(dock);
+  const map = useMapWidth();
+  const [filter, setFilter] = useState("");
+  const records = filteredRecords(listRows, filter, selectedId);
   return (
-    <div className="panel" data-v2="" style={details.style}>
-      <SearchPalette
-        open={searching}
-        onOpenChange={setSearching}
-        source={source}
-        items={NAV}
-        openRoute={(target) =>
-          target.name === "trace" ? go(target) : window.open(`${base}${href(target)}`, "_blank", "noopener")
-        }
-      />
+    <div className="panel" data-v2="" style={{ ...details.style, ...map.style }}>
       <header className="panel-top" data-dock={dock}>
         <div className="panel-top-rows">
           <LogoMark className="size-5" />
-          <button type="button" className="panel-search" onClick={() => setSearching(true)}>
-            <SearchIcon />
-            Search
-            <kbd>⌘K</kbd>
-          </button>
+          <PanelFilter value={filter} onChange={setFilter} />
           <div className="panel-top-controls">{toolbar}</div>
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
       <div className="panel-wf" data-dock={dock} data-no-details={empty ? "" : undefined}>
         <div className="panel-wf-tree">
+          {empty ? null : <MapSplitter {...map.handle} />}
           <div className="panel-wf-rows" ref={list}>
             {empty ? (
               <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
             ) : (
-              <TraceList
-                compact={true}
-                services={manyApps(rows)}
-                rows={listRows}
-                selectedId={selectedId}
-                currentId={currentId}
-                chains={chains}
-                opensOn={opensOn}
-                onSelect={(id) => go({ name: "trace", id })}
-                openContent={
-                  selectedId ? (
-                    <TraceScreen
-                      key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
-                      id={selectedId}
-                      source={source}
-                      arriving={arrivingIn(rows, stored, selectedId)}
-                      running={runningIn(rows, selectedId)}
-                      variant="waterfall"
-                      waiting={
-                        opened ? (
-                          <>
-                            <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
-                            {running && detailsHost
-                              ? createPortal(
-                                  <p className="dt-note p-4">
-                                    {running.view
-                                      ? "View still open: its trace is sent once it ends."
-                                      : "Request in flight: its trace opens here once its app has written it."}
-                                  </p>,
-                                  detailsHost,
-                                )
-                              : null}
-                          </>
-                        ) : undefined
-                      }
-                      detailsHost={detailsHost}
-                      actionsHost={actionsHost}
-                      initialTab={trace ? tabOf(trace.tab) : undefined}
-                      initialUnder={trace?.under}
-                      initialSlice={sliced.slice}
-                      onSliceChange={sliced.onChange}
-                      onTabShown={view.onTabShown}
-                      initialMemory={view.initialMemory}
-                      onMemoryChange={view.onMemoryChange}
-                      links={PANEL_LINKS}
-                      explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
-                    />
-                  ) : null
-                }
-              />
+              <RowFilter.Provider value={filter}>
+                <TraceList
+                  compact={true}
+                  services={manyApps(rows)}
+                  rows={records}
+                  selectedId={selectedId}
+                  currentId={currentId}
+                  chains={chains}
+                  opensOn={opensOn}
+                  onSelect={(id) => go({ name: "trace", id })}
+                  openContent={
+                    selectedId ? (
+                      <TraceScreen
+                        key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
+                        id={selectedId}
+                        source={source}
+                        arriving={arrivingIn(rows, stored, selectedId)}
+                        running={runningIn(rows, selectedId)}
+                        variant="waterfall"
+                        waiting={
+                          opened ? (
+                            <>
+                              <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
+                              {running && detailsHost
+                                ? createPortal(
+                                    <p className="dt-note p-4">
+                                      {running.view
+                                        ? "View still open: its trace is sent once it ends."
+                                        : "Request in flight: its trace opens here once its app has written it."}
+                                    </p>,
+                                    detailsHost,
+                                  )
+                                : null}
+                            </>
+                          ) : undefined
+                        }
+                        detailsHost={detailsHost}
+                        actionsHost={actionsHost}
+                        initialTab={trace ? tabOf(trace.tab) : undefined}
+                        initialUnder={trace?.under}
+                        initialSlice={sliced.slice}
+                        onSliceChange={sliced.onChange}
+                        onTabShown={view.onTabShown}
+                        initialMemory={view.initialMemory}
+                        onMemoryChange={view.onMemoryChange}
+                        links={PANEL_LINKS}
+                        explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
+                      />
+                    ) : null
+                  }
+                />
+              </RowFilter.Provider>
             )}
           </div>
         </div>
@@ -533,8 +529,6 @@ function PanelApp({ route }: { route: Route }) {
         empty={history !== null && tabRows.length === 0}
         sliced={sliced}
         view={view}
-        searching={searching}
-        setSearching={setSearching}
         clearing={clearing}
         setClearing={setClearing}
       />

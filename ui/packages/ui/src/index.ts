@@ -1,5 +1,5 @@
 export { AppDetails, appSaidAnything } from "./AppDetails";
-export { CallMap } from "./CallMap";
+export { CallMap, RowFilter } from "./CallMap";
 export { CallsList } from "./CallsList";
 export { CallsChart, Histogram, LatencyChart, LogsChart, Stat, StatGrid } from "./Charts";
 export * from "./CopyButton";

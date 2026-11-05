@@ -1,4 +1,14 @@
-import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  createContext,
+  type ReactNode,
+  type RefObject,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { Details } from "./CallDetails";
 import { hopText, type ProfilesIn, type TraceProfileOpener, UnderSlot } from "./CallRowParts";
@@ -9,6 +19,7 @@ import {
   type Chain,
   callSpans,
   callTraces,
+  filteredTree,
   findNode,
   hiddenLogsOf,
   type Mark,
@@ -482,6 +493,9 @@ function useRowPicked(
 
 type PickedHandler = (scope: SpanScope | null) => void;
 
+/** What the rows are filtered by, where a filter is over them (the panel's waterfall). */
+export const RowFilter = createContext("");
+
 export function CallMap({
   trace,
   issueBySpan,
@@ -532,7 +546,9 @@ export function CallMap({
     expected: wiring.expected,
     reloadRoot: wiring.reloadRelated,
   });
-  const { tree, hidden } = useShownLogs(trace, related, current.logs, chain.loaded);
+  const { tree: whole, hidden } = useShownLogs(trace, related, current.logs, chain.loaded);
+  const query = useContext(RowFilter);
+  const tree = useMemo(() => filteredTree(whole, query), [whole, query]);
   const issues = useMemo(
     () => withCallIssues(issueBySpan, related, chain.loaded),
     [issueBySpan, related, chain.loaded],

@@ -2131,12 +2131,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .panel-wf .dt-map-row {
-  grid-template-columns: minmax(0, 1fr) var(--wf-map) 4rem;
+  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: minmax(0, 1fr) var(--wf-map) 4rem;
+  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2174,7 +2174,7 @@ body {
   white-space: nowrap;
 }
 
-/* The call tree and its bars: the bars are a map, one fixed width; the names take the rest. */
+/* The call tree and its bars: the bars are a small map, its width dragged; the names take the rest. */
 /* The bar has the panel's two parts: the rows', its controls ending at the details' line; the details', its actions. */
 .panel-top {
   gap: 0;
@@ -2206,22 +2206,38 @@ body {
   width: auto;
 }
 .panel-wf-tree {
-  --wf-map: 10rem;
   position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
 }
-.panel-wf-tree::after {
+.panel-wf-split {
   position: absolute;
   z-index: 3;
   top: 0;
-  right: calc(var(--wf-map) + 5.9375rem);
+  right: calc(var(--wf-map, 8rem) + 5.9375rem);
   bottom: 0;
+  width: 0.5625rem;
+  transform: translateX(50%);
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-wf-split::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
   width: 1px;
   background: var(--dt-border);
   content: "";
-  pointer-events: none;
+}
+.panel-wf-split:is(:hover, :focus-visible, :active)::before {
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--dt-accent);
+}
+.panel-wf-split:focus-visible {
+  outline: none;
 }
 
 /* The details start at the top: their tabs against the bar above. */
@@ -2384,39 +2400,47 @@ body {
   background: var(--dt-accent);
 }
 
-/* Search in the bar: a quiet word that is a button, no field. */
-.panel-search {
-  display: inline-flex;
-  flex: none;
+/* The filter over the rows: a quiet field in the bar, no box until it is used. */
+.panel-filter {
+  display: flex;
+  flex: 0 1 16rem;
   align-items: center;
   gap: 0.375rem;
+  min-width: 6rem;
   height: 1.75rem;
   padding: 0 0.5rem;
   border-radius: 0.375rem;
   color: var(--dt-text-3);
   font-size: 0.8125rem;
-  transition:
-    color 0.12s,
-    background-color 0.12s;
 }
-.panel-search:hover {
+.panel-filter:hover {
+  background: var(--dt-hover);
+}
+.panel-filter:focus-within {
   background: var(--dt-hover);
   color: var(--dt-text);
 }
-.panel-search > svg {
+.panel-filter > svg {
+  flex: none;
   width: 0.875rem;
   height: 0.875rem;
 }
-.panel-search > kbd {
-  margin-left: 0.25rem;
+.panel-filter > input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.panel-filter > kbd {
+  flex: none;
   font: inherit;
   font-size: 0.6875rem;
   opacity: 0.75;
 }
 
-.panel-wf[data-no-details] .panel-wf-tree::after {
-  display: none;
-}
 /* The record's time strip heads its details: no card, the column's own width. */
 .dt-details-head {
   display: block;
@@ -2432,4 +2456,13 @@ body {
 }
 .dt-record:hover .dt-record-share {
   opacity: 0.6;
+}
+
+/* Queries and HTTP read alike: rows under the tabs. The tree beside them has the order; no column menu here. */
+.panel-wf-details .dt-scope-head {
+  display: none;
+}
+.panel-wf-details [aria-label="Columns"],
+.panel-wf-details [aria-label^="Column"] {
+  display: none;
 }
