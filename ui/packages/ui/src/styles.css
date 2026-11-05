@@ -3696,48 +3696,13 @@ div.dt-map-row[data-kind="code"] {
   border-radius: 2px;
 }
 
-/* What a record says only with the room (the panel's details hidden): its apps, its findings in words, its calls,
-   its clock, its queries' time. */
-.dt-record-wide,
-.dt-record-clock,
+/* A record's queries' time, said only where there's room (the panel's details hidden). */
 .dt-request-queries-time {
   display: none;
-}
-.dt-record-wide {
-  align-items: center;
-  gap: 0.375rem;
-  min-width: 0;
-  margin-left: 0.75rem;
-  overflow: hidden;
-}
-.dt-record-http {
-  flex: none;
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-.dt-record-clock {
-  margin-right: 0.5rem;
-  color: var(--dt-text-3);
-  font-variant-numeric: tabular-nums;
-}
-.dt-request-queries-time {
   margin-left: 0.125rem;
   color: var(--dt-text-3);
-}
-.dt-record-gone {
-  color: var(--dt-text-3);
-  font-size: var(--dt-size-xs);
-  font-style: italic;
-  white-space: nowrap;
 }
 /* Its traces gone from the store: the row quiet, its bar too. */
 .dt-record[data-gone] {
   opacity: 0.55;
-}
-.dt-record-apps {
-  flex: none;
-  color: var(--dt-text-3);
-  font: var(--dt-size-xs) var(--dt-mono);
-  white-space: nowrap;
 }

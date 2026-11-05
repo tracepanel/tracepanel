@@ -427,7 +427,7 @@ function PanelWaterfall({
             {empty || dock === "right" ? null : <DetailsToggle shown={detailsShown} onShown={showDetails} />}
           </div>
         </div>
-        <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
+        <div className="bar-actions">{actions(<span ref={setActionsHost} className="panel-explore-slot" />)}</div>
       </header>
       <div
         className="panel-wf"

@@ -195,14 +195,6 @@ impl Reader {
              UNION SELECT c.system FROM members m JOIN calls c ON c.trace_id = m.id
              UNION SELECT 'log' FROM members m JOIN logs l ON l.trace_id = m.id WHERE l.level_no >= 30 ORDER BY 1"
         ))?;
-        // Its calls to other apps, and the apps down it in the order they joined: the wide list says them.
-        let mut http = db.prepare_cached(&format!(
-            "{MEMBERS} SELECT count(*) FROM members m JOIN calls c ON c.trace_id = m.id WHERE c.system = 'http'"
-        ))?;
-        let mut apps_of = db.prepare_cached(&format!(
-            "{MEMBERS} SELECT t.service FROM members m JOIN traces t ON t.id = m.id
-             GROUP BY t.service ORDER BY min(m.level), min(t.start)"
-        ))?;
         let mut counts = serde_json::Map::new();
         for id in ids {
             let args = rusqlite::params![id, CHAIN_LEVELS as i64, CHAIN_TRACES as i64];
@@ -218,10 +210,6 @@ impl Reader {
                 .collect::<rusqlite::Result<_>>()?;
             found.extend(self.found_across_apps(id, traces as usize)?);
             found.retain(|_, kind| kind != "error");
-            let http_calls: i64 = http.query_row(args, |row| row.get(0))?;
-            let apps: Vec<String> = apps_of
-                .query_map(args, |row| row.get(0))?
-                .collect::<rusqlite::Result<_>>()?;
             let span_kinds: Vec<String> = kinds_of
                 .query_map(args, |row| row.get(0))?
                 .collect::<rusqlite::Result<_>>()?;
@@ -235,8 +223,6 @@ impl Reader {
                     "db_time": db_time,
                     "errors": errors,
                     "span_kinds": span_kinds,
-                    "http_calls": http_calls,
-                    "apps": apps,
                     "issues": found.len(),
                     "kinds": kinds,
                     "traces": traces,
@@ -1254,10 +1240,6 @@ mod tests {
             counts["VIEW"]["span_kinds"],
             // A warning logged down it: "log" too.
             json!(["function", "http", "log", "sql"])
-        );
-        assert_eq!(
-            counts["VIEW"]["apps"],
-            json!(["library-web", "library-bff", "library-api"])
         );
         assert_eq!(counts["API1"]["traces"], 1);
         assert_eq!(counts.get("NONE"), None);

@@ -89,7 +89,7 @@ const MAP_MOST = 1600;
 /** The time column, its gaps and the row's end, right of the bars. */
 const AFTER_MAP = 90;
 /** The names' room the bars leave, at the least. */
-const NAMES_LEAST = 240;
+const NAMES_LEAST = 320;
 
 function heldMap(width: number): number {
   return Math.round(Math.min(MAP_MOST, Math.max(MAP_LEAST, width)));

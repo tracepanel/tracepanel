@@ -2131,12 +2131,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .panel-wf .dt-map-row {
-  grid-template-columns: minmax(15rem, 1fr) minmax(0, var(--wf-map, 8rem)) 4rem;
+  grid-template-columns: minmax(20rem, 1fr) minmax(0, var(--wf-map, 8rem)) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: minmax(15rem, 1fr) minmax(0, var(--wf-map, 8rem)) 4rem;
+  grid-template-columns: minmax(20rem, 1fr) minmax(0, var(--wf-map, 8rem)) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2231,8 +2231,8 @@ body {
   position: absolute;
   z-index: 3;
   top: 0;
-  /* At the bars' column, which keeps 15rem for the names whatever width was remembered. */
-  right: calc(min(var(--wf-map, 8rem), 100% - 19rem) + 6.3125rem);
+  /* At the bars' column, which keeps 20rem for the names (their marks whole) whatever width was remembered. */
+  right: calc(min(var(--wf-map, 8rem), 100% - 24rem) + 6.3125rem);
   bottom: 0;
   width: 0.5625rem;
   transform: translateX(50%);
@@ -2754,13 +2754,33 @@ body {
 }
 
 /* With the details hidden, a record says more on its row (TraceList): the room is there. */
-.panel-wf[data-no-details] .dt-record-wide {
-  display: flex;
-}
-.panel-wf[data-no-details] .dt-record-clock,
 .panel-wf[data-no-details] .dt-request-queries-time {
   display: inline;
 }
 .panel-wf[data-no-details] .dt-record-marks {
   grid-template-columns: auto 2.75rem 6.5rem;
+}
+
+/* A record's marks keep their room: its name gives way first. */
+.dt-record .dt-record-marks {
+  flex: none;
+}
+.dt-record .dt-map-lead {
+  min-width: 0;
+}
+
+/* Explore's place in the bar, kept while its record loads: the actions after it never shift. */
+.panel-explore-slot {
+  display: inline-flex;
+  min-width: 1.875rem;
+  justify-content: center;
+}
+/* The tree's marks in the records' columns: its rows keep the queries' column the records have, so every ⚠ of
+   the panel lines up, the open record's and its calls'. */
+.panel-wf .dt-map-row:not(.dt-record):not([data-root]) > .dt-map-name > .dt-map-chips {
+  margin-right: 3.25rem;
+}
+/* A row's marks never give way: its name and its app's chip are cut first. */
+.panel-wf .dt-map-row > .dt-map-name > .dt-map-chips {
+  flex: none;
 }
