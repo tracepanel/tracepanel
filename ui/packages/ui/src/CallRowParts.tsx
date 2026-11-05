@@ -166,10 +166,14 @@ export function barPlace(trace: Trace, start: number, length: number): { style: 
  */
 export function slowness(time: number, trace: Trace, category: Category | undefined): "warn" | "error" | undefined {
   if (category === undefined || OWN_TIME.has(category)) return undefined;
+  // Most of a short request is still quick: a call is said slow only from this long, whatever its share.
+  if (time < SLOW_LEAST_US) return undefined;
   const share = time / Math.max(trace.duration, 1);
   if (share >= 0.5) return "error";
   return share >= 0.2 ? "warn" : undefined;
 }
+
+const SLOW_LEAST_US = 100_000;
 
 const OWN_TIME: ReadonlySet<Category> = new Set(["django", "code", "template", "signal"]);
 
