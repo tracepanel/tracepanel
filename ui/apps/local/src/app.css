@@ -2338,3 +2338,25 @@ body {
 .panel-wf-split {
   top: -2.5rem;
 }
+
+/* A record with no tree yet: a bar across its track that breathes, its time ticking. */
+.dt-record-live {
+  left: 0;
+  width: 100%;
+  animation: dt-record-live 1.4s ease-in-out infinite;
+}
+@keyframes dt-record-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-record-live {
+    animation: none;
+  }
+}
+
+/* A list's head with nothing left in it takes no room: the list starts under the tabs. */
+.panel-wf-details .dt-scope-head:not(:has(.dt-scope-summary-end)) {
+  display: none;
+}

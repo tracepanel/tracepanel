@@ -272,7 +272,7 @@ function ListItem({
   if (openContent !== undefined) {
     return (
       <li>
-        <ClosedRecord row={{ ...row, trace }} fresh={fresh} onSelect={onSelect} />
+        <RecordRow row={{ ...row, trace }} fresh={fresh} onSelect={onSelect} />
       </li>
     );
   }
@@ -323,15 +323,20 @@ function RowOpens({
 }
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
-/** A record that opens in place, closed: its tree's first row, how long ago in place of its bar's scale. */
-function ClosedRecord({
+/**
+ * A record that opens in place, as one row: closed, its tree's first row with how long ago in place of its
+ * bar's scale; `live`, open with no tree yet (still running, or on its way), a bar that breathes and its time.
+ */
+export function RecordRow({
   row: { trace, open, until, target: _target, opens: target },
   fresh,
   onSelect,
+  live = false,
 }: {
   row: TraceRow;
   fresh: boolean;
   onSelect: (id: string) => void;
+  live?: boolean | undefined;
 }) {
   const page = trace.kind === "page" ? pageParts(trace.name) : null;
   return (
@@ -339,6 +344,8 @@ function ClosedRecord({
       type="button"
       className="dt-map-row dt-record"
       data-kind={trace.kind}
+      data-live={live ? "" : undefined}
+      aria-current={live ? "true" : undefined}
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(target ?? trace.id)}
     >
@@ -355,14 +362,14 @@ function ClosedRecord({
             />
           </KindWords.Provider>
           <span className="dt-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
-          <span className="dt-record-ago">{ago(trace.start)}</span>
+          {live ? null : <span className="dt-record-ago">{ago(trace.start)}</span>}
         </span>
         <StatusSlot status={page ? null : trace.http_status} />
         <span className="dt-map-chips">
           <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
         </span>
       </span>
-      <span />
+      <span className="dt-map-track">{live ? <span className="dt-map-bar dt-record-live" /> : null}</span>
       <span className="dt-map-time">
         <RowTime trace={trace} open={open} until={until} />
       </span>

@@ -95,6 +95,8 @@ export interface TraceScreenProps {
   arriving?: boolean | undefined;
   /** Still running in the browser (lib/live): a view still open, a request the page waits for. Its pane says so. */
   running?: Running | undefined;
+  /** In the panel's waterfall, in place of the screens for a trace not here yet. */
+  waiting?: ReactNode;
 }
 
 /**
@@ -484,6 +486,8 @@ export function TraceScreen(props: TraceScreenProps) {
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
   const can = useAppsCan(source);
+  // Beside the tree, nothing to show yet is one row, not a screen: the record's own, its time ticking.
+  if (trace === null && props.waiting && loaded !== null) return props.waiting;
   if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={props.back} running={props.running} />;
   return <LoadedTrace props={props} trace={trace} related={relatedOf(trace.id)} reload={again} app={app} can={can} />;
 }

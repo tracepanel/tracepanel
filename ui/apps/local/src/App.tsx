@@ -7,6 +7,7 @@ import {
   Logo,
   memoryFromParams,
   parseSlice,
+  RecordRow,
   type Slice,
   sliceParams,
   type TabId,
@@ -328,7 +329,9 @@ function PanelWaterfall({
     return () => cancelAnimationFrame(frame);
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
-  const detailsEmpty = useDetailsEmpty(detailsHost);
+  const opened = rows.find((row) => row.trace.id === selectedId);
+  // Still running, there is nothing to say about it yet: no details, the rows take the room.
+  const detailsEmpty = useDetailsEmpty(detailsHost) || runningIn(rows, selectedId) !== undefined;
   const split = useNamesSplit(detailsEmpty);
   const details = useDetailsSplit(dock);
   return (
@@ -374,6 +377,11 @@ function PanelWaterfall({
                       arriving={arrivingIn(rows, stored, selectedId)}
                       running={runningIn(rows, selectedId)}
                       variant="waterfall"
+                      waiting={
+                        opened ? (
+                          <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
+                        ) : undefined
+                      }
                       detailsHost={detailsHost}
                       actionsHost={actionsHost}
                       initialTab={trace ? tabOf(trace.tab) : undefined}
