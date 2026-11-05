@@ -397,13 +397,24 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined, pro
  * lanes picks a stretch of the time; a click beside the marks, or a double click, lets it go. Always there, its own
  * lane alone too: every call tree is read over its time the same way.
  */
-export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((target: MarkTarget) => void) | undefined }) {
+export function Timeline({
+  trace,
+  onSelect,
+  still = false,
+}: {
+  trace: Trace;
+  onSelect?: ((target: MarkTarget) => void) | undefined;
+  /** Beside the tree, in a row's details: its marks open what they are; no drag, no share picks the tree's rows. */
+  still?: boolean | undefined;
+}) {
   const layer = useRef<HTMLDivElement>(null);
   const { slice, onRange, onShare, openProfile } = useLanesSlice(onSelect, trace.profile);
   const drawn = lanes(trace, slice.logs);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
   const onQuiet = trace.profile ? (range: TimeRange | undefined) => openProfile(range) : undefined;
-  const picking = { onRange, onShare, onQuiet, start: drag.start, layer };
+  const picking = still
+    ? { onRange: () => undefined, onShare: () => undefined, onQuiet: undefined, start: () => undefined, layer }
+    : { onRange, onShare, onQuiet, start: drag.start, layer };
   return (
     <figure className="dt-timeline" aria-label="Timeline">
       <LanesBody
@@ -437,7 +448,7 @@ export function TimeStrip({
   return (
     // A segment hovered on any lane lights its legend item, and the legend item every segment of it.
     <section className="dt-strip" aria-label="Time" {...litScope}>
-      <Timeline trace={trace} onSelect={onSelect} />
+      <Timeline trace={trace} onSelect={onSelect} still={still} />
       <TimeLegend trace={trace} related={related} still={still} />
     </section>
   );

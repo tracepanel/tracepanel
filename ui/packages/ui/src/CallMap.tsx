@@ -382,14 +382,14 @@ function TimedRows({
 }: {
   trace: Trace;
   range: TimeRange | null;
-  onRange: (range: TimeRange | null) => void;
+  onRange: ((range: TimeRange | null) => void) | undefined;
   children: ReactNode;
 }) {
   const timed = useRef<HTMLDivElement>(null);
   const ruler = useRef<HTMLSpanElement>(null);
   const column = useTrackColumn(timed, ruler);
   const total = Math.max(trace.duration, 1);
-  const drag = useRangeDrag(total, onRange);
+  const drag = useRangeDrag(total, onRange ?? (() => undefined));
   const shown = drag.draft ?? range;
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a drag over the rows, which are buttons of their own.
@@ -398,10 +398,11 @@ function TimedRows({
       ref={timed}
       onPointerDown={(event) => {
         const target = event.target as Element;
-        if (ruler.current && target.closest(".dt-map-track, .dt-map-ruler")) drag.start(event, ruler.current);
+        if (onRange && ruler.current && target.closest(".dt-map-track, .dt-map-ruler"))
+          drag.start(event, ruler.current);
       }}
       onDoubleClick={(event) => {
-        if ((event.target as Element).closest(".dt-map-track, .dt-map-ruler")) onRange(null);
+        if ((event.target as Element).closest(".dt-map-track, .dt-map-ruler")) onRange?.(null);
       }}
     >
       <div className="dt-map-head">
@@ -598,7 +599,12 @@ export function CallMap({
       {head}
       <HostedDetails host={wiring.detailsHost} details={details} />
       <MapBody details={side && !external ? details : null} onClose={close}>
-        <TimedRows trace={trace} range={current.range} onRange={(range) => change({ ...current, range })}>
+        <TimedRows
+          trace={trace}
+          range={external ? null : current.range}
+          // Beside the details, the rows are picked one by one: no stretch dragged across them.
+          onRange={external ? undefined : (range) => change({ ...current, range })}
+        >
           <div className="dt-map-rows" ref={rows}>
             <Rows
               nodes={tree}
