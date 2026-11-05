@@ -372,7 +372,12 @@ function PanelWaterfall({
   const opened = rows.find((row) => row.trace.id === rootId);
   return (
     <div className="panel" data-v2="" style={{ ...details.style, ...map.style }}>
-      <header className="panel-top" data-dock={dock} data-focus={focusTrace ? "" : undefined}>
+      <header
+        className="panel-top"
+        data-dock={dock}
+        data-focus={focusTrace ? "" : undefined}
+        data-no-details={empty || !detailsShown ? "" : undefined}
+      >
         <div className="panel-top-rows">
           <LogoMark className="size-5" />
           <PanelFilter value={filter} onChange={setFilter} />

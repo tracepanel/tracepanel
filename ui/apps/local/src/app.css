@@ -2215,7 +2215,8 @@ body {
   margin-left: 0;
   padding: 0 0.5rem 0 0.625rem;
 }
-.panel-top[data-dock="right"] > .bar-actions {
+.panel-top[data-dock="right"] > .bar-actions,
+.panel-top[data-no-details] > .bar-actions {
   width: auto;
 }
 .panel-wf-tree {
