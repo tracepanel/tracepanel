@@ -2467,12 +2467,16 @@ body {
 }
 
 /* Closed records' bars compare the records, on a scale of their own: quiet, one colour. */
+/* A closed record's bar in its kind's colour, as its tree's root has it, quieter than the open one's. */
 .dt-record-share {
-  background: var(--dt-text-3);
-  opacity: 0.35;
+  background: var(--dt-k-view);
+  opacity: 0.4;
+}
+.dt-record[data-kind="task"] .dt-record-share {
+  background: var(--dt-k-messaging);
 }
 .dt-record:hover .dt-record-share {
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 /* Queries and HTTP read alike: rows under the tabs. The tree beside them has the order; no column menu here.
