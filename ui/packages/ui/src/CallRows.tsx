@@ -618,10 +618,13 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
               // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keys are the row's.
               // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
               <span
+                className="inline-flex flex-none items-center gap-1"
                 onClick={(event) => {
                   event.stopPropagation();
                   ctx.onSelect(node.key);
-                  ctx.onIssues?.();
+                  // Its queries open the Queries tab, its findings the Issues tab.
+                  const opens = (event.target as HTMLElement).closest("[data-opens]") ? "sql" : "issues";
+                  ctx.onIssues?.(opens);
                 }}
               >
                 {ctx.rootMark}

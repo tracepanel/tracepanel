@@ -18,6 +18,9 @@ import type { Slice, Windows } from "./lib/slice";
 import { FailedStatus, KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 
+/** A tab a row's mark opens beside the tree. */
+export type TabOf = "issues" | "sql";
+
 export interface RowContext {
   /** A click on a closed row opens it, on an open one only selects it: the arrow alone closes. */
   opensOnly?: boolean | undefined;
@@ -27,7 +30,8 @@ export interface RowContext {
   /** How many findings are in these spans and what ran under them, where a row says a count, not a name. */
   issuesIn?: ((targets: readonly string[]) => number) | undefined;
   /** Opens the findings of the row just selected. */
-  onIssues?: (() => void) | undefined;
+  /** Opens the Issues tab, or the tab a mark on the row names (its queries: "sql"). */
+  onIssues?: ((tab?: TabOf) => void) | undefined;
   /** Beside the root row's name: what the whole record found, as its closed row says it. */
   rootMark?: ReactNode;
   trace: Trace;

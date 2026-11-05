@@ -43,6 +43,7 @@ import { ClockIcon } from "./icons";
 import { RunningMark } from "./LiveMarks";
 import { LogsPane } from "./LogList";
 import { addedUp, groupNoun, onTheClock } from "./lib/calls";
+import { callsOfTab } from "./lib/callTabs";
 import { chainScope, whoseOwn } from "./lib/chainCounts";
 import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
@@ -56,6 +57,7 @@ import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
 import { KindBadge, KindWords, RoutePath, StatusBadge, TraceBadge, WATERFALL_KINDS, WaitingIcon } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
+import { Queries } from "./RunChips";
 import { UnderThis, underCounts } from "./ScopeBar";
 import { sqlKey } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
@@ -1119,7 +1121,16 @@ export function TraceView({
       detailsHost={waterfall ? detailsSlot : undefined}
       onPicked={waterfall ? onPicked : undefined}
       onProfileTab={waterfall ? () => setActive("profile") : undefined}
-      rootMark={waterfall ? <RecordIssues issues={chainFindings(chain, findings)} /> : undefined}
+      rootMark={
+        waterfall ? (
+          <>
+            <RecordIssues issues={chainFindings(chain, findings)} />
+            <span data-opens="sql">
+              <Queries count={scopedSpans(chain.members, null, callsOfTab("sql")).length} />
+            </span>
+          </>
+        ) : undefined
+      }
       issuesIn={
         waterfall
           ? (targets: readonly string[]) =>
@@ -1128,7 +1139,7 @@ export function TraceView({
               ).length
           : undefined
       }
-      onIssues={waterfall ? () => setActive("issues") : undefined}
+      onIssues={waterfall ? (tab = "issues") => setActive(tab) : undefined}
       onSelect={openAt}
       trace={trace}
       issueBySpan={tabbed.issueBySpan}
