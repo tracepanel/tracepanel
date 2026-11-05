@@ -2348,40 +2348,16 @@ body {
 .panel-wf[data-no-details] .dt-map-head {
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 4rem;
 }
-/* There, the bars' time: an axis over them, its lines down through the rows. */
-.panel-wf[data-no-details] .dt-trace[data-variant="waterfall"] .dt-map-head {
-  height: 1.5rem;
-  overflow: visible;
-  border-bottom: 1px solid var(--dt-border);
-}
-.panel-wf[data-no-details] .dt-map-head > span:not(.dt-map-ruler) {
-  visibility: hidden;
-}
-.panel-wf[data-no-details] .dt-map-ruler {
-  position: relative;
-  margin-block: 0;
-}
-.panel-wf[data-no-details] .dt-map-tick {
-  display: block;
+/* There, the names' column still ends in a line: drawn by the panel, there while a record loads too. */
+.panel-wf[data-no-details] .panel-wf-tree::after {
   position: absolute;
-  top: 0.3125rem;
-  transform: translateX(-50%);
-  color: var(--dt-text-3);
-  font-size: 0.6875rem;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-  text-transform: none;
-  white-space: nowrap;
-}
-.panel-wf[data-no-details] .dt-map-tick:first-child {
-  transform: none;
-}
-.panel-wf[data-no-details] .dt-map-grid {
-  display: block;
-  /* The names' column ends here: the line the split drew with the details open. */
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: calc((100% - 4rem) * 0.4);
   border-left: 1px solid var(--dt-border);
-  margin-left: -0.375rem;
+  pointer-events: none;
+  content: "";
 }
 
 /* A row with nothing to say: no details at all, the rows take the room. */
