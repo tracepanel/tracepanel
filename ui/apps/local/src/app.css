@@ -2541,3 +2541,23 @@ body {
   color: var(--dt-text-3);
   font-weight: 400;
 }
+
+/* The filter reads as a field: its own quiet fill and edge, smaller than the bar. */
+.panel-filter {
+  height: 1.625rem;
+  border: 1px solid var(--dt-border);
+  background: var(--dt-field, var(--dt-bg));
+  color: var(--dt-text-2, var(--dt-text-3));
+}
+.panel-filter:hover {
+  border-color: var(--dt-text-3);
+  background: var(--dt-field, var(--dt-bg));
+}
+.panel-filter:focus-within {
+  border-color: var(--dt-accent);
+  background: var(--dt-field, var(--dt-bg));
+}
+.panel-filter > input::placeholder {
+  color: var(--dt-text-3);
+  opacity: 1;
+}
