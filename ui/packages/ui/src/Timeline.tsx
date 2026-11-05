@@ -449,7 +449,8 @@ export function TimeStrip({
     // A segment hovered on any lane lights its legend item, and the legend item every segment of it.
     <section className="dt-strip" aria-label="Time" {...litScope}>
       <Timeline trace={trace} onSelect={onSelect} still={still} />
-      <TimeLegend trace={trace} related={related} still={still} />
+      {/* Its shares pick the tree's rows: beside the details, those under the row picked (CallMap). */}
+      <TimeLegend trace={trace} related={related} />
     </section>
   );
 }

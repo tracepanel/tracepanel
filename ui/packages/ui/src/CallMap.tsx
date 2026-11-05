@@ -20,6 +20,7 @@ import {
   type Chain,
   callSpans,
   callTraces,
+  childrenOf,
   filteredTree,
   findNode,
   hiddenLogsOf,
@@ -343,6 +344,34 @@ function detailsOf(
   );
 }
 
+/**
+ * The rows a slice keeps under the row picked beside the details (its legend picked the share): the rest of the tree
+ * as it is. The whole tree's otherwise.
+ */
+function scopedMarks(tree: Node[], picked: Picked, selected: string | null): Map<string, Mark> | undefined {
+  const all = marksOf(tree, picked);
+  const node = all && selected ? pathTo(tree, selected)?.at(-1) : undefined;
+  if (!(all && node)) return all;
+  const marks = new Map<string, Mark>();
+  markTree(childrenOf(node), picked, marks);
+  const under = new Set<string>();
+  const collect = (nodes: readonly Node[]) => {
+    for (const each of nodes) {
+      under.add(each.key);
+      collect(childrenOf(each));
+    }
+  };
+  collect(childrenOf(node));
+  const shown = (nodes: readonly Node[]) => {
+    for (const each of nodes) {
+      if (!under.has(each.key)) marks.set(each.key, "match");
+      shown(childrenOf(each));
+    }
+  };
+  shown(tree);
+  return marks;
+}
+
 /** The rows a slice keeps, or undefined while it is the whole trace. */
 function marksOf(tree: Node[], picked: Picked): Map<string, Mark> | undefined {
   if (picked.parts.size === 0 && picked.range === null) return undefined;
@@ -607,7 +636,15 @@ export function CallMap({
     })
   );
   const { categories, quiet } = useSpansTime(trace);
-  const marks = useMemo(() => marksOf(tree, pickedOf(current, trace, categories)), [tree, current, trace, categories]);
+  const marks = useMemo(
+    () => scopedMarks(tree, pickedOf(current, trace, categories), external ? selected : null),
+    [tree, current, trace, categories, external, selected],
+  );
+  // A share picked is of the row it was picked on: another row picked lets it go.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not the slice it changes.
+  useEffect(() => {
+    if (external && current.parts.length > 0) change({ ...current, parts: [] });
+  }, [external, selected]);
   const inline = side || external ? null : details;
 
   return (
