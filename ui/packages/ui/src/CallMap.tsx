@@ -476,6 +476,7 @@ function useRowPicked(
   trace: Trace,
   initialSpan: string | undefined,
   { detailsHost, onPicked }: { detailsHost?: HTMLElement | null | undefined; onPicked?: PickedHandler | undefined },
+  at: SpanScope["at"],
 ) {
   const held = useSelection(initialSpan);
   const external = detailsHost !== undefined;
@@ -483,10 +484,14 @@ function useRowPicked(
   const selected = external ? (held.selected ?? rootKey) : held.selected;
   const picked = external && selected !== rootKey ? selected : null;
   const found = picked ? findNode(tree, picked, trace) : undefined;
+  // A code or wait row: its span's scope at its stretches, the root's too.
+  const node = found?.node ?? (at ? tree[0] : undefined);
+  const atKey = at ? `${at.trace}:${at.windows.join(";")}` : "";
   // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not each new tree it is found in.
   useEffect(() => {
-    if (external) onPicked?.(found ? (scopeOfNode(found.node) ?? null) : null);
-  }, [external, picked]);
+    const scope = node ? scopeOfNode(node) : undefined;
+    if (external) onPicked?.(scope ? { ...scope, ...(at ? { at } : {}) } : null);
+  }, [external, picked, atKey]);
   // A row picked from elsewhere (an issue's link) may be off screen: it comes into view.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked is what moves the view.
   useEffect(() => {
@@ -564,8 +569,8 @@ export function CallMap({
     () => withCallIssues(issueBySpan, related, chain.loaded),
     [issueBySpan, related, chain.loaded],
   );
-  const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring);
-  const [codeRow, setCodeRow] = useState<string | null>(null);
+  const [codeRow, setCodeRow] = useState<{ row: string; at: NonNullable<SpanScope["at"]> } | null>(null);
+  const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring, codeRow?.at);
   const map = useRef<HTMLDivElement>(null);
   const side = useSidePane(map);
   const rows = useScrolledToInitial(initialSpan);
@@ -599,11 +604,11 @@ export function CallMap({
                   select(key);
                 },
                 opensOnly: external,
-                codeRow,
+                codeRow: codeRow?.row,
                 onCodeRow: external
-                  ? (row, span) => {
+                  ? (row, span, at) => {
                       select(span);
-                      setCodeRow(row);
+                      setCodeRow({ row, at });
                     }
                   : undefined,
                 issuesIn: wiring.issuesIn,

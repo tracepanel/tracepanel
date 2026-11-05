@@ -2460,6 +2460,7 @@ body {
 /* Rows stay clean: closed records' times and marks in columns, profiles on their tab. */
 .dt-record .dt-map-chips {
   flex: none;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   min-width: 2rem;
 }

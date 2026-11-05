@@ -4,6 +4,7 @@
 
 import type { ChainTrace, Issue, Log, Related, ScopeIssue, Span, Trace } from "../types";
 import { serviceRuntime, traceRuntime } from "./runtime";
+import type { Windows } from "./slice";
 
 /** One trace of a chain, on the chain's clock: the trace above it and its span whose call it served. */
 export interface Member {
@@ -23,6 +24,8 @@ export interface SpanScope {
   targets: readonly string[];
   label: string;
   only: boolean;
+  /** A code or wait row's: its trace's stretches (µs since that trace started), what its profile is of. */
+  at?: { trace: string; windows: Windows } | undefined;
 }
 
 /** A record of a scope, with its trace and the app that logged it. */

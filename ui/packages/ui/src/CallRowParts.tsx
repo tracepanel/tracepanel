@@ -21,7 +21,7 @@ export interface RowContext {
   opensOnly?: boolean | undefined;
   /** The code row picked (its span and which of its parts), where a code row is a row to pick. */
   codeRow?: string | null | undefined;
-  onCodeRow?: ((row: string, span: string) => void) | undefined;
+  onCodeRow?: ((row: string, span: string, at: { trace: string; windows: Windows }) => void) | undefined;
   /** How many findings are in these spans and what ran under them, where a row says a count, not a name. */
   issuesIn?: ((targets: readonly string[]) => number) | undefined;
   /** Opens the findings of the row just selected. */

@@ -143,6 +143,7 @@ function CodeBars({
  * without one, untraced code, waiting where the profile can't say.
  */
 function partName(part: CodePart, code: CodeOwner, span: string): { name: string; yours: boolean } {
+  if (inBrowser(code.trace)) return { name: browserPart(part), yours: false };
   const profile = partProfile(part, code, span);
   if (part.waiting) return waited(profile);
   const name = profile ? ranMost(profile) : UNTRACED;
@@ -150,6 +151,16 @@ function partName(part: CodePart, code: CodeOwner, span: string): { name: string
 }
 
 const UNTRACED = "untraced code";
+
+/** A browser's trace: its own time is the page's, which no profile records. */
+function inBrowser(trace: Trace): boolean {
+  return trace.attrs["service.role"] === "browser";
+}
+
+/** A browser's own time: loading the page, before its first call; its scripts and rendering after. */
+function browserPart(part: CodePart): string {
+  return (part.pieces[0]?.from ?? 1) < 1_000 ? "page load" : "in the browser";
+}
 
 const OWNERS = new WeakMap<CodeOwner, Map<number, string>>();
 
@@ -231,6 +242,17 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
 
 /** On untraced code of a trace without a profile, where the app can profile, on hover: how to see what ran there. */
 function UntracedHint({ name, code, children }: { name: string; code: CodeOwner; children: ReactNode }) {
+  if (inBrowser(code.trace)) {
+    return (
+      <Hint
+        title={name === "page load" ? "Page load" : "In the browser"}
+        detail="The page's own time between its calls: loading its HTML and scripts, running them, rendering. The browser records no profile of it."
+        side="top"
+      >
+        <span className="flex min-w-0">{children}</span>
+      </Hint>
+    );
+  }
   if (name !== UNTRACED || !code.profiles || code.trace.profile) return children;
   return (
     <Hint
@@ -289,7 +311,7 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
           : undefined
       }
       onClick={() => {
-        pick?.(row, span.id);
+        pick?.(row, span.id, { trace: ctx.code.trace.id, windows: stretchesOf(part.pieces) });
         open?.(stretchesOf(part.pieces));
       }}
     >
