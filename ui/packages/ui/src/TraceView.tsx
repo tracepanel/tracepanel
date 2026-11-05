@@ -501,7 +501,8 @@ function RecordIssues({ issues }: { issues: readonly { kind: IssueKind }[] }) {
 }
 
 /** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
-const DETAILS_HIDES: ReadonlySet<string> = new Set(["share"]);
+// Beside the tree: no share bars, no start (the tree's bars say when): a call's time has the room.
+const DETAILS_HIDES: ReadonlySet<string> = new Set(["share", "start"]);
 
 /** What is selected and how long it took: the row itself may be scrolled away, or have come from a link. */
 function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {

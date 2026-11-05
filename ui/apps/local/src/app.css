@@ -2530,6 +2530,20 @@ body {
     display: none;
   }
 }
+/* Too narrow for the list's tools and the actions on one line (a panel docked right): the actions take a second. */
+.panel-top {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 2.5rem;
+}
+.panel-top-rows {
+  min-width: 19rem;
+  height: 2.5rem;
+}
+.panel-top > .bar-actions {
+  flex-grow: 1;
+  height: 2.5rem;
+}
 
 /* Profile's tabs name the app: its section doesn't again, nor a lone table. */
 .panel-wf-details [data-one-app] [data-split-head] > span:first-child {
