@@ -1,5 +1,5 @@
 import { AppWindowIcon, ArrowRightIcon, HourglassIcon } from "lucide-react";
-import { type ComponentType, type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ComponentType, createContext, type ReactNode, useContext, useLayoutEffect, useRef } from "react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { ISSUE_LABELS } from "./labels";
@@ -322,6 +322,9 @@ const KINDS = new Set(["task", "job", "ws", "gql", "rpc", "page"]);
  * shape in the brand's colour. `muted`: what a call is in the call tree (a view, a query, a task enqueued), the same
  * shape, quiet, so the traces it links to stand out among its calls.
  */
+/** Shorter words for the kinds, where rows are tight (the panel's waterfall). */
+export const KindWords = createContext<Readonly<Record<string, string>> | null>(null);
+
 export function KindBadge({
   kind,
   muted = false,
@@ -332,7 +335,8 @@ export function KindBadge({
   className?: string | undefined;
 }) {
   // A call's kind is its own word (a span may be a "command"); a trace's in short.
-  const word = muted ? kind : shortKind(kind);
+  const own = muted ? kind : shortKind(kind);
+  const word = useContext(KindWords)?.[own.toLowerCase()] ?? own;
   return (
     <span className={cn("dt-kind", className)} data-muted={muted ? "" : undefined}>
       {word}

@@ -264,6 +264,17 @@ function PanelActions({
   );
 }
 
+/** The tab's records: a view's calls are in its tree, so only the one a link opened stays a row of its own. */
+function recordsOf(rows: readonly TraceRow[], selectedId: string | null): TraceRow[] {
+  let view = -1;
+  return rows.filter((row) => {
+    const depth = row.depth ?? 0;
+    if (view >= 0 && depth > view) return row.trace.id === selectedId;
+    view = row.trace.kind === "page" ? depth : -1;
+    return true;
+  });
+}
+
 /** The panel as one waterfall: the tab's records as rows, the one selected open to its call tree, details beside them. */
 function PanelWaterfall({
   route,
@@ -462,7 +473,7 @@ function PanelApp({ route }: { route: Route }) {
         route={route}
         selectedId={selectedId}
         rows={rows}
-        listRows={inOrder(true, shown.rows)}
+        listRows={recordsOf(inOrder(true, shown.rows), selectedId)}
         stored={stored}
         chains={chains}
         opensOn={opensOn}

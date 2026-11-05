@@ -225,6 +225,17 @@ function picks(slice: Slice): number {
  * lane's colour picks its rows; the filters with no time of their own (Logs, Errors, Tasks…) follow as plain chips,
  * then the range picked. A pick opens the call tree (`onPick`).
  */
+export function ShareList({ trace }: { trace: Trace }) {
+  const shares = useMemo(() => sharesOf(trace), [trace]);
+  return (
+    <ul className="dt-breakdown-legend" aria-label="Where the time went">
+      {shares.map((share) => (
+        <FixedShare key={share.category} share={share} />
+      ))}
+    </ul>
+  );
+}
+
 export function TimeLegend({ trace, related }: { trace: Trace; related: Related | undefined }) {
   const { slice, change } = useHeldSlice();
   const tree = useMemo(() => buildTree(withShownLogs(trace, slice.logs), related), [trace, related, slice.logs]);

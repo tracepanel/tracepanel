@@ -46,17 +46,18 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { type Member, type SpanScope, scopedIssues, scopedSpans } from "./lib/scope";
+import { type Member, type SpanScope, scopedIssues, scopedSpans, scopeWindow } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
-import { RoutePath, StatusBadge, TraceBadge, WaitingIcon } from "./primitives";
+import { KindWords, RoutePath, StatusBadge, TraceBadge, WaitingIcon } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
+import { ShareList } from "./TimeLegend";
 import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
@@ -280,6 +281,14 @@ function appTab(app: App | null | undefined) {
   return [{ id: "app" as const, label: "App", icon: <BoxIcon />, ...count }];
 }
 
+const SHORT_TABS: Readonly<Record<string, string>> = { sql: "Queries", http: "HTTP" };
+
+/** A tab where the details are narrow: its name in short, no time beside its count. */
+function shortTab<T extends { id: string; label: string; detail?: unknown }>(tab: T): T {
+  const { detail: _detail, ...rest } = tab;
+  return { ...rest, label: SHORT_TABS[tab.id] ?? tab.label } as T;
+}
+
 /** The trace's tabs, in the order they show: each list's only when it has anything. */
 function traceTabs({
   trace,
@@ -309,8 +318,7 @@ function traceTabs({
       label: tabLabel(trace),
       icon: <KindIcon />,
       // How it went and how long it took, on the tab that describes it: no separate metrics line.
-      badge: outcome,
-      detail: duration(trace.duration),
+      ...(waterfall ? {} : { badge: outcome, detail: duration(trace.duration) }),
     },
     // Second, but open by default: the call tree is where a slow or failing request is explained.
     { id: "tree" as const, label: waterfall ? "Details" : "Call tree", icon: <ListTreeIcon /> },
@@ -330,7 +338,7 @@ function traceTabs({
       tone: "warn" as const,
     }),
     // What a request is most often opened for: its SQL, cache and HTTP calls, and its logs when it wrote any.
-    ...callsTabs(calls, trace),
+    ...(waterfall ? callsTabs(calls, trace).map(shortTab) : callsTabs(calls, trace)),
     ...(logs > 0 ? [{ id: "logs" as const, label: "Logs", icon: <ScrollTextIcon />, count: logs }] : []),
     // Recorded only when asked for: where the time went in code.
     ...(profiled ? [{ id: "profile" as const, label: "Profile", icon: <FlameIcon /> }] : []),
@@ -405,10 +413,44 @@ function rootTab(trace: Trace, findings: readonly Issue[]): TabId {
   return findings.length > 0 ? "issues" : "request";
 }
 
+const WATERFALL_KINDS: Readonly<Record<string, string>> = {
+  request: "req",
+  transaction: "tx",
+  function: "fn",
+  graphql: "gql",
+  template: "tpl",
+  framework: "fw",
+  handler: "fn",
+  "http.client": "http",
+};
+
+/** What is selected and how long it took; the root's also where its time went. */
+function DetailsHead({ trace, chain }: { trace: Trace; chain: TraceScope }) {
+  const scope = chain.scope;
+  if (scope) {
+    const [from, to] = scopeWindow(chain.members, scope);
+    return (
+      <header className="dt-details-head">
+        <h3>{scope.label}</h3>
+        <span className="dt-details-time">{duration(to - from)}</span>
+      </header>
+    );
+  }
+  return (
+    <header className="dt-details-head">
+      <h3>{trace.name}</h3>
+      {outcomeOf(trace)}
+      <span className="dt-details-time">{duration(trace.duration)}</span>
+      <ShareList trace={trace} />
+    </header>
+  );
+}
+
 /** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
 function WaterfallParts({
   traceId,
   rows,
+  head,
   tabs,
   panel,
   explore,
@@ -416,6 +458,7 @@ function WaterfallParts({
   showRow,
   onSlot,
 }: {
+  head: ReactNode;
   traceId: string;
   rows: ReactNode;
   tabs: ReactNode;
@@ -427,14 +470,17 @@ function WaterfallParts({
 }) {
   return (
     <>
-      <article className="dt-trace" data-variant="waterfall" data-trace={traceId}>
-        {rows}
-      </article>
+      <KindWords.Provider value={WATERFALL_KINDS}>
+        <article className="dt-trace" data-variant="waterfall" data-trace={traceId}>
+          {rows}
+        </article>
+      </KindWords.Provider>
       {hosts.actions && explore ? createPortal(explore, hosts.actions) : null}
       {hosts.details
         ? createPortal(
             <div className="dt-trace" data-variant="details">
               {tabs}
+              {head}
               <div ref={onSlot} className="dt-details-row" hidden={!showRow} />
               {panel}
             </div>,
@@ -1006,6 +1052,7 @@ export function TraceView({
         <UntracedCalls value={chain.untraced}>
           <WaterfallParts
             traceId={trace.id}
+            head={<DetailsHead trace={trace} chain={chain} />}
             rows={treePane}
             tabs={tabsBar}
             panel={panel}

@@ -257,6 +257,14 @@ function ListItem({
       </li>
     );
   }
+  // Open, its row is the first of what it opens to.
+  if (trace.id === selectedId && openContent !== undefined) {
+    return (
+      <li>
+        <div className="dt-requests-open">{openContent}</div>
+      </li>
+    );
+  }
   return (
     <li>
       <ListRow
@@ -274,7 +282,6 @@ function ListItem({
         onSelect={onSelect}
       />
       <RowOpens
-        selected={trace.id === selectedId}
         openContent={openContent}
         chain={
           withOpens && fold?.open !== false
@@ -288,21 +295,19 @@ function ListItem({
   );
 }
 
-/** Under a row: what it opens to where the list has that (only under the selected one), else its trace's chain. */
+/** Under a row: its trace's chain, where the row doesn't open in place. */
 function RowOpens({
-  selected,
   openContent,
   chain,
   selectedId,
   onSelect,
 }: {
-  selected: boolean;
   openContent: ReactNode;
   chain: { rowId: string; level: number; rows: boolean; chains: ListChains } | undefined;
   selectedId: TraceListProps["selectedId"];
   onSelect: TraceListProps["onSelect"];
 }) {
-  if (openContent !== undefined) return selected ? <div className="dt-requests-open">{openContent}</div> : null;
+  if (openContent !== undefined) return null;
   return chain ? <RowChain {...chain} selectedId={selectedId} onSelect={onSelect} /> : null;
 }
 

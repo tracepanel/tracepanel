@@ -2124,3 +2124,66 @@ body {
 .dt-details-row[hidden] {
   display: none;
 }
+
+/* Its rows, closed and open, are one list: one height, one type, one quiet line between. */
+.panel[data-v2] .dt-requests[data-compact] {
+  background: transparent;
+}
+.panel[data-v2] .dt-requests[data-compact] .dt-request-row {
+  min-height: 1.75rem;
+  padding-block: 0;
+  background: transparent;
+}
+.panel[data-v2] .dt-requests[data-compact] .dt-request-row:hover {
+  background: var(--dt-hover);
+}
+.dt-requests-open {
+  border-block: 0;
+  background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
+}
+.dt-trace[data-variant="waterfall"] .dt-map-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) 4rem;
+  min-height: 1.625rem;
+  border-bottom-color: transparent;
+}
+.dt-trace[data-variant="waterfall"] .dt-map-head {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) 4rem;
+}
+.dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
+  display: none;
+}
+.dt-trace[data-variant="waterfall"] .dt-map-kind {
+  min-width: 2.25rem;
+  text-align: center;
+}
+
+.dt-details-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.625rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-details-head h3 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--dt-size-md, 0.9375rem);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-details-time {
+  margin-left: auto;
+  font-family: var(--dt-mono);
+  font-variant-numeric: tabular-nums;
+}
+.dt-details-head .dt-breakdown-legend {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+.dt-trace[data-variant="details"] .dt-scope-chip {
+  display: none;
+}
