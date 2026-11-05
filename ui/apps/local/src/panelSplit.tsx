@@ -1,5 +1,5 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import { FoldHorizontalIcon, SearchIcon, UnfoldHorizontalIcon } from "lucide-react";
+import { ChevronsLeftIcon, ChevronsRightIcon, SearchIcon } from "lucide-react";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
 
 const STEP = 0.02;
@@ -200,8 +200,8 @@ export function useDetailsShown(): [boolean, (shown: boolean) => void] {
  * row picked shows them again.
  */
 export function DetailsToggle({ shown, onShown }: { shown: boolean; onShown: (shown: boolean) => void }) {
-  // Not a panel's outline (the dock's button is one): the rows spread across, or the details back beside them.
-  const Icon = shown ? UnfoldHorizontalIcon : FoldHorizontalIcon;
+  // Not a panel's outline (the dock's button is one): the details pushed off to the right, or brought back.
+  const Icon = shown ? ChevronsRightIcon : ChevronsLeftIcon;
   const label = shown ? "Hide details" : "Show details";
   return (
     <button type="button" className="icon-button" aria-label={label} title={label} onClick={() => onShown(!shown)}>
