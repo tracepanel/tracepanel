@@ -208,6 +208,12 @@ export function TraceList({
   };
   return (
     <ul className="dt-requests" data-compact={compact ? "" : undefined}>
+      {/* A trace opened from elsewhere (the one a call was served by) that isn't a row here: still open, first. */}
+      {openContent !== undefined && selectedId && !rows.some((row) => row.trace.id === selectedId) ? (
+        <li>
+          <div className="dt-requests-open">{openContent}</div>
+        </li>
+      ) : null}
       {shownRows(rows, chains, openContent !== undefined).map(({ row, fold, under }) => (
         <ListItem key={row.key ?? row.trace.id} row={row} fold={fold} under={under} {...props} />
       ))}
