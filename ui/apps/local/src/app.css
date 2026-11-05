@@ -2282,8 +2282,18 @@ body {
 .panel-wf-details .tp-scope-summary {
   justify-content: flex-end;
 }
+/* A row's hidden records, short beside the marks: the log's icon and how many. */
 .panel-wf .tp-map-row .tp-map-logs {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  color: var(--tp-text-3);
+  font-size: var(--tp-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.panel-wf .tp-map-row .tp-map-logs svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 /* Beside the bars, a kind's badge is one quiet look: the bar carries the colour, a log's level or an error stays. */

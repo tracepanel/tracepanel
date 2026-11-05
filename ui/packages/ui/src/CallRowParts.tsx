@@ -1,3 +1,4 @@
+import { ScrollTextIcon } from "lucide-react";
 import { type CSSProperties, createContext, type ReactNode, useContext } from "react";
 import type { CodeInfo } from "./CallCode";
 import { type Mark, type Node, type ServedRun, SKEW_NOTE_MIN, type SpanNode } from "./callTree";
@@ -570,13 +571,15 @@ export function HiddenLogs({ count, onShow }: { count: number | undefined; onSho
       className="tp-map-sub tp-map-logs"
       role="button"
       tabIndex={-1}
-      title="Info and debug records here; a click shows every record"
+      aria-label={plural(count, "log", "logs")}
+      title={`${plural(count, "info or debug record", "info or debug records")} here; a click shows every record`}
       onClick={(event) => {
         event.stopPropagation();
         onShow();
       }}
     >
-      {plural(count, "log", "logs")}
+      <ScrollTextIcon aria-hidden="true" />
+      {count}
     </span>
   );
 }

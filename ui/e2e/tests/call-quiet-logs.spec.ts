@@ -92,7 +92,7 @@ test("a call's trace opened under the call shows its warnings, its info counted 
 
   await expect(page.getByText("stock running low")).toBeVisible();
   await expect(page.getByText("order received")).toHaveCount(0);
-  await expect(handler.locator(".tp-map-logs")).toHaveText("1 log");
+  await expect(handler.locator(".tp-map-logs")).toHaveAccessibleName("1 log");
 
   await handler.locator(".tp-map-logs").click();
 
