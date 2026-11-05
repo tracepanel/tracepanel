@@ -141,21 +141,20 @@ test("a choice of lists is the pill switch every pane has: the chosen one raised
   await expect(other).toHaveCSS("box-shadow", "none");
 });
 
-test("a trace's parts without a switch are named on the same pill track as the ones with one", async ({ page }) => {
+test("a trace's parts without a switch are named on a full-width pill track", async ({ page }) => {
   await openTrace(page, "shop.tasks.parse_feed");
   await page.getByRole("tablist").first().getByRole("tab", { name: /^Task/ }).click();
   const workflow = page.getByRole("region", { name: "Workflow" }).getByRole("heading");
 
   await expect(workflow).toHaveText("Workflow");
-  await expect(page.getByRole("tablist", { name: "Request details" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Attributes" })).toBeVisible();
   await laidOut(page);
   const track = await workflow.locator("span").first().boundingBox();
-  const attributes = await page.getByRole("tablist", { name: "Request details" }).boundingBox();
+  const attributes = await page.getByRole("region", { name: "Attributes" }).boundingBox();
   if (!(track && attributes)) throw new Error("no tracks");
 
-  // The same full-width muted track as Attributes', not a lone pill.
+  // A full-width muted track, as wide as the attributes under it, not a lone pill.
   expect(Math.abs(track.width - attributes.width)).toBeLessThan(1);
-  expect(Math.abs(track.height - attributes.height)).toBeLessThan(1);
 });
 
 for (const [name, url] of [

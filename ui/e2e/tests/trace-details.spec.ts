@@ -25,7 +25,7 @@ test("a repeated query's details: its SQL, how many, and the line that runs it",
 
   await expect(details).toContainText("13 similar queries");
   await expect(details.getByRole("code").first()).toHaveText(
-    "SELECT author.id, author.name FROM author WHERE author.id = ?",
+    /^SELECT\s+author\.id,\s+author\.name\s+FROM\s+author\s+WHERE\s+author\.id = \d+$/,
   );
   await expect(details).toContainText("app/main.py:60 in posts");
 

@@ -178,9 +178,15 @@ export function RequestParts({ parts, look = "card" }: { parts: readonly Part[];
           onChange={setPicked}
         />
       ) : null}
-      <div className={PART_PANELS[look]} role="tabpanel" aria-label={open.label}>
-        <RowsLookContext value={look}>{open.content}</RowsLookContext>
-      </div>
+      {parts.length > 1 ? (
+        <div className={PART_PANELS[look]} role="tabpanel" aria-label={open.label}>
+          <RowsLookContext value={look}>{open.content}</RowsLookContext>
+        </div>
+      ) : (
+        <section className={PART_PANELS[look]} aria-label={open.label}>
+          <RowsLookContext value={look}>{open.content}</RowsLookContext>
+        </section>
+      )}
     </section>
   );
 }

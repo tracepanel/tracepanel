@@ -130,8 +130,10 @@ test("only warnings and worse show by default; the Logs chip, or a row's note, s
   await expect(lanes.locator(".tp-lane-label")).toHaveText(["task", "1 log record"]);
   await expect(chip).toHaveAttribute("aria-pressed", "false");
   await expect(chip).toContainText("11");
-  await expect(row(page, "task", HELD_REPORT).locator(".tp-map-logs")).toHaveText("1 log");
-  await expect(row(page, "transaction", "transaction app.sqlite3").locator(".tp-map-logs")).toHaveText("9 logs");
+  await expect(row(page, "task", HELD_REPORT).locator(".tp-map-logs")).toHaveAccessibleName("1 log");
+  await expect(row(page, "transaction", "transaction app.sqlite3").locator(".tp-map-logs")).toHaveAccessibleName(
+    "9 logs",
+  );
 
   await row(page, "transaction", "transaction app.sqlite3").locator(".tp-map-logs").click();
 

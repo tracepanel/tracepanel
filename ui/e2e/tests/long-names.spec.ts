@@ -18,7 +18,6 @@ test("a long attribute name is shown whole, not cut", async ({ page, request }) 
   });
   await page.goto(`/#/t/${await first(request, "system:rabbitmq")}`);
   await page.getByRole("tab", { name: /^Task/ }).click();
-  await page.getByRole("tab", { name: /^Attributes/ }).click();
   const term = page.locator("dt", { hasText: "rabbitmq.destination.routing_key" });
 
   await expect(term).toBeVisible();

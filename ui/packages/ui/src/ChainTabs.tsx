@@ -256,7 +256,7 @@ export function ScopedCalls({
   const [mode, setMode] = useState<SqlMode>("grouped");
   const sql = tab === "sql";
   // One query run again and again (a group opened in the tree): each run in its order, nothing left to group.
-  const oneQuery = shown.length > 1 && new Set(shown.map(sqlKey)).size === 1;
+  const oneQuery = chain.scope !== null && shown.length > 1 && new Set(shown.map(sqlKey)).size === 1;
   return (
     <>
       <CallsHeader

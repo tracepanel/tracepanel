@@ -92,7 +92,7 @@ test("at 1440 × 900 the sidebar shows its Problems, its footer on one line wher
   const list = await nav.boundingBox();
   const item = await issues.boundingBox();
   const icon = await nav.locator("a svg").first().boundingBox();
-  const footer = await page.locator("aside footer span").first().boundingBox();
+  const footer = await page.locator('aside footer span[title^="Local"]').boundingBox();
   if (!(list && item && icon && footer)) throw new Error("no sidebar boxes");
 
   expect(item.y + item.height).toBeLessThanOrEqual(list.y + list.height);
