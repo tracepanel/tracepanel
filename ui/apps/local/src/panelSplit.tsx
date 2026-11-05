@@ -53,6 +53,8 @@ export function useDetailsSplit(dock: string) {
       onPointerDown,
       onPointerMove,
       onPointerUp: () => save(share),
+      // A drag cut short (the pointer lost, the window left): where it got to is kept all the same.
+      onLostPointerCapture: () => save(share),
       onKeyDown,
       onDoubleClick: () => {
         const first = DETAILS_AT_FIRST[dock] ?? 0.38;
@@ -122,6 +124,8 @@ export function useMapWidth({ key, first }: { key: string; first: number }) {
         }
       },
       onPointerUp: () => writeItem(key, String(width)),
+      // A drag cut short (the pointer lost, the window left): where it got to is kept all the same.
+      onLostPointerCapture: () => writeItem(key, String(width)),
       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
         if (event.key === "ArrowLeft") keep(heldMap(width + 16));
         else if (event.key === "ArrowRight") keep(heldMap(width - 16));
