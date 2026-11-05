@@ -142,10 +142,25 @@ function LibraryCaller({ caller, className }: { caller: string; className?: stri
   );
 }
 
-/** What a query's line says when its heading has said where it ran: the rows it returned. */
+/** What a query's line says when its heading has said where it ran: what it was run with, the rows it returned. */
 function rowsOf(span: Span): string | null {
   const rows = span.attrs["db.response.returned_rows"];
-  return rows === undefined ? null : `${rows} ${rows === 1 ? "row" : "rows"}`;
+  const returned = rows === undefined ? null : `${rows} ${rows === 1 ? "row" : "rows"}`;
+  return [paramsOf(span), returned].filter(Boolean).join(" · ") || null;
+}
+
+/** "pk_1 = 12": the values a query ran with, by name where the driver says them; none where they stay local. */
+function paramsOf(span: Span): string | null {
+  const values = span.attrs["db.params"];
+  if (!Array.isArray(values) || values.length === 0) return null;
+  const names = span.attrs["db.param_names"];
+  return values
+    .map((value, at) => {
+      const name = Array.isArray(names) ? names[at] : undefined;
+      const text = typeof value === "string" ? `'${value}'` : JSON.stringify(value);
+      return name === undefined ? text : `${String(name)} = ${text}`;
+    })
+    .join(", ");
 }
 
 /** Where each query of a group was made, one line each, with its time. */
@@ -300,15 +315,22 @@ function orderColumns(
       id: "query",
       label: "Query",
       required: true,
-      cell: ({ span }) => (
-        <QueryName
-          name={span.name}
-          count={1}
-          alias={span.attrs["db.alias"]}
-          from={span.attrs}
-          issue={issueBySpan.get(span.id)}
-        />
-      ),
+      cell: ({ span }) => {
+        // What it ran with: one query run again and again tells its runs apart by their values.
+        const params = paramsOf(span);
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <QueryName
+              name={span.name}
+              count={1}
+              alias={span.attrs["db.alias"]}
+              from={span.attrs}
+              issue={issueBySpan.get(span.id)}
+            />
+            {params ? <span className="dt-map-sub truncate font-mono">{params}</span> : null}
+          </span>
+        );
+      },
     },
     {
       id: "start",
@@ -317,7 +339,7 @@ function orderColumns(
       num: true,
       drop: 2,
       className: "text-muted-foreground",
-      cell: ({ span }) => `+${duration(Math.max(span.start - start, 0))}`,
+      cell: ({ span }) => (span.start - start < 1_000 ? "+0 ms" : `+${duration(span.start - start)}`),
     },
     ...timeColumns<Placed>((item) => rowTime([item.span]), placed, scope, QUERY),
   ];

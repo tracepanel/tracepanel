@@ -255,6 +255,8 @@ export function ScopedCalls({
   const clock = useMemo(() => clockText(shown, chain.members), [shown, chain.members]);
   const [mode, setMode] = useState<SqlMode>("grouped");
   const sql = tab === "sql";
+  // One query run again and again (a group opened in the tree): each run in its order, nothing left to group.
+  const oneQuery = shown.length > 1 && new Set(shown.map(sqlKey)).size === 1;
   return (
     <>
       <CallsHeader
@@ -268,7 +270,11 @@ export function ScopedCalls({
         onPick={setPicks}
         noun={of.noun}
         clock={clock}
-        end={sql ? <Segmented label="Queries shown" segments={SQL_MODES} value={mode} onChange={setMode} /> : null}
+        end={
+          sql && !oneQuery ? (
+            <Segmented label="Queries shown" segments={SQL_MODES} value={mode} onChange={setMode} />
+          ) : null
+        }
       />
       <CallsOf spans={shown} empty={emptyCalls(of.empty, chain.scope !== null)}>
         {sql ? (
@@ -278,7 +284,7 @@ export function ScopedCalls({
             focus={focus}
             onExplain={onExplain}
             links={links}
-            mode={mode}
+            mode={oneQuery ? "timeline" : mode}
             clock={clock}
           />
         ) : (
