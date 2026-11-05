@@ -1,4 +1,3 @@
-import { Badge } from "./components/ui/badge";
 // A trace's calls to one system as the console lists anything: its DB, Cache and HTTP calls tabs are tables with the
 // console's head and hairline rows (DataTable), a row's details opened under it as a log record's are, and those
 // details laid out as the call tree's.
@@ -230,25 +229,6 @@ export function sameOrigin(spans: readonly Span[]): string | null {
 export function calledFrom(count: number, origin: string | null): string {
   if (count === 1) return origin ? `Called from ${origin}` : "Call";
   return origin ? `Called ${count} times from ${origin}` : `Called ${count} times`;
-}
-
-/** How many calls a row folds, in a column of its own: raised when they are an N+1. */
-export function countColumn<T>(count: (item: T) => number, repeats: (item: T) => boolean): DataColumn<T> {
-  return {
-    id: "count",
-    label: "Count",
-    width: 4.5,
-    fixed: true,
-    num: true,
-    cell: (item) =>
-      repeats(item) ? (
-        <Badge variant="warn" size="compact" className="tabular-nums" title="N+1">
-          {count(item)}
-        </Badge>
-      ) : (
-        <span className="text-muted-foreground tabular-nums">{count(item)}</span>
-      ),
-  };
 }
 
 /** What an open row's details start with, as the call tree's do: what it is, how many, how long. */

@@ -4,7 +4,6 @@ import {
   CallLines,
   CallTable,
   calledFrom,
-  countColumn,
   DetailsTitle,
   groupTitle,
   issueOfRepeats,
@@ -114,11 +113,11 @@ function Status({ span, dot }: { span: Span; dot: boolean }) {
 const TEXT_ATTRS = ["url.full", "db.statement"];
 
 /** What a call's row shows, as text: its URL or command, where it was made, why it failed. */
-function textsOf(span: Span): { url: string; origin: string; failure: string } {
+function textsOf(span: Span): { url: string; origin: string | null; failure: string } {
   const attrs = span.attrs;
   return {
     url: String(TEXT_ATTRS.map((key) => attrs[key]).find((value) => value !== undefined) ?? span.name),
-    origin: String(attrs["code.origin"] ?? "—"),
+    origin: attrs["code.origin"] === undefined ? null : String(attrs["code.origin"]),
     failure: String(attrs["error.type"] ?? ""),
   };
 }
@@ -155,7 +154,8 @@ function Call({
             <code className="truncate font-mono">{url}</code>
             <NotTraced spanId={span.id} />
           </span>
-          {saidOrigin ? null : <code className="truncate font-mono text-muted-foreground">{origin}</code>}
+          {/* Where it was made, where that is known: no line of a dash. */}
+          {saidOrigin || !origin ? null : <code className="truncate font-mono text-muted-foreground">{origin}</code>}
         </span>
       </span>
     </CallLine>
@@ -164,13 +164,12 @@ function Call({
 
 /** A group's name in its row: what its calls repeat, how many, how they went, its issue. */
 function GroupName({ group }: { group: Group }) {
-  // Beside the tree, the count has its own column, and it says the N+1.
-  const beside = useContext(HiddenColumns) !== null;
-  const issue = beside && group.issue === "n+1" ? undefined : group.issue;
+  // How many right after what, as the tree says it: ×36.
+  const issue = group.issue;
   return (
     <span className="flex min-w-0 items-center gap-2">
       <Template template={group.template} />
-      {beside ? null : <Times count={group.spans.length} />}
+      <Times count={group.spans.length} />
       {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
       <GroupNotTraced spans={group.spans} />
       {issue ? <IssueChip kind={issue} /> : null}
@@ -178,22 +177,9 @@ function GroupName({ group }: { group: Group }) {
   );
 }
 
-function columns(
-  groups: readonly Group[],
-  scope: ListTime,
-  noun: readonly [string, string],
-  beside: boolean,
-): DataColumn<Group>[] {
+function columns(groups: readonly Group[], scope: ListTime, noun: readonly [string, string]): DataColumn<Group>[] {
   return [
     { id: "call", label: "Call", required: true, cell: (group) => <GroupName group={group} /> },
-    ...(beside
-      ? [
-          countColumn<Group>(
-            (group) => group.spans.length,
-            (group) => group.issue === "n+1",
-          ),
-        ]
-      : []),
     ...timeColumns<Group>((group) => group.time, groups, scope, noun),
   ];
 }
@@ -233,14 +219,13 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
 
 /** One system's calls, grouped by what they repeat (an endpoint, a key pattern) like queries by statement. */
 export function CallsList({ spans, issueBySpan, focus, table = "trace-calls", clock }: CallsListProps) {
-  const beside = useContext(HiddenColumns) !== null;
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
   return (
     <CallTable
       table={table}
-      columns={columns(groups, scope, nounOf(spans[0]), beside)}
+      columns={columns(groups, scope, nounOf(spans[0]))}
       items={groups}
       focus={focus}
       row={{

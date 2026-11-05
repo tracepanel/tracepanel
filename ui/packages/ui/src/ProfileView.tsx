@@ -56,7 +56,7 @@ import type { WaitFrame } from "./lib/waitCalls";
 import { timed } from "./lib/waiting";
 import { rawWindowProfile, sayProfile, windowProfile } from "./lib/windowProfile";
 import { litKey, litScope } from "./lit";
-import { AppChip } from "./primitives";
+import { AppChip, AppMark } from "./primitives";
 import { ScopeHeader } from "./ScopeBar";
 import { Segmented } from "./Segmented";
 import { largestFirst, ShareBar, ShareFace } from "./Shares";
@@ -1353,7 +1353,16 @@ function OneApp({
       {apps.length > 1 && app ? (
         <Segmented
           label="App"
-          segments={apps.map((each) => ({ id: each.app, label: each.app }))}
+          segments={apps.map((each) => ({
+            id: each.app,
+            // Each app as it is everywhere: its runtime's mark, its name.
+            label: (
+              <>
+                <AppMark runtime={appRuntime(each)} />
+                {each.app}
+              </>
+            ),
+          }))}
           value={app.app}
           onChange={onTab}
         />

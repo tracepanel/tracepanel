@@ -5,7 +5,6 @@ import {
   CallLines,
   CallTable,
   calledFrom,
-  countColumn,
   DetailsTitle,
   type Explain,
   groupTitle,
@@ -276,7 +275,7 @@ export const SQL_MODES: readonly Segment<SqlMode>[] = [
   { id: "timeline", label: "In order" },
 ];
 
-function groupColumns(groups: readonly Group[], scope: ListTime, beside: boolean): DataColumn<Group>[] {
+function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Group>[] {
   return [
     {
       id: "query",
@@ -285,22 +284,13 @@ function groupColumns(groups: readonly Group[], scope: ListTime, beside: boolean
       cell: (group) => (
         <QueryName
           name={group.name}
-          count={beside ? 1 : group.spans.length}
+          count={group.spans.length}
           alias={group.spans[0]?.attrs["db.alias"]}
           from={group.spans.find((span) => templatePlace(span.attrs))?.attrs}
-          issue={beside && group.issue === "n+1" ? undefined : group.issue}
+          issue={group.issue}
         />
       ),
     },
-    // Beside the tree, the count has its own column, and it says the N+1.
-    ...(beside
-      ? [
-          countColumn<Group>(
-            (group) => group.spans.length,
-            (group) => group.issue === "n+1",
-          ),
-        ]
-      : []),
     ...timeColumns<Group>((group) => group.time, groups, scope, QUERY),
   ];
 }
@@ -362,7 +352,6 @@ interface Placed {
 }
 
 export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clock }: SqlListProps) {
-  const beside = useContext(HiddenColumns) !== null;
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
@@ -375,7 +364,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
       {mode === "grouped" ? (
         <CallTable
           table="trace-sql"
-          columns={groupColumns(groups, scope, beside)}
+          columns={groupColumns(groups, scope)}
           items={groups}
           focus={focus}
           row={{
