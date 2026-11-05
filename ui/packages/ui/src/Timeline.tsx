@@ -418,7 +418,7 @@ export function TimeStrip({
     <section className="dt-strip" aria-label="Time" {...litScope}>
       <Timeline trace={trace} onSelect={onSelect} still={still} />
       {/* Its shares pick the tree's rows: beside the details, those under the row picked (CallMap). */}
-      <TimeLegend trace={trace} related={related} />
+      <TimeLegend trace={trace} related={related} shares={still} />
     </section>
   );
 }
