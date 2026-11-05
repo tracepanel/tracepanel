@@ -2462,7 +2462,6 @@ body {
 .panel-wf-details .dt-scope-head {
   display: none;
 }
-.panel-wf-details [aria-label="Columns"],
-.panel-wf-details [aria-label^="Column"] {
-  display: none;
+.panel-wf-details button[aria-label="Columns"] {
+  display: none !important;
 }
