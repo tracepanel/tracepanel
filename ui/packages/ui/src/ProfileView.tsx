@@ -1,3 +1,4 @@
+import { ClockIcon, CodeIcon, LayersIcon, MemoryStickIcon } from "lucide-react";
 import {
   type MouseEvent,
   type ReactNode,
@@ -243,9 +244,28 @@ const LABELLED = 0.035;
 /** How much a box, a share or a row stands for, said: a time ("60 ms"), or bytes ("30 MB"). */
 type Measure = (amount: number) => string;
 
+// Each switch's pills with a small mark of what they show, as the trace's tabs have.
+const MARK = "size-3.5 shrink-0";
+
 const FRAMES = [
-  { id: "own", label: "Your code" },
-  { id: "all", label: "All frames" },
+  {
+    id: "own",
+    label: (
+      <>
+        <CodeIcon aria-hidden="true" className={MARK} />
+        Your code
+      </>
+    ),
+  },
+  {
+    id: "all",
+    label: (
+      <>
+        <LayersIcon aria-hidden="true" className={MARK} />
+        All frames
+      </>
+    ),
+  },
 ] as const;
 
 type Kind = "time" | "memory";
@@ -276,8 +296,24 @@ function useFrames(time: Profile): Frames {
 }
 
 const KINDS = [
-  { id: "time", label: "Time" },
-  { id: "memory", label: "Memory" },
+  {
+    id: "time",
+    label: (
+      <>
+        <ClockIcon aria-hidden="true" className={MARK} />
+        Time
+      </>
+    ),
+  },
+  {
+    id: "memory",
+    label: (
+      <>
+        <MemoryStickIcon aria-hidden="true" className={MARK} />
+        Memory
+      </>
+    ),
+  },
 ] as const;
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile: its time, or its memory. */

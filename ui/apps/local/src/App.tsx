@@ -252,7 +252,7 @@ function PanelActions({
           target="_blank"
           rel="noreferrer"
         >
-          Console
+          <span className="panel-console-label">Console</span>
           <ExternalIcon />
         </a>
       </Hint>

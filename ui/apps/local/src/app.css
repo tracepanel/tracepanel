@@ -2131,12 +2131,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .panel-wf .dt-map-row {
-  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
+  grid-template-columns: minmax(0, 1fr) min(var(--wf-map, 8rem), 45%) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
+  grid-template-columns: minmax(0, 1fr) min(var(--wf-map, 8rem), 45%) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2179,6 +2179,19 @@ body {
 .panel-top {
   gap: 0;
   padding: 0;
+  container-type: inline-size;
+}
+/* A narrow panel: Console is its icon, the filter its field alone; nothing runs under the details' actions. */
+@container (max-width: 60rem) {
+  .panel-console-label {
+    display: none;
+  }
+  .panel-filter {
+    min-width: 2rem;
+  }
+  .panel-filter > kbd {
+    display: none;
+  }
 }
 .panel-top-rows {
   display: flex;
@@ -2215,7 +2228,7 @@ body {
   position: absolute;
   z-index: 3;
   top: 0;
-  right: calc(var(--wf-map, 8rem) + 5.9375rem);
+  right: calc(min(var(--wf-map, 8rem), 45%) + 5.9375rem);
   bottom: 0;
   width: 0.5625rem;
   transform: translateX(50%);
@@ -2586,8 +2599,9 @@ body {
   margin: 0;
   padding: 0;
 }
+/* Past Time and Memory (each with its mark), on their line. */
 .panel-wf-details .dt-scope-head:has([aria-label="Profile of"]) + .dt-profile-one > [role="tablist"] {
-  left: 10.25rem;
+  left: 11.5rem;
 }
 
 /* One tight column for the word before a call's name. */
