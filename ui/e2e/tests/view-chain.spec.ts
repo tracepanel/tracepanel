@@ -144,10 +144,10 @@ test("the pill of a view counts what its chain did, as the panel's tabs count it
   await expect(pill(page).locator(".seg").nth(3)).toHaveText("7");
 
   await pill(page).click();
-  await panel(page).locator('.tp-request-row[data-kind="page"]').first().click();
+  await panel(page).locator('.tp-map-row[data-kind="page"]').first().click();
 
-  await expect(panel(page).getByRole("tab", { name: /^DB/ })).toContainText("3");
-  await expect(panel(page).getByRole("tab", { name: /^HTTP calls/ })).toContainText("7");
+  await expect(panel(page).getByRole("tab", { name: /^Queries/ })).toContainText("3");
+  await expect(panel(page).getByRole("tab", { name: /^HTTP/ })).toContainText("7");
 });
 
 test("each call says what it was answered: 200, 404 amber, 503 and no answer red; a cut call takes its trace's time", async ({

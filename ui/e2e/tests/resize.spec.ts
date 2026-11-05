@@ -182,7 +182,7 @@ async function held(page: Page, edge: Locator, by: { x?: number; y?: number }, p
   await page.mouse.down();
   await page.mouse.move(x + (by.x ?? 0), y + (by.y ?? 0), { steps: 3 });
   const drawn = {
-    hit: Math.round(box.width < box.height ? box.width : box.height),
+    hit: Math.round(Math.min(box.width, box.height)),
     ...(await edge.evaluate(line, pseudo)),
   };
   await page.mouse.up();

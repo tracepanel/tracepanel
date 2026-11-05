@@ -113,15 +113,11 @@ test("the panel, docked to the right: the call tree and the tasks the request en
   await page.getByRole("button", { name: "Load rebuild" }).click();
   await pill(page).click();
   await panel(page).getByRole("button", { name: "Dock to right" }).click();
-  await panel(page)
-    .getByRole("tab", { name: /Call tree/ })
-    .click();
 
   for (const name of HANDLERS) await shownByItsEnd(panel(page).getByRole("button", { name: /^task(?!\.)/i }), name);
 
-  await panel(page)
-    .getByRole("tab", { name: /Request/ })
-    .click();
+  // The request's own row: its details name the tasks it enqueued too.
+  await panel(page).locator(".tp-map-row[data-root]").click();
 
   for (const name of HANDLERS) await shownByItsEnd(panel(page), name);
 });

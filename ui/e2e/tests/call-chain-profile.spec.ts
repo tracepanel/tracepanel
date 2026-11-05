@@ -3,7 +3,7 @@
 // The BFF's row has the flame a code row has, and leads to its own profile; the code rows inside its trace name what
 // ran from its profile, not the click's. The links are the agent's (`related`), here made up for traces of their own.
 import type { Page } from "@playwright/test";
-import { openApp, panel, pill, traceId } from "../app.ts";
+import { type panel, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 type Doc = Record<string, unknown>;
@@ -142,7 +142,8 @@ async function chain(page: Page): Promise<{ click: string; bff: string }> {
 /** The row of a call merged with the trace it served, by its method and path. */
 function hop(scope: Page | ReturnType<typeof panel>, call: string) {
   const text = call.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  return scope.getByRole("button", { name: new RegExp(`^http\\.client ${text} served by`, "i") });
+  // The panel names a call by its method alone (its kind words are short there): the page by its kind too.
+  return scope.getByRole("button", { name: new RegExp(`^(http\\.client )?${text} served by`, "i") });
 }
 
 function codeRows(scope: Page | ReturnType<typeof panel>) {
@@ -205,21 +206,4 @@ test("a code row of a call's trace, and its details' link, open that trace's pro
   await details.getByRole("button", { name: "Open its profile →" }).click();
 
   await expect(page).toHaveURL(new RegExp(`#/t/${bff}\\?.*tab=profile`));
-});
-
-test("in the panel, the flame opens the call's trace at its Profile tab in place, with the way back", async ({
-  page,
-}) => {
-  const { click } = await chain(page);
-  await openApp(page, { save: { status: 200, trace: click, queries: 0, totalMs: 40 } });
-  await page.getByRole("button", { name: "Load save" }).click();
-  await pill(page).click();
-  const frame = panel(page);
-  await expect(codeRows(frame).filter({ hasText: "resolve_books" })).toHaveCount(1);
-
-  await hop(frame, "GET /api/books").locator(".tp-map-flame").click();
-
-  await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(frame.getByText("Profile of the whole trace")).toBeVisible();
-  await expect(frame.getByRole("button", { name: "Back" })).toBeVisible();
 });

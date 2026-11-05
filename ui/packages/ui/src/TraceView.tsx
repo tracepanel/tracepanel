@@ -472,7 +472,9 @@ function tabsOfRow<T extends { id: string; label: string; icon?: unknown }>(
     const profiled = chain.members.some((member) => member.id === at.trace && member.trace.profile);
     return tabs.filter((tab) => tab.id === "tree" || (profiled && tab.id === "profile"));
   }
-  if (isLeafRow(chain, scope)) return tabs.filter((tab) => tab.id === "tree");
+  // A row whose trace was profiled keeps its Profile, however little else it has.
+  const profiled = chain.members.some((member) => scope.targets.includes(member.id) && member.trace.profile);
+  if (isLeafRow(chain, scope)) return tabs.filter((tab) => tab.id === "tree" || (profiled && tab.id === "profile"));
   // One call with nothing under it (a query): its own Details, and its findings, error and logs where it has them; a list of
   // it alone, or a profile of its few ms, says nothing more.
   if (scopedSpans(chain.members, scope, () => true).length <= 1) {
