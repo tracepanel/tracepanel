@@ -609,7 +609,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           <MigrationNotes span={span} />
-          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
+          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
           <RowChips>
             {/* Beside the tree, a folded row says what is under it too: its findings don't hide in the fold. */}
             {ctx.issuesIn && (issue || fold === false) ? (
@@ -725,7 +725,7 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
           {/* After what served it: the answer is the served trace's when the call says none. */}
           <CallStatus node={node} />
           <FromTemplate span={span} parent={parent} />
-          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
+          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
           <RowChips>
             {ctx.issuesIn ? (
               <IssuesMark ctx={ctx} rowKey={node.key} targets={[span.id]} kind={ctx.issueBySpan.get(span.id)} />

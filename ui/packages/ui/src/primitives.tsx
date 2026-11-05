@@ -48,18 +48,9 @@ export function FailedStatus({ failure }: { failure?: string | undefined }) {
   );
 }
 
-export function StatusBadge({ status, dot = false }: { status: number | null | undefined; dot?: boolean }) {
-  const dotted = useContext(KindWords) !== null || dot;
+export function StatusBadge({ status }: { status: number | null | undefined }) {
   if (status === null || status === undefined) return null;
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";
-  // Beside the bars a success says its code quietly, no pill: what went otherwise stands out in its tone.
-  if (dotted && tone === "ok") {
-    return (
-      <span className="tp-status" data-tone={tone} data-quiet="">
-        {status}
-      </span>
-    );
-  }
   return (
     <span className="tp-status" data-tone={tone}>
       {status}

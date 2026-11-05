@@ -2289,6 +2289,10 @@ body {
   font-size: var(--tp-size-xs);
   font-variant-numeric: tabular-nums;
 }
+/* Pressed: the records show in the tree; the mark hides them again. */
+.panel-wf .tp-map-row .tp-map-logs[data-shown] {
+  color: var(--tp-accent);
+}
 .panel-wf .tp-map-row .tp-map-logs svg {
   width: 0.75rem;
   height: 0.75rem;
@@ -2699,20 +2703,6 @@ body {
 /* A row's marks end at the column's edge, whatever else the row holds. */
 .panel-wf .tp-map-row .tp-map-chips {
   justify-content: flex-end;
-}
-
-/* A success beside the bars: its code, quiet, no pill; another status keeps its tone's. */
-.panel-wf .tp-status[data-quiet] {
-  flex: none;
-  min-width: 0;
-  padding: 0;
-  background: none;
-  color: var(--tp-text-3);
-  font-size: var(--tp-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-.panel-wf .tp-status[data-quiet]::before {
-  display: none;
 }
 
 /* The query's fields just above say which database. */

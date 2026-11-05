@@ -458,18 +458,15 @@ function TimedRows({
   );
 }
 
-/** The tree with the records that show, and how many don't, by span: none hidden while every one shows. */
+/** The tree with the records that show, and its info and debug records by span: hidden, or shown on demand. */
 function useShownLogs(trace: Trace, related: Related | undefined, all: boolean, loaded: ReadonlyMap<string, Related>) {
   const tree = useMemo(() => {
     const chain: Chain = { level: 0, relatedOf: (id) => loaded.get(id), seen: new Set([trace.id]), allLogs: all };
     return buildTree(withShownLogs(trace, all), related, chain);
   }, [trace, related, all, loaded]);
   const hidden = useMemo(
-    () =>
-      all
-        ? new Map<string, number>()
-        : hiddenLogsOf([trace, ...callTraces(related, loaded)], callSpans(related, loaded)),
-    [trace, related, all, loaded],
+    () => hiddenLogsOf([trace, ...callTraces(related, loaded)], callSpans(related, loaded)),
+    [trace, related, loaded],
   );
   return { tree, hidden };
 }
@@ -703,6 +700,7 @@ export function CallMap({
                 marks,
                 details: inline,
                 hiddenLogs: hidden,
+                logsShown: current.logs,
                 code: {
                   trace,
                   quiet,
@@ -714,7 +712,7 @@ export function CallMap({
                 slice: kinds.length > 0 ? { ...current, parts: kinds, range: null } : current,
                 onTraceProfile: wiring.onTraceProfile,
                 profilesIn: wiring.profilesIn,
-                onShowLogs: () => change({ ...current, logs: true }),
+                onShowLogs: () => change({ ...current, logs: !current.logs }),
                 onChain: chain.want,
               }}
             />

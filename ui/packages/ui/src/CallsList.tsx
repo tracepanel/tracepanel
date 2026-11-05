@@ -103,9 +103,9 @@ function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
 }
 
 /** One call's outcome: its HTTP status as every list shows one, else whether it failed. */
-function Status({ span, dot }: { span: Span; dot: boolean }) {
+function Status({ span }: { span: Span }) {
   const { status, tone } = callAnswer(span);
-  if (status !== null) return <StatusBadge status={status} dot={dot} />;
+  if (status !== null) return <StatusBadge status={status} />;
   return tone === "error" ? <span className="text-destructive">failed</span> : <span>—</span>;
 }
 
@@ -147,7 +147,7 @@ function Call({
         )}
       >
         <span className="font-mono tabular-nums" title={failure}>
-          <Status span={span} dot={beside} />
+          <Status span={span} />
         </span>
         <span className="grid min-w-0">
           <span className="flex min-w-0 items-center gap-2">

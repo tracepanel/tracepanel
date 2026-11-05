@@ -53,6 +53,8 @@ export interface RowContext {
   details: ReactNode;
   /** How many info and debug records each span has that don't show, by its id; and what shows them. */
   hiddenLogs: ReadonlyMap<string, number>;
+  /** The info and debug records shown in the tree (a row's mark pressed): its mark hides them again. */
+  logsShown?: boolean | undefined;
   onShowLogs: () => void;
   /** Whose code the code rows under are: this trace's, or a call's trace opened under its call. */
   code: CodeOwner;
@@ -571,17 +573,28 @@ export function Inside() {
  * A span's info and debug records, while only warnings and worse show: how many, quietly. A click shows every
  * record (the legend's Logs chip turns on).
  */
-export function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () => void }) {
+export function HiddenLogs({
+  count,
+  shown = false,
+  onShow,
+}: {
+  count: number | undefined;
+  shown?: boolean | undefined;
+  onShow: () => void;
+}) {
   if (!count) return null;
+  const records = plural(count, "info or debug record", "info or debug records");
   return (
-    // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click here shows the records.
+    // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click shows or hides the records.
     // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's Logs chip is the keyboard's way.
     <span
       className="tp-map-sub tp-map-logs"
       role="button"
       tabIndex={-1}
       aria-label={plural(count, "log", "logs")}
-      title={`${plural(count, "info or debug record", "info or debug records")} here; a click shows every record`}
+      aria-pressed={shown}
+      data-shown={shown ? "" : undefined}
+      title={shown ? `${records} here, shown; a click hides them again` : `${records} here; a click shows every record`}
       onClick={(event) => {
         event.stopPropagation();
         onShow();
