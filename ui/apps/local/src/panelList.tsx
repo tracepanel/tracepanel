@@ -121,6 +121,31 @@ export function ListToggles({
   );
 }
 
+/** What acts on the list itself, beside its filter: follow the new requests, clear them. */
+export function ListTools({
+  follow,
+  onFollow,
+  onClear,
+  clearLabel,
+}: {
+  follow: boolean;
+  onFollow: (value: boolean) => void;
+  onClear: () => void;
+  clearLabel: string;
+}) {
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <FollowToggle follow={follow} onFollow={onFollow} />
+      <ClearButton onClear={onClear} label={clearLabel} />
+    </span>
+  );
+}
+
+/** Profile the next requests: what the panel records, not what the list shows. */
+export function PanelProfile() {
+  return <ProfileToggle source={source} />;
+}
+
 /** Clear, where the requests are listed, as in the browser's Network tab. */
 function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => void; label?: string | undefined }) {
   return (

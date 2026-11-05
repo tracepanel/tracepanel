@@ -33,10 +33,12 @@ import {
   currentTrace,
   DockButton,
   ListToggles,
+  ListTools,
   opensOnTab,
   PANEL_LINKS,
   PANEL_V2,
   PageRequests,
+  PanelProfile,
   RequestSwitcher,
   readFollow,
   sectionFor,
@@ -324,9 +326,12 @@ function PanelWaterfall({
   clearing,
   setClearing,
   onMore,
+  listTools,
 }: {
   /** Shows older rows of the tab's history, where there are more. */
   onMore: (() => void) | undefined;
+  /** Follow and Clear, right after the filter: they act on the list it filters. */
+  listTools: ReactNode;
   route: Route;
   selectedId: string | null;
   rows: readonly TraceRow[];
@@ -381,6 +386,7 @@ function PanelWaterfall({
         <div className="panel-top-rows">
           <LogoMark className="size-5" />
           <PanelFilter value={filter} onChange={setFilter} />
+          {listTools}
           <div className="panel-top-controls">
             {toolbar}
             {empty ? null : <DetailsToggle dock={dock} shown={detailsShown} onShown={showDetails} />}
@@ -566,17 +572,18 @@ function PanelApp({ route }: { route: Route }) {
         chains={chains}
         opensOn={opensOn}
         currentId={currentId}
+        listTools={
+          <ListTools
+            follow={follow}
+            onFollow={onFollow}
+            onClear={() => setClearing(true)}
+            clearLabel={`Clear ${tabCount}`}
+          />
+        }
         toolbar={
           <>
             <BackTo view={back} rows={listed} bare={false} />
-            <span className="flex shrink-0 items-center gap-1">
-              <ListToggles
-                follow={follow}
-                onFollow={onFollow}
-                onClear={() => setClearing(true)}
-                clearLabel={`Clear ${tabCount}`}
-              />
-            </span>
+            <PanelProfile />
           </>
         }
         actions={(explore) => (
