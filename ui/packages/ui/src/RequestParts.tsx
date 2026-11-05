@@ -167,15 +167,17 @@ export function RequestParts({ parts, look = "card" }: { parts: readonly Part[];
   const [picked, setPicked] = useState<string | null>(null);
   const open = parts.find((part) => part.id === picked) ?? parts[0];
   if (!open) return null;
-  // One look for every trace: the switch shows even with one part (a task run's Attributes), as a request's does.
+  // A switch only where there is something to switch to: a lone part (attributes alone) is just its rows.
   return (
     <section className="grid gap-2" aria-label="Request details">
-      <Segmented
-        label="Request details"
-        segments={parts.map(({ id, label, count }) => ({ id, label, count }))}
-        value={open.id}
-        onChange={setPicked}
-      />
+      {parts.length > 1 ? (
+        <Segmented
+          label="Request details"
+          segments={parts.map(({ id, label, count }) => ({ id, label, count }))}
+          value={open.id}
+          onChange={setPicked}
+        />
+      ) : null}
       <div className={PART_PANELS[look]} role="tabpanel" aria-label={open.label}>
         <RowsLookContext value={look}>{open.content}</RowsLookContext>
       </div>
