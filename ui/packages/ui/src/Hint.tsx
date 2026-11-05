@@ -1,4 +1,4 @@
-import type { FocusEvent, ReactNode } from "react";
+import { type FocusEvent, type ReactNode, useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./components/ui/tooltip";
 
 function keyboardOnly(event: FocusEvent<HTMLElement>): void {
@@ -22,8 +22,9 @@ export function Hint({
   side?: "top" | "bottom" | "left" | "right";
   children: ReactNode;
 }) {
+  const [open, setOpen] = useOpenWhileHere();
   return (
-    <Tooltip>
+    <Tooltip open={open} onOpenChange={setOpen}>
       {/* Opened by focus only from the keyboard: a clicked button keeps focus, and its hint would stay over the next. */}
       <TooltipTrigger asChild onFocus={keyboardOnly}>
         {children}
@@ -46,4 +47,28 @@ export function Hint({
       </TooltipContent>
     </Tooltip>
   );
+}
+
+/**
+ * A hint's open state that lets go when the pointer leaves the document (the panel's frame, left fast for the page:
+ * no pointerleave reaches the button), the window loses focus, anything is pressed or the view scrolls.
+ */
+function useOpenWhileHere(): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const root = document.documentElement;
+    root.addEventListener("mouseleave", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("pointerdown", close, true);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      root.removeEventListener("mouseleave", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("pointerdown", close, true);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [open]);
+  return [open, setOpen];
 }
