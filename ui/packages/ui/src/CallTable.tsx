@@ -13,7 +13,7 @@ import { onTheClock } from "./lib/calls";
 import { percents } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
-import type { ExplainPlan, Span, Trace } from "./types";
+import type { ExplainPlan, IssueKind, Span, Trace } from "./types";
 
 // A failed call marks its row's edge red, one answered 4xx amber, as the console's lists mark theirs; one an issue
 // points at is highlighted.
@@ -203,6 +203,20 @@ export function groupTitle(time: RowTime, noun: readonly [string, string], simil
   const head = `${time.count} similar ${similar}`;
   if (time.clock >= time.total) return `${head} · ${duration(time.total)} total`;
   return `${head} · ${duration(time.clock)} on the clock · ${duration(time.total)} total`;
+}
+
+/**
+ * What a row of repeats says of itself: an N+1 if any of its calls is in one, else a finding all of them share.
+ * One slow query among 36 is that query's, on its own line: it doesn't make the 36 "Slow query".
+ */
+export function issueOfRepeats(
+  spans: readonly { id: string }[],
+  issueBySpan: ReadonlyMap<string, IssueKind>,
+): IssueKind | undefined {
+  const kinds = spans.map((span) => issueBySpan.get(span.id));
+  if (kinds.includes("n+1")) return "n+1";
+  const [first] = kinds;
+  return first && kinds.every((kind) => kind === first) ? first : undefined;
 }
 
 /** How many calls a row folds, in a column of its own: raised when they are an N+1. */

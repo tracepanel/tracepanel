@@ -56,6 +56,7 @@ import { ProfileTab } from "./ProfileView";
 import { KindWords, RoutePath, StatusBadge, TraceBadge, WATERFALL_KINDS, WaitingIcon } from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { UnderThis, underCounts } from "./ScopeBar";
+import { sqlKey } from "./SqlList";
 import { type SystemCalls, systemCalls, systemOfIssue } from "./systemCalls";
 import { Tabs } from "./Tabs";
 import { type MarkTarget, TimeStrip } from "./Timeline";
@@ -194,8 +195,35 @@ function chainFindings(chain: TraceScope, findings: readonly Issue[]): readonly 
 function issuesBySpan(chain: TraceScope): Map<string, IssueKind> {
   const map = new Map<string, IssueKind>();
   const issues = [...chain.members.flatMap((member) => member.trace.issues), ...chain.chainIssues];
-  for (const issue of issues) for (const id of issue.span_ids) map.set(id, issue.kind);
+  for (const issue of issues) {
+    for (const id of issue.span_ids) {
+      // An N+1 says more of a call than that it was slow.
+      if (map.get(id) !== "n+1") map.set(id, issue.kind);
+    }
+  }
+  for (const id of queriesOfCrossAppRepeats(chain)) map.set(id, "n+1");
   return map;
+}
+
+/**
+ * The queries an N+1 across apps repeats. The issue names the calls (one per item); the query each of them ran in
+ * the app that served it is the one found once per call.
+ */
+function queriesOfCrossAppRepeats(chain: TraceScope): string[] {
+  return chain.chainIssues
+    .filter((issue) => issue.kind === "n+1")
+    .flatMap((issue) => {
+      const calls = new Set(issue.span_ids.map(String));
+      const byQuery = new Map<string, string[]>();
+      for (const member of chain.members) {
+        if (member.via === null || !calls.has(String(member.via))) continue;
+        for (const span of member.trace.spans) {
+          if (span.kind !== "sql") continue;
+          byQuery.set(sqlKey(span), [...(byQuery.get(sqlKey(span)) ?? []), span.id]);
+        }
+      }
+      return [...byQuery.values()].filter((ids) => ids.length === calls.size).flat();
+    });
 }
 
 /** The app a trace says it is (its `service.name`), "" where it says none. */

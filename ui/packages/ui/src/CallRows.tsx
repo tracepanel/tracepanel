@@ -30,6 +30,7 @@ import {
   TaskState,
   type Within,
 } from "./CallRowParts";
+import { issueOfRepeats } from "./CallTable";
 import {
   CHAIN_LEVELS,
   childrenOf,
@@ -437,9 +438,7 @@ function groupSpans(node: Extract<Node, { type: "group" }>): Span[] {
 }
 
 function groupIssue(node: Extract<Node, { type: "group" }>, issueBySpan: ReadonlyMap<string, IssueKind>) {
-  return groupSpans(node)
-    .map((span) => issueBySpan.get(span.id))
-    .find(Boolean);
+  return issueOfRepeats(groupSpans(node), issueBySpan);
 }
 
 /**

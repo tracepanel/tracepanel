@@ -6,6 +6,7 @@ import {
   countColumn,
   DetailsTitle,
   groupTitle,
+  issueOfRepeats,
   type ListTime,
   listTime,
   type RowTime,
@@ -70,10 +71,9 @@ function Template({ template }: { template: string }) {
   );
 }
 
-/** A group with one more of its calls and its issue. */
-function withCall(group: Group, span: Span, issue: IssueKind | undefined): Group {
+/** A group with one more of its calls. */
+function withCall(group: Group, span: Span): Group {
   group.spans.push(span);
-  group.issue ??= issue;
   return group;
 }
 
@@ -89,11 +89,12 @@ function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
       issue: undefined,
       answer: NO_ANSWER,
     };
-    groups.set(template, withCall(group, span, issueBySpan.get(span.id)));
+    groups.set(template, withCall(group, span));
   }
   // Each row's time on the clock, as the table shows it and sorts by, and how its calls went.
   for (const group of groups.values()) {
     group.time = rowTime(group.spans);
+    group.issue = issueOfRepeats(group.spans, issueBySpan);
     group.answer = groupAnswer(group.spans.map((span) => ({ span })));
   }
   return [...groups.values()].sort((a, b) => b.time.clock - a.time.clock);

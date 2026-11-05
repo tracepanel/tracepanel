@@ -8,6 +8,7 @@ import {
   DetailsTitle,
   type Explain,
   groupTitle,
+  issueOfRepeats,
   type ListTime,
   listTime,
   QueryPlan,
@@ -85,11 +86,13 @@ function groupSpans(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
       issue: undefined,
     };
     group.spans.push(span);
-    group.issue ??= issueBySpan.get(span.id);
     groups.set(key, group);
   }
   // Each row's time on the clock, as the table shows it and sorts by.
-  for (const group of groups.values()) group.time = rowTime(group.spans);
+  for (const group of groups.values()) {
+    group.time = rowTime(group.spans);
+    group.issue = issueOfRepeats(group.spans, issueBySpan);
+  }
   return [...groups.values()].sort((a, b) => b.time.clock - a.time.clock);
 }
 
