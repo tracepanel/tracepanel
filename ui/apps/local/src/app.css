@@ -2131,12 +2131,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .panel-wf .dt-map-row {
-  grid-template-columns: minmax(0, 1fr) min(var(--wf-map, 8rem), 45%) 4rem;
+  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: minmax(0, 1fr) min(var(--wf-map, 8rem), 45%) 4rem;
+  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2231,7 +2231,7 @@ body {
   position: absolute;
   z-index: 3;
   top: 0;
-  right: calc(min(var(--wf-map, 8rem), 45%) + 5.9375rem);
+  right: calc(var(--wf-map, 8rem) + 5.9375rem);
   bottom: 0;
   width: 0.5625rem;
   transform: translateX(50%);
@@ -2348,15 +2348,13 @@ body {
 .panel-wf[data-no-details] .dt-map-head {
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 4rem;
 }
-/* There, the names' column still ends in a line: drawn by the panel, there while a record loads too. */
-.panel-wf[data-no-details] .panel-wf-tree::after {
+/* There, the names' column ends in a line: each row's own, at its bars' column, there while a record loads too. */
+.panel-wf[data-no-details] .dt-map-row > .dt-map-track::before {
   position: absolute;
-  z-index: 1;
-  top: 0;
-  bottom: 0;
-  left: calc((100% - 4rem) * 0.4);
-  border-left: 1px solid var(--dt-border);
-  pointer-events: none;
+  top: -0.75rem;
+  bottom: -0.75rem;
+  left: 0;
+  border-left: 1px solid color-mix(in srgb, var(--dt-border) 70%, transparent);
   content: "";
 }
 

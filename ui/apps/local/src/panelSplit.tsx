@@ -93,6 +93,8 @@ const MAP_LEAST = 64;
 const MAP_MOST = 640;
 /** The time column, its gaps and the row's end, right of the bars. */
 const AFTER_MAP = 90;
+/** The names' room the bars leave, at the least. */
+const NAMES_LEAST = 240;
 
 function heldMap(width: number): number {
   return Math.round(Math.min(MAP_MOST, Math.max(MAP_LEAST, width)));
@@ -119,7 +121,9 @@ export function useMapWidth() {
       onPointerMove: (event: PointerEvent<HTMLElement>) => {
         const box = event.currentTarget.parentElement?.getBoundingClientRect();
         if (box && event.currentTarget.hasPointerCapture(event.pointerId)) {
-          setWidth(heldMap(box.right - AFTER_MAP - event.clientX));
+          // The names keep their room: the bars never take more than the rows leave them.
+          const most = box.width - AFTER_MAP - NAMES_LEAST;
+          setWidth(heldMap(Math.min(box.right - AFTER_MAP - event.clientX, most)));
         }
       },
       onPointerUp: () => writeItem(MAP_KEY, String(width)),
