@@ -280,6 +280,7 @@ function ListItem({
         services={services}
         opens={opensOn?.(trace)}
         onSelect={onSelect}
+        closed={openContent !== undefined}
       />
       <RowOpens
         openContent={openContent}
@@ -325,7 +326,10 @@ function ListRow({
   services,
   opens,
   onSelect,
+  closed,
 }: {
+  /** A record that opens in place: its arrow, and how long ago it was, so two of one name read apart. */
+  closed?: boolean | undefined;
   row: TraceRow;
   /** Its chain's rows under it (the narrow list): open or folded, a caret; a placeholder for a row without. */
   fold?: RowFold | null | undefined;
@@ -357,11 +361,19 @@ function ListRow({
       title={callTitle(trace, call, cut, host, failed) ?? opens}
       {...foldProps(fold)}
       data-new={fresh ? "" : undefined}
+      data-earlier={closed && !current ? "" : undefined}
       onClick={() => onSelect(target_ ?? trace.id)}
     >
       <span className="dt-request-main">
-        <RowCaret fold={fold} />
+        {closed ? (
+          <span className="dt-request-closed" aria-hidden="true">
+            <ChevronRightIcon />
+          </span>
+        ) : (
+          <RowCaret fold={fold} />
+        )}
         <RowName trace={trace} trigger={trigger} target={target} redirectedFrom={redirectedFrom} />
+        {closed ? <span className="dt-request-ago">{ago(trace.start)}</span> : null}
         <RowApp trace={trace} shown={services} />
         <RowMarks cut={open ? null : cut} untraced={call === "untraced" ? host : undefined} />
         {current ? <ThisPage compact={compact} /> : null}

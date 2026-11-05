@@ -2142,12 +2142,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .dt-trace[data-variant="waterfall"] .dt-map-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) 4rem;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) 4rem;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2185,5 +2185,33 @@ body {
   padding: 0;
 }
 .dt-trace[data-variant="details"] .dt-scope-chip {
+  display: none;
+}
+
+/* A closed record: its arrow, as the tree's rows have, and how long ago; a page left behind steps back. */
+.dt-request-closed {
+  display: inline-flex;
+  flex: none;
+  color: var(--dt-text-3);
+}
+.dt-request-closed > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.dt-request-ago {
+  flex: none;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs, 0.75rem);
+  white-space: nowrap;
+}
+.panel[data-v2] .dt-request-row[data-earlier][data-kind="page"] {
+  opacity: 0.72;
+}
+.panel[data-v2] .dt-request-row[data-earlier][data-kind="page"]:hover {
+  opacity: 1;
+}
+
+/* The details' head says what it is and how long it took. */
+.dt-trace[data-variant="details"] .dt-map-details-title {
   display: none;
 }

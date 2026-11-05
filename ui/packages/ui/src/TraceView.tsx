@@ -402,6 +402,18 @@ function useWaterfallTabs(
   };
 }
 
+/** A row's tabs: nothing about the whole request or its app, and none at all for a row with nothing under it. */
+function tabsOfRow<T extends { id: string }>(tabs: readonly T[], chain: TraceScope): readonly T[] {
+  const scope = chain.scope;
+  if (!scope) return tabs;
+  if (isLeafRow(chain, scope)) return tabs.filter((tab) => tab.id === "tree");
+  return tabs.filter((tab) => tab.id !== "request" && tab.id !== "app");
+}
+
+function isLeafRow(chain: TraceScope, scope: SpanScope): boolean {
+  return scopedSpans(chain.members, scope, () => true).length <= 1 && chain.scoped.length === 0;
+}
+
 function pickedTab(chain: TraceScope, scope: SpanScope): TabId {
   const more = scopedSpans(chain.members, scope, () => true).length > 1;
   const wrong = scopedIssues(chain.members, scope, chain.chainIssues).some((issue) => issue.kind !== "error");
@@ -949,7 +961,7 @@ export function TraceView({
   const explain = useMemo(() => chainExplain(chain, explainOf), [chain, explainOf]);
 
   const outcome = outcomeOf(trace);
-  const tabs = traceTabs({
+  const allTabs = traceTabs({
     waterfall,
     trace,
     outcome,
@@ -959,6 +971,7 @@ export function TraceView({
     logs: waterfall ? chain.scoped.length : chain.logs.length,
     profiled: chain.members.some((member) => member.trace.profile !== undefined),
   });
+  const tabs = waterfall ? tabsOfRow(allTabs, chain) : allTabs;
   const onPicked = useWaterfallTabs(waterfall, trace, chain, findings, tabs, active, setActive);
   // A tab the link asked for that only the chain has (the DB tab of a browser's view): opened once the chain came.
   const asked = useAskedTab(initialTab, tabs, setActive);
@@ -1054,7 +1067,7 @@ export function TraceView({
             traceId={trace.id}
             head={<DetailsHead trace={trace} chain={chain} />}
             rows={treePane}
-            tabs={tabsBar}
+            tabs={tabs.length > 1 ? tabsBar : null}
             panel={panel}
             explore={exploreMenu}
             hosts={{ details: detailsHost, actions: actionsHost }}
