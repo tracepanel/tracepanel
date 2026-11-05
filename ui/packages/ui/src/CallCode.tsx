@@ -304,15 +304,16 @@ function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; 
       aria-current={ctx.codeRow === row ? "true" : undefined}
       // Says where it leads: a code row of a call's trace opens that trace, not a tab of this one.
       title={
-        open
+        open && !pick
           ? ctx.code.trace.id === ctx.trace.id
             ? "Open the profile at this stretch"
             : "Open the profile of the trace that served this call, at this stretch"
           : undefined
       }
       onClick={() => {
-        pick?.(row, span.id, { trace: ctx.code.trace.id, windows: stretchesOf(part.pieces) });
-        open?.(stretchesOf(part.pieces));
+        // Beside the tree, its details open its profile there: the page stays as it is.
+        if (pick) pick(row, span.id, { trace: ctx.code.trace.id, windows: stretchesOf(part.pieces) });
+        else open?.(stretchesOf(part.pieces));
       }}
     >
       {inside}

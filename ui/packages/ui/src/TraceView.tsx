@@ -447,6 +447,9 @@ function useWaterfallTabs(
     chain.setScope(scope);
     // The tab stays as rows are picked, as long as the row has it; a failed record's own row says its error.
     if (!scope && trace.errors.length > 0) setActive("error");
+    // A code or wait row is its stretch of the profile, where its trace has one.
+    const at = scope?.at;
+    if (at && chain.members.some((member) => member.id === at.trace && member.trace.profile)) setActive("profile");
   };
 }
 
