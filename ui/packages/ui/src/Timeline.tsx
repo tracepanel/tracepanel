@@ -172,7 +172,7 @@ const MIN_STEPS = 3;
  * times, none past its end; all said in one unit with the decimals the step needs ("0.5 ms", "1.0 ms"), so they read
  * evenly spaced and no two the same.
  */
-function axisTicks(duration: number): Tick[] {
+export function axisTicks(duration: number): Tick[] {
   const total = Math.max(duration, 1);
   const power = 10 ** Math.floor(Math.log10(total / MIN_STEPS));
   const fits = [...STEPS, ...STEPS.map((each) => each / 10)]

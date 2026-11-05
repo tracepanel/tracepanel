@@ -43,6 +43,7 @@ import { splitByProfile } from "./lib/timeShares";
 import { useRemembered, VIEW_KEYS } from "./lib/viewMemory";
 import type { TraceLinks } from "./links";
 import { SideResize, useSideWidth } from "./SideResize";
+import { axisTicks } from "./Timeline";
 import { RangeBand, useHeldSlice, useRangeDrag } from "./TimeSlice";
 import type { IssueKind, Related, Span, Trace } from "./types";
 
@@ -389,6 +390,7 @@ function TimedRows({
   const ruler = useRef<HTMLSpanElement>(null);
   const column = useTrackColumn(timed, ruler);
   const total = Math.max(trace.duration, 1);
+  const ticks = axisTicks(total);
   const drag = useRangeDrag(total, onRange ?? (() => undefined));
   const shown = drag.draft ?? range;
   return (
@@ -407,9 +409,23 @@ function TimedRows({
     >
       <div className="dt-map-head">
         <span>Call tree</span>
-        <span className="dt-map-ruler" ref={ruler} title="Drag to pick a stretch of the time" />
+        <span className="dt-map-ruler" ref={ruler} title={onRange ? "Drag to pick a stretch of the time" : undefined}>
+          {/* Its time, said where the bars have the room for it (the panel with its details closed). */}
+          {ticks.map((tick) => (
+            <span key={tick.at} className="dt-map-tick" style={{ left: `${tick.at * 100}%` }}>
+              {tick.label}
+            </span>
+          ))}
+        </span>
         <span>Time</span>
       </div>
+      {column ? (
+        <div className="dt-map-grid" style={column} aria-hidden="true">
+          {ticks.map((tick) =>
+            tick.at > 0 && tick.at < 0.999 ? <i key={tick.at} style={{ left: `${tick.at * 100}%` }} /> : null,
+          )}
+        </div>
+      ) : null}
       {children}
       {shown && column ? (
         <div className="dt-map-range-layer" style={column}>
