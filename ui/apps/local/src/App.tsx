@@ -395,9 +395,7 @@ function PanelWaterfall({
             {toolbar}
             <PanelProfile />
             {/* Docked right, the details are under the rows: nothing to fold away. */}
-            {empty || dock === "right" ? null : (
-              <DetailsToggle dock={dock} shown={detailsShown} onShown={showDetails} />
-            )}
+            {empty || dock === "right" ? null : <DetailsToggle shown={detailsShown} onShown={showDetails} />}
           </div>
         </div>
         <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>

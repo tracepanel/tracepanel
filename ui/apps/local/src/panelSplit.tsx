@@ -1,11 +1,5 @@
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
-import {
-  PanelBottomCloseIcon,
-  PanelBottomOpenIcon,
-  PanelRightCloseIcon,
-  PanelRightOpenIcon,
-  SearchIcon,
-} from "lucide-react";
+import { FoldHorizontalIcon, SearchIcon, UnfoldHorizontalIcon } from "lucide-react";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
 
 const STEP = 0.02;
@@ -205,23 +199,9 @@ export function useDetailsShown(): [boolean, (shown: boolean) => void] {
  * Shows or hides the details, in the bar where the rows meet them: hidden, the rows and their bars take the panel. A
  * row picked shows them again.
  */
-export function DetailsToggle({
-  dock,
-  shown,
-  onShown,
-}: {
-  dock: string;
-  shown: boolean;
-  onShown: (shown: boolean) => void;
-}) {
-  const right = dock !== "right";
-  const Icon = shown
-    ? right
-      ? PanelRightCloseIcon
-      : PanelBottomCloseIcon
-    : right
-      ? PanelRightOpenIcon
-      : PanelBottomOpenIcon;
+export function DetailsToggle({ shown, onShown }: { shown: boolean; onShown: (shown: boolean) => void }) {
+  // Not a panel's outline (the dock's button is one): the rows spread across, or the details back beside them.
+  const Icon = shown ? UnfoldHorizontalIcon : FoldHorizontalIcon;
   const label = shown ? "Hide details" : "Show details";
   return (
     <button type="button" className="icon-button" aria-label={label} title={label} onClick={() => onShown(!shown)}>
