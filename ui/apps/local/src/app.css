@@ -2518,6 +2518,8 @@ body {
 }
 .panel-top-controls {
   flex: none;
+  /* Its buttons as close as the list's tools beside the filter. */
+  gap: 0.25rem;
 }
 .panel-filter {
   flex: 1 1 22rem;
