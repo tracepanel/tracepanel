@@ -225,7 +225,16 @@ function picks(slice: Slice): number {
  * lane's colour picks its rows; the filters with no time of their own (Logs, Errors, Tasks…) follow as plain chips,
  * then the range picked. A pick opens the call tree (`onPick`).
  */
-export function TimeLegend({ trace, related }: { trace: Trace; related: Related | undefined }) {
+export function TimeLegend({
+  trace,
+  related,
+  still = false,
+}: {
+  trace: Trace;
+  related: Related | undefined;
+  /** Beside the tree, in a row's details: what its time was, nothing that picks the tree's rows. */
+  still?: boolean | undefined;
+}) {
   const { slice, change } = useHeldSlice();
   const tree = useMemo(() => buildTree(withShownLogs(trace, slice.logs), related), [trace, related, slice.logs]);
   const counts = useMemo(() => chipCounts(tree, trace), [tree, trace]);
@@ -233,6 +242,15 @@ export function TimeLegend({ trace, related }: { trace: Trace; related: Related 
   const filters = { counts, slice, onChange: change };
   const claimed = new Set(shares.filter(ofSpans).map((share) => partOfCategory(share.category)));
   const others = FILTERS.filter((filter) => !claimed.has(filter.id) && (counts.get(filter.id) ?? 0) > 0);
+  if (still) {
+    return (
+      <ul className="dt-breakdown-legend" aria-label="Where the time went">
+        {shares.map((share) => (
+          <FixedShare key={share.category} share={share} />
+        ))}
+      </ul>
+    );
+  }
   return (
     <ul className="dt-breakdown-legend" aria-label="Where the time went, and what to show">
       {shares.map((share) =>

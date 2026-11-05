@@ -561,7 +561,7 @@ function RowStrip({
   if (!trace) return null;
   return (
     <header className="dt-details-head">
-      <TimeStrip trace={trace} related={related} onSelect={onSelect} />
+      <TimeStrip trace={trace} related={related} onSelect={onSelect} still={true} />
     </header>
   );
 }

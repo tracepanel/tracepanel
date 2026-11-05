@@ -426,16 +426,19 @@ export function TimeStrip({
   trace,
   related,
   onSelect,
+  still,
 }: {
   trace: Trace;
   related: Related | undefined;
   onSelect: (target: MarkTarget) => void;
+  /** Its legend only says, picks nothing (TimeLegend). */
+  still?: boolean | undefined;
 }) {
   return (
     // A segment hovered on any lane lights its legend item, and the legend item every segment of it.
     <section className="dt-strip" aria-label="Time" {...litScope}>
       <Timeline trace={trace} onSelect={onSelect} />
-      <TimeLegend trace={trace} related={related} />
+      <TimeLegend trace={trace} related={related} still={still} />
     </section>
   );
 }
