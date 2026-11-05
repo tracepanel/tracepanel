@@ -2131,12 +2131,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .panel-wf .dt-map-row {
-  grid-template-columns: var(--wf-names, minmax(0, 1fr)) minmax(0, 1fr) 4rem;
+  grid-template-columns: var(--wf-names, minmax(0, 1fr)) var(--wf-bars, minmax(0, 1fr)) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: var(--wf-names, minmax(0, 1fr)) minmax(0, 1fr) 4rem;
+  grid-template-columns: var(--wf-names, minmax(0, 1fr)) var(--wf-bars, minmax(0, 1fr)) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2174,24 +2174,12 @@ body {
   white-space: nowrap;
 }
 
-/* The call tree and its bars, split by a line that moves; the panel's own controls end at that line. */
-.panel-top {
-  padding-left: 0;
-}
-.panel-top-tree {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 0.75rem;
-  width: var(--wf-names, auto);
-  min-width: max-content;
-  padding: 0 0.625rem 0 0.875rem;
-}
+/* The call tree and its bars, split by a line that moves. */
 .panel-top-controls {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-left: auto;
+  margin-right: 0.5rem;
 }
 .panel-wf-tree {
   position: relative;
@@ -2334,9 +2322,12 @@ body {
   display: none;
 }
 
-/* The line between tree and bars runs up through the bar above, where the panel's controls end at it. */
+/* The line between tree and bars runs up through the bar above; docked right, that bar has no room to spare. */
 .panel-wf-split {
   top: -2.5rem;
+}
+.panel-wf[data-dock="right"] .panel-wf-split {
+  top: 0;
 }
 
 /* A record with no tree yet: a bar across its track that breathes, its time ticking. */

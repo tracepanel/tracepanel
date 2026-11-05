@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 
-const KEY = "tracepanel:panel-names";
+const KEY = "tracepanel:panel-tree";
 const LEAST = 0.2;
 const MOST = 0.75;
 const AT_FIRST = 0.5;
@@ -64,7 +64,14 @@ export function useNamesSplit(frozen: boolean) {
     if (event.key === "ArrowLeft") keep(heldShare(share - STEP));
     else if (event.key === "ArrowRight") keep(heldShare(share + STEP));
   };
-  const style = width ? ({ "--wf-names": `${Math.round(width * share)}px` } as CSSProperties) : undefined;
+  // Both columns in pixels: with the details stepping aside for a row, nothing in the rows moves or rescales.
+  const names = Math.round(width * share);
+  const style = width
+    ? ({
+        "--wf-names": `${names}px`,
+        "--wf-bars": `max(3rem, calc(${width - names}px - 6.25rem))`,
+      } as CSSProperties)
+    : undefined;
   return {
     style,
     areaRef,

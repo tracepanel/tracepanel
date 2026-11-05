@@ -346,11 +346,11 @@ function PanelWaterfall({
         }
       />
       <header className="panel-top">
-        <div className="panel-top-tree">
-          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+        <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-5" />
+        <div className="bar-actions">
           <div className="panel-top-controls">{toolbar}</div>
+          {actions(<span ref={setActionsHost} className="contents" />)}
         </div>
-        <div className="bar-actions">{actions(<span ref={setActionsHost} className="contents" />)}</div>
       </header>
       <div className="panel-wf" data-dock={dock} data-no-details={detailsEmpty ? "" : undefined} style={details.style}>
         <div className="panel-wf-tree" ref={split.areaRef}>
