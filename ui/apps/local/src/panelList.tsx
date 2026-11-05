@@ -661,11 +661,12 @@ export function KindsMenu({
     ...present.filter((filter) => FIRST.includes(filter.id)),
     ...present.filter((filter) => !FIRST.includes(filter.id)),
   ];
+  const [open, setOpen] = useState(false);
   if (offered.length === 0) return null;
   const label = kinds.length > 0 ? `Showing ${kinds.length === 1 ? "1 kind" : `${kinds.length} kinds`}` : "Show";
   return (
-    <Popover>
-      <Hint title={label} detail="Which calls the tree shows: only SQL, only GraphQL… The rest are hidden.">
+    <Popover open={open} onOpenChange={setOpen}>
+      <Hint title={label} detail="Which calls the tree shows: only SQL, only GraphQL… The rest are hidden." off={open}>
         <PopoverTrigger asChild>
           <button
             type="button"

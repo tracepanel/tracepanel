@@ -371,6 +371,15 @@ function scopedMarks(tree: Node[], picked: Picked, selected: string | null): Map
   return marks;
 }
 
+/**
+ * The rows of the kinds shown. None among the rows loaded (its calls to other apps not opened yet, where they are),
+ * the tree whole: the record has them, the list kept it for them, never an empty record.
+ */
+function kindMarks(tree: Node[], picked: Picked): Map<string, Mark> | undefined {
+  const marks = marksOf(tree, picked);
+  return marks && marks.size > 0 ? marks : undefined;
+}
+
 /** The rows a slice keeps, or undefined while it is the whole trace. */
 function marksOf(tree: Node[], picked: Picked): Map<string, Mark> | undefined {
   if (picked.parts.size === 0 && picked.range === null) return undefined;
@@ -630,7 +639,7 @@ export function CallMap({
   const marks = useMemo(
     () =>
       kinds.length > 0
-        ? marksOf(tree, pickedOf({ ...current, parts: kinds, range: null }, trace, categories))
+        ? kindMarks(tree, pickedOf({ ...current, parts: kinds, range: null }, trace, categories))
         : scopedMarks(tree, pickedOf(current, trace, categories), external ? selected : null),
     [tree, current, trace, categories, external, selected, kinds],
   );

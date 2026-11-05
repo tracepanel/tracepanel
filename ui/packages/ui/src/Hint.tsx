@@ -14,8 +14,11 @@ export function Hint({
   detail,
   keys,
   side = "bottom",
+  off = false,
   children,
 }: {
+  /** Held shut: what it is on is open already (its menu), the hint would only cover it. */
+  off?: boolean | undefined;
   title: string;
   detail?: ReactNode | undefined;
   keys?: string | undefined;
@@ -24,7 +27,7 @@ export function Hint({
 }) {
   const [open, setOpen] = useOpenWhileHere();
   return (
-    <Tooltip open={open} onOpenChange={setOpen}>
+    <Tooltip open={open && !off} onOpenChange={setOpen}>
       {/* Opened by focus only from the keyboard: a clicked button keeps focus, and its hint would stay over the next. */}
       <TooltipTrigger asChild onFocus={keyboardOnly}>
         {children}
