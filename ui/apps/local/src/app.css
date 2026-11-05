@@ -2131,12 +2131,12 @@ body {
   background: color-mix(in srgb, var(--dt-accent) 3%, transparent);
 }
 .panel-wf .dt-map-row {
-  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
+  grid-template-columns: minmax(15rem, 1fr) minmax(0, var(--wf-map, 8rem)) 4rem;
   min-height: 1.625rem;
   border-bottom-color: transparent;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-head {
-  grid-template-columns: minmax(0, 1fr) var(--wf-map, 8rem) 4rem;
+  grid-template-columns: minmax(15rem, 1fr) minmax(0, var(--wf-map, 8rem)) 4rem;
 }
 .dt-trace[data-variant="waterfall"] .dt-map-lead[data-http] > .dt-map-kind {
   display: none;
@@ -2231,7 +2231,8 @@ body {
   position: absolute;
   z-index: 3;
   top: 0;
-  right: calc(var(--wf-map, 8rem) + 6.3125rem);
+  /* At the bars' column, which keeps 15rem for the names whatever width was remembered. */
+  right: calc(min(var(--wf-map, 8rem), 100% - 19rem) + 6.3125rem);
   bottom: 0;
   width: 0.5625rem;
   transform: translateX(50%);
@@ -2750,4 +2751,16 @@ body {
   padding-inline: 0;
   text-align: center;
   text-overflow: clip;
+}
+
+/* With the details hidden, a record says more on its row (TraceList): the room is there. */
+.panel-wf[data-no-details] .dt-record-wide {
+  display: flex;
+}
+.panel-wf[data-no-details] .dt-record-clock,
+.panel-wf[data-no-details] .dt-request-queries-time {
+  display: inline;
+}
+.panel-wf[data-no-details] .dt-record-marks {
+  grid-template-columns: auto 2.75rem 6.5rem;
 }

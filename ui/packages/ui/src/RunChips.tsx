@@ -1,3 +1,4 @@
+import { duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { IssueChip } from "./primitives";
 import type { TraceSummary } from "./types";
@@ -19,13 +20,14 @@ export function RunChips({ trace }: { trace: TraceSummary }) {
   );
 }
 
-/** Its SQL queries, as the narrow list counts them: the database icon and how many. */
-export function Queries({ count }: { count: number }) {
+/** Its SQL queries, as the narrow list counts them: the database icon and how many; their time where there's room. */
+export function Queries({ count, time }: { count: number; time?: number | undefined }) {
   if (count === 0) return null;
   return (
     <span className="dt-request-queries" title={`${count} SQL ${count === 1 ? "query" : "queries"}`}>
       <DatabaseIcon size={12} />
       {count}
+      {time ? <span className="dt-request-queries-time">· {duration(time)}</span> : null}
     </span>
   );
 }

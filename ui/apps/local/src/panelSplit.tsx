@@ -83,7 +83,7 @@ export function DetailsSplitter({ down, now, ...props }: ReturnType<typeof useDe
 
 /** The bars' width beside the details, and with them hidden (the rows across the panel): each remembered. */
 export const MAP = { key: "tracepanel:panel-map", first: 128 } as const;
-export const MAP_WIDE = { key: "tracepanel:panel-map-wide", first: 560 } as const;
+export const MAP_WIDE = { key: "tracepanel:panel-map-wide", first: 420 } as const;
 const MAP_LEAST = 64;
 const MAP_MOST = 1600;
 /** The time column, its gaps and the row's end, right of the bars. */

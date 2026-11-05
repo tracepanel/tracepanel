@@ -7,7 +7,6 @@ import {
   FILTERS,
   Hint,
   KindBadge,
-  KindWords,
   LayersIcon,
   type ListChains,
   PageName,
@@ -18,7 +17,6 @@ import {
   TraceList,
   type TraceRow,
   type TraceSummary,
-  WATERFALL_KINDS,
 } from "@tracepanel/ui";
 import {
   DropdownMenu,
@@ -620,9 +618,28 @@ export function offeredKinds(spanKinds: readonly (readonly string[] | undefined)
   return FILTERS.filter((filter) => kinds.includes(filter.id) || hasFilter(present, filter));
 }
 
-/** A kind's badge, as the tree's rows have it: "sql", "gql", "fn", "http". */
-function filterBadge(filter: (typeof FILTERS)[number]): string {
-  return filter.id === "task" ? "task" : filter.kinds[0];
+/** A kind's colour, the bars' own: the closest share where a kind has none of its own (GraphQL, functions: code). */
+function filterColor(id: string): string {
+  const own: Record<string, string> = {
+    sql: "sql",
+    redis: "redis",
+    cache: "cache",
+    datastore: "datastore",
+    messaging: "messaging",
+    http: "http",
+    rpc: "http",
+    storage: "storage",
+    llm: "llm",
+    migration: "migration",
+    signal: "signal",
+    template: "template",
+    mail: "mail",
+    task: "messaging",
+    channels: "messaging",
+    transaction: "sql",
+    error: "log",
+  };
+  return own[id] ?? "view";
 }
 
 /** The kinds offered first: what a request's calls mostly are. The rest follow. */
@@ -672,9 +689,8 @@ export function KindsMenu({
             onSelect={(event) => event.preventDefault()}
             className="gap-2"
           >
-            <KindWords.Provider value={WATERFALL_KINDS}>
-              <KindBadge kind={filterBadge(filter)} muted={true} className="dt-map-kind" />
-            </KindWords.Provider>
+            {/* Its colour, as the bars and the time's legend have it. */}
+            <span className="dt-kind-dot" style={{ background: `var(--dt-k-${filterColor(filter.id)})` }} />
             {filter.label}
           </DropdownMenuCheckboxItem>
         ))}

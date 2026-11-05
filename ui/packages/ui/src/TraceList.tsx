@@ -351,6 +351,9 @@ function ListItem({
           fresh={fresh}
           onSelect={onSelect}
           share={Math.min(trace.duration / (longest ?? trace.duration), 1)}
+          counts={counts}
+          // Asked for its chain and none came: its traces have left the local store.
+          gone={chains?.counts !== undefined && counts === undefined && !row.open && !row.awaiting}
         />
       </li>
     );
@@ -406,6 +409,32 @@ function RowOpens({
  * A record that opens in place, as one row: closed, its tree's first row with how long ago in place of its
  * bar's scale; `live`, open with no tree yet (still running, or on its way), a bar that breathes and its time.
  */
+/** Apps' names without what they all start with ("library-web", "library-api": "web", "api"). */
+function shortApps(apps: readonly string[]): string[] {
+  const [first = ""] = apps;
+  let common = first.length;
+  for (const app of apps) {
+    let at = 0;
+    while (at < common && at < app.length && app[at] === first[at]) at++;
+    common = at;
+  }
+  // Only a whole word of it: up to its last separator.
+  const cut =
+    Math.max(
+      first.lastIndexOf("-", common - 1),
+      first.lastIndexOf("_", common - 1),
+      first.lastIndexOf(".", common - 1),
+    ) + 1;
+  return cut > 0 && apps.every((app) => app.length > cut) ? apps.map((app) => app.slice(cut)) : [...apps];
+}
+
+const GONE_NOTE = "Not in the local store anymore: newer traces took its place.";
+
+/** "14:21:05": when it started, to the second, in the browser's time. */
+function clockOf(start: number): string {
+  return new Date(start / 1000).toLocaleTimeString([], { hour12: false });
+}
+
 export function RecordRow({
   row: { trace, open, until, target: _target, opens: target },
   fresh,
@@ -413,7 +442,13 @@ export function RecordRow({
   live = false,
   share,
   depth = 0,
+  counts,
+  gone = false,
 }: {
+  /** What its chain did (the list's answer): the wide list says more of it. */
+  counts?: RowCounts | undefined;
+  /** Its traces are no longer in the local store: said, the row quiet. */
+  gone?: boolean | undefined;
   /** How far in it sits: a call of a view still open shows under it. */
   depth?: number | undefined;
   /** Closed: its time against the list's typical longest, linear; a far longer one reaches the end. */
@@ -430,6 +465,8 @@ export function RecordRow({
         type="button"
         className="dt-map-row dt-record"
         data-record={trace.id}
+        data-gone={gone ? "" : undefined}
+        title={gone ? GONE_NOTE : undefined}
         data-kind={trace.kind}
         data-live={live ? "" : undefined}
         aria-current={live ? "true" : undefined}
@@ -447,7 +484,37 @@ export function RecordRow({
               className="dt-map-kind"
             />
             <span className="dt-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
-            {live ? null : <span className="dt-record-ago">{ago(trace.start)}</span>}
+            {/* With the room (the details hidden): what it touched and found, said. */}
+            <span className="dt-record-wide">
+              {gone ? (
+                <span className="dt-record-gone">{GONE_NOTE}</span>
+              ) : (
+                <>
+                  {/* The apps down its chain, in the order they joined, short: "web → bff → api". */}
+                  {(counts?.apps?.length ?? 0) > 1 ? (
+                    <span className="dt-record-apps" title={counts?.apps?.join(" → ")}>
+                      {shortApps(counts?.apps ?? []).join(" → ")}
+                    </span>
+                  ) : null}
+                  {trace.issue_kinds
+                    .filter((kind) => kind !== "error")
+                    .map((kind) => (
+                      <IssueChip key={kind} kind={kind} />
+                    ))}
+                  {counts?.http_calls ? (
+                    <span className="dt-record-http" title={plural(counts.http_calls, "HTTP call", "HTTP calls")}>
+                      ↗ {counts.http_calls}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </span>
+            {live ? null : (
+              <span className="dt-record-ago">
+                <time className="dt-record-clock">{clockOf(trace.start)}</time>
+                {ago(trace.start)}
+              </span>
+            )}
           </span>
           <StatusSlot status={page ? null : trace.http_status} />
           {/* A column each, the same on every row: its marks line up down the list, empty or not. */}
@@ -459,7 +526,7 @@ export function RecordRow({
               <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
             </span>
             <span className="dt-record-queries">
-              <Queries count={trace.queries} />
+              <Queries count={trace.queries} time={trace.db_time} />
             </span>
           </span>
         </span>
