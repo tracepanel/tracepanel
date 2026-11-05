@@ -381,15 +381,16 @@ export function sectionFor(kind: string | undefined): string | undefined {
   return section ? `#/${section}` : undefined;
 }
 
-const FOLLOW_KEY = "tracepanel:follow";
+// Per tab: on in every new one, whatever was switched off elsewhere.
+const FOLLOW_KEY = "tracepanel:follow-tab";
 
 /** On unless turned off: the newest request is usually the one to look at, as in the browser's Network tab. */
 export function readFollow(): boolean {
-  return readItem(FOLLOW_KEY) !== "0";
+  return readItem(FOLLOW_KEY, "sessionStorage") !== "0";
 }
 
 export function writeFollow(value: boolean): void {
-  writeItem(FOLLOW_KEY, value ? "1" : "0");
+  writeItem(FOLLOW_KEY, value ? "1" : "0", "sessionStorage");
 }
 
 /** Close enough to the end to count as reading the newest requests. */
