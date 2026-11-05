@@ -180,7 +180,7 @@ impl Reader {
              members AS (SELECT id, min(level) AS level FROM down GROUP BY id ORDER BY level LIMIT ?3)";
         let db = self.connect()?;
         let mut totals = db.prepare_cached(&format!(
-            "{MEMBERS} SELECT count(*), coalesce(sum(t.queries), 0)
+            "{MEMBERS} SELECT count(*), coalesce(sum(t.queries), 0), coalesce(sum(t.db_time), 0), coalesce(sum(t.errors), 0)
              FROM members m JOIN traces t ON t.id = m.id"
         ))?;
         // A finding is one however many traces it is in: its fingerprint, as the Issues tab groups them.
@@ -191,8 +191,10 @@ impl Reader {
         let mut counts = serde_json::Map::new();
         for id in ids {
             let args = rusqlite::params![id, CHAIN_LEVELS as i64, CHAIN_TRACES as i64];
-            let (traces, queries): (i64, i64) =
-                totals.query_row(args, |row| Ok((row.get(0)?, row.get(1)?)))?;
+            let (traces, queries, db_time, errors): (i64, i64, i64, i64) = totals
+                .query_row(args, |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                })?;
             if traces == 0 {
                 continue;
             }
@@ -208,6 +210,8 @@ impl Reader {
                 id.clone(),
                 serde_json::json!({
                     "queries": queries,
+                    "db_time": db_time,
+                    "errors": errors,
                     "issues": found.len(),
                     "kinds": kinds,
                     "traces": traces,
@@ -1202,9 +1206,24 @@ mod tests {
             .map(|member| member.spans().filter(|span| span["kind"] == "sql").count() as i64)
             .sum();
 
+        let listed = reader
+            .list_traces(
+                &["VIEW", "BFF", "API1", "API2", "API3"].map(String::from),
+                5,
+            )
+            .unwrap();
+        let sum = |field: &str| {
+            listed
+                .iter()
+                .map(|trace| trace[field].as_i64().unwrap())
+                .sum::<i64>()
+        };
+
         assert_eq!(counts["VIEW"]["traces"], 5);
         assert_eq!(counts["VIEW"]["queries"], queries);
         assert_eq!(counts["VIEW"]["issues"], across);
+        assert_eq!(counts["VIEW"]["db_time"], sum("db_time"));
+        assert_eq!(counts["VIEW"]["errors"], sum("errors"));
         assert_eq!(counts["API1"]["traces"], 1);
         assert_eq!(counts.get("NONE"), None);
         let _ = std::fs::remove_dir_all(&dir);

@@ -9,7 +9,12 @@ import { plural } from "./plural";
 import { type Member, membersOf, scopedIssues, scopedSpans } from "./scope";
 
 /** What a row of a list says of its whole chain, as the agent's list answers it, or counted from the chain. */
-export type RowCounts = Pick<ChainCounts, "queries" | "issues" | "kinds" | "traces">;
+export type RowCounts = Pick<ChainCounts, "queries" | "issues" | "kinds" | "traces"> & {
+  /** The agent's list says these too, from its rows: the queries' time (µs) and the errors, all down the chain. */
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  db_time?: number;
+  errors?: number;
+};
 
 export interface ChainCounts {
   queries: number;

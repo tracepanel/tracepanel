@@ -1,4 +1,4 @@
-import { TriangleAlertIcon } from "lucide-react";
+import { CircleXIcon, TriangleAlertIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { indentOf } from "./CallCode";
 import { Badge } from "./components/ui/badge";
@@ -37,6 +37,7 @@ import {
   Times,
   WATERFALL_KINDS,
 } from "./primitives";
+import { Queries } from "./RunChips";
 import type { IssueKind, TraceSummary } from "./types";
 import { untracedNote } from "./Untraced";
 
@@ -175,8 +176,17 @@ function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
 /** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
 function withChain(trace: TraceSummary, counts: RowCounts | undefined): TraceSummary {
   if (!counts || counts.traces < 2) return trace;
-  // biome-ignore lint/style/useNamingConvention: wire format.
-  return { ...trace, queries: counts.queries, issues: counts.issues, issue_kinds: counts.kinds };
+  const { db_time: dbTime = trace.db_time, errors = trace.errors } = counts;
+  return {
+    ...trace,
+    queries: counts.queries,
+    issues: counts.issues,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    issue_kinds: counts.kinds,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    db_time: dbTime,
+    errors,
+  };
 }
 
 export function TraceList({
@@ -398,7 +408,9 @@ export function RecordRow({
           </span>
           <StatusSlot status={page ? null : trace.http_status} />
           <span className="dt-map-chips">
+            <Errors count={trace.errors} />
             <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
+            <Queries count={trace.queries} time={trace.db_time} />
           </span>
         </span>
         <span className="dt-map-track">
@@ -1283,6 +1295,22 @@ export function PageName({ name, redirectedFrom }: { name: string; redirectedFro
  * The narrow list's findings: a mark and how many, in the first kind's colour, their names in its title. A label per
  * finding ("Before commit +3") took the row's room from its path.
  */
+/** Its errors, the chain's too: a mark and how many, in red; nothing for none. */
+function Errors({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <Badge
+      variant="error"
+      size="compact"
+      className="gap-[0.1875rem] px-[0.375rem] tabular-nums"
+      title={plural(count, "error", "errors")}
+    >
+      <CircleXIcon aria-hidden="true" />
+      {count}
+    </Badge>
+  );
+}
+
 export function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
   const shown = (kinds ?? []).filter((kind) => kind !== "error");
   // Its findings, as its Issues tab counts them (three N+1s are three), not their kinds; before its trace loads (a
