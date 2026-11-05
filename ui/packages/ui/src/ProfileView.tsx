@@ -444,7 +444,7 @@ const WHOLE_TRACE: MemoryWhat = { title: "Memory of the whole trace", traces: 1 
 function MemoryHead({ memory, what = WHOLE_TRACE }: { memory: Memory; what?: MemoryWhat }) {
   const several = what.traces > 1;
   return (
-    <div className="grid gap-0.5">
+    <div className="grid gap-0.5" data-memory-head="">
       <span className="flex items-center gap-2 text-xs text-muted-foreground">
         {what.app}
         {what.title}
@@ -1292,6 +1292,8 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
   const apps = useMemo(() => appProfiles(profiles), [profiles]);
   const memories = useMemo(() => appMemories(apps), [apps]);
   const [picked, setPicked] = useState<string | null>(null);
+  // Which app's tab is open beside the tree: the same one, in time and in memory.
+  const [tab, setTab] = useState<string | null>(null);
   const [kind, setKind] = useKind();
   const runtimes = useMemo(() => new Map(apps.map((app) => [app.app, appRuntime(app)])), [apps]);
   const counts = useMemo(() => new Map(apps.map((app) => [app.app, app.traces.length])), [apps]);
@@ -1308,7 +1310,11 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
         summary={chainSummary(listed, memory ? memories : null)}
         end={measured ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={setKind} /> : null}
       />
-      {memory ? <ChainMemory apps={listed} memories={memories} /> : <ChainTime apps={listed} />}
+      {memory ? (
+        <ChainMemory apps={listed} memories={memories} tab={tab} onTab={setTab} />
+      ) : (
+        <ChainTime apps={listed} tab={tab} onTab={setTab} />
+      )}
     </>
   );
 }
@@ -1327,28 +1333,53 @@ function chainSummary(apps: readonly AppProfile[], memories: ReadonlyMap<string,
   return `${plural(traces, "trace", "traces")} with their memory`;
 }
 
+/** Beside the tree there is room for one app: the apps as tabs, no table of what the tab then says. */
+function OneApp({
+  apps,
+  app,
+  onTab,
+  children,
+}: {
+  apps: readonly AppProfile[];
+  app: AppProfile | undefined;
+  onTab: (app: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="dt-profile-one" data-one-app="">
+      {apps.length > 1 && app ? (
+        <Segmented
+          label="App"
+          segments={apps.map((each) => ({ id: each.app, label: each.app }))}
+          value={app.app}
+          onChange={onTab}
+        />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
 /** Each app's time: what it adds up to, then its flame. */
-function ChainTime({ apps }: { apps: readonly AppProfile[] }) {
+function ChainTime({
+  apps,
+  tab,
+  onTab,
+}: {
+  apps: readonly AppProfile[];
+  tab: string | null;
+  onTab: (app: string) => void;
+}) {
   const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
   const beside = useContext(HiddenColumns) !== null;
-  const [picked, setPicked] = useState<string | null>(null);
   if (apps.length === 0) return <p className="dt-note">Nothing profiled under this.</p>;
   if (beside) {
-    // Beside the tree there is room for one: the apps as tabs, no table of what the tab then says.
-    const app = apps.find((each) => each.app === picked) ?? apps[0];
+    const app = apps.find((each) => each.app === tab) ?? apps[0];
     const view = app && views.get(app.app);
     return (
-      <div className="dt-profile-one" data-one-app="">
-        {apps.length > 1 && app ? (
-          <Segmented
-            label="App"
-            segments={apps.map((each) => ({ id: each.app, label: each.app }))}
-            value={app.app}
-            onChange={setPicked}
-          />
-        ) : null}
+      <OneApp apps={apps} app={app} onTab={onTab}>
         {app && view ? <AppProfileSection key={app.app} app={app} view={view} /> : null}
-      </div>
+      </OneApp>
     );
   }
   return (
@@ -1363,8 +1394,28 @@ function ChainTime({ apps }: { apps: readonly AppProfile[] }) {
 }
 
 /** Each app's memory: what it adds up to, then where it was. */
-function ChainMemory({ apps, memories }: { apps: readonly AppProfile[]; memories: ReadonlyMap<string, AppMemory> }) {
+function ChainMemory({
+  apps,
+  memories,
+  tab,
+  onTab,
+}: {
+  apps: readonly AppProfile[];
+  memories: ReadonlyMap<string, AppMemory>;
+  tab: string | null;
+  onTab: (app: string) => void;
+}) {
+  const beside = useContext(HiddenColumns) !== null;
   if (apps.length === 0) return <p className="dt-note">No memory measured under this.</p>;
+  if (beside) {
+    const app = apps.find((each) => each.app === tab) ?? apps[0];
+    const measured = app && memories.get(app.app);
+    return (
+      <OneApp apps={apps} app={app} onTab={onTab}>
+        {app && measured ? <AppMemorySection key={app.app} app={app} measured={measured} /> : null}
+      </OneApp>
+    );
+  }
   return (
     <>
       <MemorySums apps={apps} memories={memories} />

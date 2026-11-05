@@ -2585,3 +2585,29 @@ body {
   width: 2.5rem;
   min-width: 2.5rem;
 }
+
+/* Memory reads as Time does: the switches on one row, under them what it held, in a line. */
+.panel-wf-details [data-one-app] :has(> [data-memory-head]) {
+  align-items: flex-start;
+}
+.panel-wf-details [data-one-app] [data-memory-head] {
+  padding-top: 2.5rem;
+}
+.panel-wf-details [data-one-app] [data-memory-head] > span:first-child,
+.panel-wf-details [data-one-app] [data-memory-head] > span:nth-child(4) {
+  display: none !important;
+}
+.panel-wf-details [data-one-app] [data-memory-head] > span:nth-child(2) {
+  font-size: 1rem !important;
+  line-height: 1.5rem !important;
+}
+/* A chosen switch looks chosen under the pointer too. */
+.panel-wf-details [role="tablist"] [role="tab"][aria-selected="true"]:hover {
+  background: var(--background, #fff);
+}
+.dt-profile-one:has([data-memory-head]) [role="tablist"][aria-label="Frames shown"] {
+  position: absolute;
+  z-index: 1;
+  top: 1rem;
+  right: 1rem;
+}
