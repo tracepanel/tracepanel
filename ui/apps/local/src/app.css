@@ -2744,11 +2744,14 @@ body {
 }
 
 /* The details' tables beside the tree: compact rows, a level's dot in a cell of its own size. */
+/* Over the table's own utilities (a layer above this sheet's rules). */
 .panel-wf-details td {
-  padding-block: 0.3125rem;
+  height: 1.625rem !important;
+  padding-block: 0.125rem !important;
 }
 .panel-wf-details th {
-  height: 2rem;
+  height: 1.625rem !important;
+  font-size: 0.6875rem !important;
 }
 .panel-wf-details td:has([data-level-dot]) {
   padding-inline: 0;
