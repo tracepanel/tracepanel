@@ -2722,9 +2722,13 @@ div.tp-map-row[data-kind="code"] {
   color: var(--tp-text);
   text-decoration: underline;
 }
-/* Rows on the way to a filtered one: context, not the point. */
-.tp-map-row[data-dim] {
-  opacity: 0.5;
+/* Rows on the way to a filtered one: context, not the point. Still rows to read, fold and pick (never a disabled
+   look): only their bars and times step back, the filtered rows' stand out. */
+.tp-map-row[data-dim] .tp-map-track {
+  opacity: 0.35;
+}
+.tp-map-row[data-dim] .tp-map-time {
+  color: var(--tp-text-3);
 }
 /* Italic labels lean past their box: room on their right for the last letter, so a tight or clipped cell never cuts
    it ("not traced", "waiting"). */
