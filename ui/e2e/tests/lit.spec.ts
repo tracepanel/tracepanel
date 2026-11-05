@@ -64,9 +64,6 @@ test("in the panel, dark, the strip lights the same way", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Load home" }).click();
   await pill(page).click();
-  await panel(page)
-    .getByRole("tab", { name: /^Call tree/ })
-    .click();
 
   await checkStrip(panel(page));
 });

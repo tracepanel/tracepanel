@@ -119,7 +119,6 @@ test("in the panel too: the same block, the same why", async ({ page }) => {
   await page.getByRole("button", { name: "Load checkout" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
   const block = await received(frame, "http.client", "billing.test/charge");
 

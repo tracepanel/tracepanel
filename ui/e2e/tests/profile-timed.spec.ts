@@ -100,7 +100,6 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
   await page.getByRole("button", { name: "Load one" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await frame.locator('.tp-map-row[data-kind="code"]').first().click();
 
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");

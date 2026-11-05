@@ -93,7 +93,6 @@ test.beforeEach(seed);
 
 test("in the docked panel a dump's long value wraps inside its box, its indentation kept", async ({ page }) => {
   const frame = await openPanel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await frame.locator('.tp-map-row[data-kind="dump"]').click();
   const value = frame.getByRole("region", { name: "Dump arguments" }).getByRole("region", { name: "order" });
   const pre = value.locator("pre");
@@ -111,7 +110,6 @@ test("in the docked panel a dump's long value wraps inside its box, its indentat
 
 test("in the docked panel a long query and a long request body wrap inside their boxes", async ({ page }) => {
   const frame = await openPanel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await frame.locator('.tp-map-row[data-kind="sql"]').first().click();
   const sql = frame.getByRole("complementary", { name: "Details" }).locator("pre").filter({ hasText: "END'" }).first();
 

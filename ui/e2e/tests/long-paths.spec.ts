@@ -53,7 +53,6 @@ test("in the panel too, a query's long path wraps in the details pane", async ({
   await page.getByRole("button", { name: "Load home" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await frame.locator('.tp-map-group .tp-map-row[data-kind="sql"]').first().click();
 
   await expectNoSideways(frame);

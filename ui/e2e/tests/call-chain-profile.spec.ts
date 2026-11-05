@@ -215,7 +215,6 @@ test("in the panel, the flame opens the call's trace at its Profile tab in place
   await page.getByRole("button", { name: "Load save" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await expect(codeRows(frame).filter({ hasText: "resolve_books" })).toHaveCount(1);
 
   await hop(frame, "GET /api/books").locator(".tp-map-flame").click();

@@ -2249,7 +2249,7 @@ body {
   content: "";
 }
 .panel-wf-split:is(:hover, :focus-visible, :active)::before {
-  background: color-mix(in srgb, var(--tp-text-3) 50%, transparent);
+  background: var(--tp-divider-active);
 }
 .panel-wf-split:focus-visible {
   outline: none;
@@ -2320,22 +2320,23 @@ body {
   transform: translateY(-50%);
   cursor: row-resize;
 }
+/* In hand, one thin neutral line, as every edge the panel drags by draws it. */
 .panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(50% - 1px);
-  width: 2px;
-  background: var(--tp-text-3);
+  left: calc(50% - 0.5px);
+  width: 1px;
+  background: var(--tp-divider-active);
   content: "";
 }
 .panel-wf[data-dock="right"] .panel-wf-details-split:is(:hover, :focus-visible, :active)::before {
-  top: calc(50% - 1px);
+  top: calc(50% - 0.5px);
   right: 0;
   bottom: auto;
   left: 0;
   width: auto;
-  height: 2px;
+  height: 1px;
 }
 .panel-wf-details-split:focus-visible {
   outline: none;

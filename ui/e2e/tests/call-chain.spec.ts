@@ -463,7 +463,6 @@ test("in the panel too, the click's call tree opens the chain, row for row as th
   await page.getByRole("button", { name: "Load save" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   const books = hop(frame, "GET /books");
 
   await expect(hop(frame, "GET /api/books")).toHaveAttribute("aria-expanded", "true");
@@ -637,7 +636,6 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
   await page.getByRole("button", { name: "Load save" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await hop(frame, "GET /books").locator(".tp-map-caret[data-toggle]").click();
   await hop(frame, "GET /books").click();
 

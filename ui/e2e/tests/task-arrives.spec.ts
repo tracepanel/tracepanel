@@ -117,7 +117,6 @@ test("in the panel, a task's run replaces its waiting row as it arrives", async 
   await page.getByRole("button", { name: "Load products" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
   await expectArrives(frame, run);
 });

@@ -105,7 +105,6 @@ test("the strip is the Call tree tab's only, on the page and in the panel; the f
   await page.getByRole("button", { name: "Load held" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
   await expect(frame.getByRole("region", { name: "Time" }).locator(QUIET).first()).toBeVisible();
 
@@ -182,7 +181,6 @@ async function openSales(page: Page): Promise<FrameLocator> {
   await page.getByRole("button", { name: "Load one" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   return frame;
 }
 
@@ -255,7 +253,6 @@ test("the tree's code row leads to the profile: its flame, a click opens it, in 
   await page.getByRole("button", { name: "Load one" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
   await frame.locator('.tp-map-row[data-kind="code"]').click();
 
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
