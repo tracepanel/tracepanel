@@ -606,7 +606,8 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <MigrationNotes span={span} />
           <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
           <RowChips>
-            {ctx.issuesIn && issue ? (
+            {/* Beside the tree, a folded row says what is under it too: its findings don't hide in the fold. */}
+            {ctx.issuesIn && (issue || fold === false) ? (
               span.parent_id === null ? null : (
                 <IssuesMark ctx={ctx} rowKey={node.key} targets={[span.id]} kind={issue} />
               )
