@@ -456,6 +456,9 @@ function useWaterfallTabs(
   };
 }
 
+/** Findings of a group of calls, never of one of them. */
+const REPEATS: ReadonlySet<string> = new Set(["n+1", "duplicates"]);
+
 /** A row's tabs: nothing about the whole request or its app, and none at all for a row with nothing under it. */
 function tabsOfRow<T extends { id: string; label: string; icon?: unknown }>(
   tabs: readonly T[],
@@ -473,7 +476,9 @@ function tabsOfRow<T extends { id: string; label: string; icon?: unknown }>(
   // One call with nothing under it (a query): its own Details, and its findings, error and logs where it has them; a list of
   // it alone, or a profile of its few ms, says nothing more.
   if (scopedSpans(chain.members, scope, () => true).length <= 1) {
-    return tabs.filter((tab) => ["tree", "issues", "error", "logs"].includes(tab.id));
+    // A repeat (an N+1, a duplicate) is its group's: one of its calls has only what is its own.
+    const own = scopedIssues(chain.members, scope, chain.chainIssues).some((issue) => !REPEATS.has(issue.kind));
+    return tabs.filter((tab) => ["tree", "error", "logs"].includes(tab.id) || (own && tab.id === "issues"));
   }
   return tabs.filter((tab) => tab.id !== "request" && tab.id !== "app");
 }

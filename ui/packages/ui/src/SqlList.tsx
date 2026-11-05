@@ -295,6 +295,11 @@ function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Gro
   ];
 }
 
+/** A query's own finding: none for a repeat (an N+1, a duplicate), which is its group's. */
+function ownIssue(issue: IssueKind | undefined): IssueKind | undefined {
+  return issue === "n+1" || issue === "duplicates" ? undefined : issue;
+}
+
 function orderColumns(
   placed: readonly Placed[],
   start: number,
@@ -325,7 +330,8 @@ function orderColumns(
               count={1}
               alias={span.attrs["db.alias"]}
               from={span.attrs}
-              issue={issueBySpan.get(span.id)}
+              // A repeat is its group's (the Grouped view, the tree's row): each run says only its own.
+              issue={ownIssue(issueBySpan.get(span.id))}
             />
             {params ? <span className="dt-map-sub truncate font-mono">{params}</span> : null}
           </span>
