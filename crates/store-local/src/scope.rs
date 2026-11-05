@@ -188,11 +188,12 @@ impl Reader {
             "{MEMBERS} SELECT DISTINCT i.fingerprint, i.kind FROM members m
              JOIN issue_traces t ON t.trace_id = m.id JOIN issues i ON i.fingerprint = t.fingerprint"
         ))?;
-        // What ran down the chain: its spans' kinds (functions, GraphQL, transactions) and its calls' systems (sql,
-        // http, redis): what a list can be narrowed to, and which rows have it.
+        // What ran down the chain: its spans' kinds (functions, GraphQL, transactions), its calls' systems (sql,
+        // http, redis), and "log" for a warning or worse: what a list can be narrowed to, and which rows have it.
         let mut kinds_of = db.prepare_cached(&format!(
             "{MEMBERS} SELECT s.kind FROM members m JOIN spans s ON s.trace_id = m.id
-             UNION SELECT c.system FROM members m JOIN calls c ON c.trace_id = m.id ORDER BY 1"
+             UNION SELECT c.system FROM members m JOIN calls c ON c.trace_id = m.id
+             UNION SELECT 'log' FROM members m JOIN logs l ON l.trace_id = m.id WHERE l.level_no >= 30 ORDER BY 1"
         ))?;
         // Its calls to other apps, and the apps down it in the order they joined: the wide list says them.
         let mut http = db.prepare_cached(&format!(
@@ -1251,7 +1252,8 @@ mod tests {
         // Its calls by system, its other spans by kind (the root's own, a page or a request, isn't one).
         assert_eq!(
             counts["VIEW"]["span_kinds"],
-            json!(["function", "http", "sql"])
+            // A warning logged down it: "log" too.
+            json!(["function", "http", "log", "sql"])
         );
         assert_eq!(
             counts["VIEW"]["apps"],

@@ -466,6 +466,8 @@ function spansOf(node: Node): readonly Span[] {
 function partOf(node: Node, picked: Picked): boolean {
   if (picked.parts.size === 0) return true;
   if (picked.parts.has(FILTER_OF.get(kindOf(node)) ?? "")) return true;
+  // A row's own kind picked as it is (the panel's Show menu: "log", a record's warnings and errors).
+  if (picked.parts.has(kindOf(node))) return true;
   return spansOf(node).some((span) => picked.parts.has(picked.categories.get(span.id) ?? ""));
 }
 

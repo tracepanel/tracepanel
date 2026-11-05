@@ -600,8 +600,13 @@ export function useShownKinds(): [readonly string[], (kinds: readonly string[]) 
   return [kinds, keep];
 }
 
+/** Logs as a kind the menu offers: a record's log rows (warnings and errors, as the tree shows them). */
+const LOGS = { id: "log", label: "Logs", kinds: ["log"] } as const;
+
+type Shown = (typeof FILTERS)[number] | typeof LOGS;
+
 /** A filter's own: what ran down a record's chain (its counts' span_kinds) has it. */
-function hasFilter(present: ReadonlySet<string>, filter: (typeof FILTERS)[number]): boolean {
+function hasFilter(present: ReadonlySet<string>, filter: Shown): boolean {
   return present.has(filter.id) || filter.kinds.some((kind) => present.has(kind));
 }
 
@@ -609,13 +614,13 @@ function hasFilter(present: ReadonlySet<string>, filter: (typeof FILTERS)[number
 export function showsKinds(spanKinds: readonly string[] | undefined, kinds: readonly string[]): boolean {
   if (kinds.length === 0) return true;
   const present = new Set(spanKinds ?? []);
-  return FILTERS.some((filter) => kinds.includes(filter.id) && hasFilter(present, filter));
+  return [...FILTERS, LOGS].some((filter) => kinds.includes(filter.id) && hasFilter(present, filter));
 }
 
 /** The kinds the list's records have, the ones picked kept: what the Show menu offers. */
 export function offeredKinds(spanKinds: readonly (readonly string[] | undefined)[], kinds: readonly string[]) {
   const present = new Set(spanKinds.flatMap((each) => each ?? []));
-  return FILTERS.filter((filter) => kinds.includes(filter.id) || hasFilter(present, filter));
+  return [...FILTERS, LOGS].filter((filter) => kinds.includes(filter.id) || hasFilter(present, filter));
 }
 
 /** A kind's colour, the bars' own: the closest share where a kind has none of its own (GraphQL, functions: code). */
@@ -638,6 +643,7 @@ function filterColor(id: string): string {
     channels: "messaging",
     transaction: "sql",
     error: "log",
+    log: "log",
   };
   return own[id] ?? "view";
 }
@@ -655,7 +661,7 @@ export function KindsMenu({
   onKinds,
 }: {
   kinds: readonly string[];
-  offered: readonly (typeof FILTERS)[number][];
+  offered: readonly Shown[];
   onKinds: (kinds: readonly string[]) => void;
 }) {
   const offered = [
