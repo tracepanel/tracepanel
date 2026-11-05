@@ -2784,18 +2784,8 @@ body {
 .panel-wf .dt-map-row > .dt-map-name > .dt-map-chips {
   flex: none;
 }
-
-/* The Show menu: its kinds as the tables' heads say theirs, small capitals, tight rows. */
-.dt-kinds-menu [role="menuitemcheckbox"],
-.dt-kinds-menu [role="menuitem"] {
-  min-height: 1.625rem !important;
-  padding-block: 0.25rem !important;
-  font-size: 0.6875rem !important;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--dt-text-2);
-}
-.dt-kinds-menu [role="menuitemcheckbox"][data-state="checked"] {
-  color: var(--dt-text);
+/* What can be clicked says so under the pointer: buttons, chips, tabs, rows. */
+.panel :is(button, [role="tab"], [role="button"], summary, a[href]):not(:disabled),
+[data-radix-popper-content-wrapper] :is(button, [role="menuitem"], [role="menuitemcheckbox"]):not(:disabled) {
+  cursor: pointer;
 }

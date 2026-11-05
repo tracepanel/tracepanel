@@ -18,14 +18,7 @@ import {
   type TraceRow,
   type TraceSummary,
 } from "@tracepanel/ui";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@tracepanel/ui/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { cn } from "@tracepanel/ui/lib/utils";
@@ -671,9 +664,9 @@ export function KindsMenu({
   if (offered.length === 0) return null;
   const label = kinds.length > 0 ? `Showing ${kinds.length === 1 ? "1 kind" : `${kinds.length} kinds`}` : "Show";
   return (
-    <DropdownMenu>
+    <Popover>
       <Hint title={label} detail="Which calls the tree shows: only SQL, only GraphQL… The rest are hidden.">
-        <DropdownMenuTrigger asChild>
+        <PopoverTrigger asChild>
           <button
             type="button"
             className={cn("icon-button", kinds.length > 0 && "text-brand hover:text-brand")}
@@ -682,31 +675,32 @@ export function KindsMenu({
           >
             <ListFilterIcon size={16} />
           </button>
-        </DropdownMenuTrigger>
+        </PopoverTrigger>
       </Hint>
-      <DropdownMenuContent align="start" className="dt-kinds-menu max-h-96 w-44 overflow-y-auto">
-        {offered.map((filter) => (
-          <DropdownMenuCheckboxItem
-            key={filter.id}
-            checked={kinds.includes(filter.id)}
-            onCheckedChange={(checked) =>
-              onKinds(checked ? [...kinds, filter.id] : kinds.filter((each) => each !== filter.id))
-            }
-            onSelect={(event) => event.preventDefault()}
-            className="gap-2"
-          >
-            {/* Its colour, as the bars and the time's legend have it. */}
-            <span className="dt-kind-dot" style={{ background: `var(--dt-k-${filterColor(filter.id)})` }} />
-            {filter.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-        {kinds.length > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => onKinds([])}>Show all</DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      {/* The time legend's own chips: a kind's swatch and name, pressed while picked. */}
+      <PopoverContent align="start" className="dt-kinds-menu w-72 p-2">
+        <div className="flex flex-wrap gap-1.5">
+          {offered.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              className="dt-map-filter"
+              aria-pressed={kinds.includes(filter.id)}
+              onClick={() =>
+                onKinds(kinds.includes(filter.id) ? kinds.filter((each) => each !== filter.id) : [...kinds, filter.id])
+              }
+            >
+              <span className="dt-swatch" style={{ background: `var(--dt-k-${filterColor(filter.id)})` }} />
+              {filter.label}
+            </button>
+          ))}
+          {kinds.length > 0 ? (
+            <button type="button" className="dt-map-filter-clear" onClick={() => onKinds([])}>
+              Show all
+            </button>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
