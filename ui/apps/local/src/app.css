@@ -2455,6 +2455,17 @@ body {
   justify-content: flex-end;
   min-width: 2rem;
 }
+/* Its queries say how many, quietly: the findings beside them are what to look at. */
+.dt-record .dt-request-queries {
+  gap: 0.1875rem;
+  color: var(--dt-text-3);
+  font-size: var(--dt-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.dt-record .dt-request-queries svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
 .dt-record-ago {
   margin-left: auto;
 }
