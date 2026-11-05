@@ -633,6 +633,8 @@ export interface TraceViewProps {
   detailsHost?: HTMLElement | null | undefined;
   /** `waterfall`: where Explore goes, among the panel's buttons. */
   actionsHost?: HTMLElement | null | undefined;
+  /** `waterfall`: the record's time as its closed row says it (the time the page waited): its root row's too. */
+  recordTime?: number | undefined;
   /** The Explore menu; hidden when empty. */
   explore?: readonly ExploreItem[] | undefined;
   /** Called when the reader picks another tab (its bar, its keys, a tile that leads to one). */
@@ -1057,6 +1059,7 @@ export function TraceView({
   onOutsideChain,
   detailsHost,
   actionsHost,
+  recordTime,
   // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
   ...held
 }: TraceViewProps) {
@@ -1127,6 +1130,7 @@ export function TraceView({
       detailsHost={waterfall ? detailsSlot : undefined}
       onPicked={waterfall ? onPicked : undefined}
       onProfileTab={waterfall ? () => setActive("profile") : undefined}
+      rootTime={waterfall ? recordTime : undefined}
       rootMark={
         waterfall ? (
           // In the closed records' columns (TraceList): the open one's marks under theirs.

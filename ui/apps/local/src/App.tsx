@@ -359,7 +359,7 @@ function PanelWaterfall({
 }) {
   const [detailsHost, setDetailsHost] = useState<HTMLElement | null>(null);
   const [actionsHost, setActionsHost] = useState<HTMLElement | null>(null);
-  const list = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLElement>(null);
   // The record opened stays under the click: the one closed above it would move it up, the list scrolls it back.
   // Opened another way (Follow, a link), the list scrolls only to bring it into view.
   const clicked = useRef<number | null>(null);
@@ -439,8 +439,9 @@ function PanelWaterfall({
       >
         <div className="panel-wf-tree">
           {empty ? null : <MapSplitter {...map.handle} />}
-          <div
+          <section
             className="panel-wf-rows"
+            aria-label="Pages and requests in this browser tab"
             ref={list}
             // Closed details open again with a row picked (not with a fold opened or closed).
             onClickCapture={(event) => {
@@ -477,6 +478,7 @@ function PanelWaterfall({
                           arriving={arrivingIn(rows, stored, rootId)}
                           running={runningIn(rows, rootId)}
                           variant="waterfall"
+                          recordTime={opened?.trace.duration}
                           waiting={
                             opened ? (
                               <>
@@ -530,7 +532,7 @@ function PanelWaterfall({
                 </RowKinds.Provider>
               </RowFilter.Provider>
             )}
-          </div>
+          </section>
         </div>
         <DetailsSplitter {...details.handle} />
         <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
@@ -630,7 +632,9 @@ function PanelApp({ route }: { route: Route }) {
         route={route}
         selectedId={selectedId}
         rows={rows}
-        listRows={recordsOf(inOrder(true, shown.rows), selectedId).reverse()}
+        listRows={recordsOf(inOrder(true, shown.rows), selectedId)
+          .reverse()
+          .map((row) => (arrivingIn(rows, stored, row.trace.id) ? { ...row, arriving: true } : row))}
         onMore={more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined}
         stored={stored}
         chains={chains}

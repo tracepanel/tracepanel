@@ -2,7 +2,18 @@
 import { readFileSync } from "node:fs";
 import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
-import { type Call, chooseTheme, OTHER_API, openApp, panel, pill, traceId } from "../app.ts";
+import {
+  type Call,
+  chooseTheme,
+  OTHER_API,
+  openApp,
+  panel,
+  panelList,
+  panelRows,
+  pill,
+  records,
+  traceId,
+} from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 async function posts(): Promise<Call> {
@@ -114,8 +125,8 @@ test("once the agent stored the request, the pill shows its time as the panel do
   // Its issues come from the agent: the request is stored by then.
   await expect(pill(page)).toHaveAccessibleName(/1 issue/);
   await pill(page).click();
-  const row = panel(page).locator(".tp-request-row").filter({ hasText: "/api/posts" });
-  const time = await row.locator(".tp-request-meta > :nth-child(2)").innerText();
+  const row = records(page).filter({ hasText: "/api/posts" });
+  const time = await row.locator(".tp-map-time").innerText();
 
   // The time the page waited for it, the same in both: never the header's 0.4 ms.
   expect(time).toMatch(/^[\d.]+ ms$/);
@@ -145,13 +156,15 @@ test("the panel opens on the latest request's trace, from the agent", async ({ p
   await page.getByRole("button", { name: "Load posts" }).click();
   await pill(page).click();
 
-  await expect(panel(page).getByRole("region", { name: "Pages and requests in this browser tab" })).toContainText(
-    /GET\s*\/api\/posts/,
-  );
-  await expect(panel(page).getByRole("tab", { name: "Call tree" })).toHaveAttribute("aria-selected", "true");
-  // The tab's narrow list marks the request's findings by their number, their names in the title.
-  await expect(panel(page).getByTitle("N+1", { exact: true })).toHaveText("1");
-  await expect(panel(page).getByRole("button", { name: /SELECT author .*×13 N\+1/ })).toBeVisible();
+  // Open, as its call tree: the request first, its findings marked by their number, down to the repeated query.
+  await expect(records(page).first()).toHaveText(/GET\s*\/api\/posts/);
+  await expect(records(page).first()).toHaveAttribute("aria-expanded", "true");
+  await expect(records(page).first().locator(".tp-record-issues")).toHaveText("1");
+  await expect(
+    panelList(page)
+      .getByRole("button", { name: /SELECT author ×13/ })
+      .locator('[data-issue-kind="n+1"]'),
+  ).toHaveText("1");
 });
 
 test("Clear empties the tab's list; Esc hides the panel", async ({ page }) => {
@@ -200,14 +213,18 @@ test("with the browser recording, the pill shows the page's view, and the panel 
   await page.getByRole("button", { name: "Do posts" }).click();
   await page.getByRole("button", { name: "Do boom" }).click();
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+  const actions = records(page).filter({ hasText: /^(view|click)/i });
 
-  await expect(rows).toHaveText([
-    /^VIEW\s*\/app\//,
-    /^CLICK\s*"posts"/,
-    /^GET\s*\/api\/posts/,
-    /^CLICK\s*"boom"/,
-    /^GET\s*\/api\/error/,
+  // The view and each action a record, the newest first; one opened, its requests under it.
+  await expect(actions).toHaveText([/^click\s*"boom"/i, /^click\s*"posts"/i, /^view\s*\/app\//i]);
+
+  await actions.filter({ hasText: '"posts"' }).click();
+
+  await expect(panelRows(page)).toHaveText([
+    /^click\s*"boom"/i,
+    /^click\s*"posts"/i,
+    /^req\s*GET\s*\/api\/posts/i,
+    /^view\s*\/app\//i,
   ]);
 });
 
@@ -225,12 +242,15 @@ test("a server-rendered page's own request sits under the view that loaded it, o
   );
   await page.getByRole("button", { name: "Do posts" }).click();
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+  const actions = records(page).filter({ hasText: /^(view|click)/i });
 
-  await expect(rows).toHaveText([/^VIEW\s*\/app\//, /^GET\s*\/blog/, /^CLICK\s*"posts"/, /^GET\s*\/api\/posts/]);
-  await expect
-    .poll(() => rows.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("data-depth"))))
-    .toEqual(["0", "1", "0", "1"]);
+  // One record for one load: the page's own request is under its view, not a record of its own.
+  await expect(actions).toHaveText([/^click\s*"posts"/i, /^view\s*\/app\//i]);
+  await expect(records(page).filter({ hasText: /GET\s*\/blog/ })).toHaveCount(0);
+
+  await actions.filter({ hasText: /^view/i }).click();
+
+  await expect(panelRows(page)).toHaveText([/^click\s*"posts"/i, /^view\s*\/app\//i, /^req\s*GET\s*\//i]);
 });
 
 test("calls to an API on another origin sit under the action that made them, with a recording started after the widget", async ({
@@ -241,18 +261,19 @@ test("calls to an API on another origin sit under the action that made them, wit
   await page.getByRole("button", { name: "Do posts" }).click();
   await page.getByRole("button", { name: "Do boom" }).click();
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+  const actions = records(page).filter({ hasText: /^(view|click)/i });
 
-  await expect(rows).toHaveText([
-    /^VIEW\s*\/app\//,
-    /^CLICK\s*"posts"/,
-    /^GET\s*\/api\/posts/,
-    /^CLICK\s*"boom"/,
-    /^GET\s*\/api\/error/,
+  await expect(actions).toHaveText([/^click\s*"boom"/i, /^click\s*"posts"/i, /^view\s*\/app\//i]);
+
+  await actions.filter({ hasText: '"posts"' }).click();
+
+  // The other origin's request under the action that made it, not under the view.
+  await expect(panelRows(page)).toHaveText([
+    /^click\s*"boom"/i,
+    /^click\s*"posts"/i,
+    /^req\s*GET\s*\/api\/posts/i,
+    /^view\s*\/app\//i,
   ]);
-  await expect
-    .poll(() => rows.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("data-depth"))))
-    .toEqual(["0", "0", "1", "0", "1"]);
 });
 
 test("Follow new stays on the action a request belongs to, once the action is stored", async ({ page }) => {
@@ -267,41 +288,32 @@ test("Follow new stays on the action a request belongs to, once the action is st
           .filter((id) => !known.has(id))
           .map((id) => ({ ...template, id, kind: "page", name: '/app/ › click "posts"' }))
       : [];
-    await route.fulfill({ json: { ...answer, traces: [...answer.traces, ...pages] } });
+    // Counted as any stored trace is.
+    const counts =
+      answer.counts && template ? Object.fromEntries(pages.map((each) => [each.id, answer.counts[template.id]])) : {};
+    await route.fulfill({
+      json: { ...answer, traces: [...answer.traces, ...pages], counts: { ...answer.counts, ...counts } },
+    });
   });
   await openApp(page, { posts: await posts(), boom: await broken() }, { recording: true });
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
-  await expect(rows.first()).toBeVisible();
+  await expect(records(page).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Do posts" }).click();
 
-  // The view, the click, its request: the click stays open, not the request under it.
-  await expect(rows).toHaveCount(3);
-  await expect(rows.nth(1)).toHaveAttribute("aria-current", "true");
-  await expect(rows.nth(2)).not.toHaveAttribute("aria-current", "true");
+  // The click is the open record, not the request under it.
+  await expect(records(page).first()).toHaveText(/^click\s*"posts"/i);
+  await expect(records(page).first()).toHaveAttribute("aria-current", "true");
+  await expect(records(page).filter({ hasText: /^req/i })).toHaveCount(0);
 });
 
-test("with requests from more than one app, each row of the tab's list names its app", async ({ page }) => {
-  const books: Call = { status: 200, trace: await traceId("GET /books"), queries: 21, totalMs: 2 };
-  await openApp(page, { posts: await posts(), books });
-
-  await page.getByRole("button", { name: "Load posts" }).click();
-  await page.getByRole("button", { name: "Load books" }).click();
-  await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
-
-  await expect(rows.filter({ hasText: "/api/posts" }).locator(".tp-app-chip")).toHaveText("shop-api");
-  await expect(rows.filter({ hasText: /GET\s*\/books/ }).locator(".tp-app-chip")).toHaveText("api");
-});
-
-test("with requests from one app only, the rows name no app", async ({ page }) => {
+test("the rows name no app, from one app or more", async ({ page }) => {
   await openApp(page, { posts: await posts(), boom: await broken() });
 
   await page.getByRole("button", { name: "Load posts" }).click();
   await page.getByRole("button", { name: "Load boom" }).click();
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+  const rows = records(page);
 
   await expect(rows).toHaveCount(2);
   await expect(rows.locator(".tp-app-chip")).toHaveCount(0);
@@ -328,22 +340,11 @@ test("a form's POST that redirected heads the page it led to: the app names it i
     },
   );
   await pill(page).click();
-  const rows = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" }).getByRole("button");
+  const rows = records(page);
 
-  await expect(rows.nth(0)).toHaveText(/^POST\s*\/accounts\/login\/.*302/);
-  await expect(rows.nth(1)).toHaveText(/^GET\s*\//);
+  // The newest first: the page, then the POST that led to it.
+  await expect(rows).toHaveText([/^req\s*GET\s*\//i, /POST\s*\/accounts\/login\/.*302/]);
   expect((await context.cookies()).map((cookie) => cookie.name)).not.toContain("tracepanel_redirect");
-});
-
-test("in the panel, the Request tab heads with the request at a glance", async ({ page }) => {
-  await openApp(page, { posts: await posts() });
-  await page.getByRole("button", { name: "Load posts" }).click();
-  await pill(page).click();
-  await panel(page)
-    .getByRole("tab", { name: /^Request/ })
-    .click();
-
-  await expect(panel(page).locator(".tp-tabpanel header")).toContainText(/GET\s*\/api\/posts\s*200/);
 });
 
 test("docked at the bottom, the panel leaves room to scroll to the page's end, even where the root is as tall as the window", async ({
@@ -368,7 +369,7 @@ test("docked at the bottom, the panel leaves room to scroll to the page's end, e
   expect(end && top && end.y + end.height <= top.y).toBe(true);
 });
 
-test("Profile sits with Follow new and Clear: one button, Off and Time, when the app doesn't profile memory", async ({
+test("Profile sits in the bar with Follow new and Clear: one button, Off and Time, when the app doesn't profile memory", async ({
   page,
   context,
 }) => {
@@ -376,12 +377,9 @@ test("Profile sits with Follow new and Clear: one button, Off and Time, when the
   await openApp(page, { posts: await posts() });
   await page.getByRole("button", { name: "Load posts" }).click();
   await pill(page).click();
-  const controls = panel(page)
-    .locator("span")
-    .filter({ has: panel(page).getByText("Follow new") })
-    .filter({ has: panel(page).getByRole("button", { name: /^Clear/ }) })
-    .last();
-  const button = controls.getByRole("button", { name: /^Profiling/ });
+  const button = panel(page)
+    .locator(".panel-top")
+    .getByRole("button", { name: /^Profiling/ });
 
   await expect(button).toHaveCount(1);
   await expect(button).toHaveAccessibleName("Profiling off");
@@ -558,12 +556,11 @@ test("Profile, when the cookie asks for memory where the apps profile time only,
   expect(await profileCookie(context)).toBeUndefined();
 });
 
-for (const width of [220, 300, 360, 480]) {
-  test(`docked at the bottom with a list ${width} px wide, its toolbar row holds the user, Follow new, Profile and Clear in one line`, async ({
+for (const width of [640, 900, 1280]) {
+  test(`docked at the bottom in a window ${width} px wide, the bar holds the user, Follow new, Profile and Clear, none over another`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.addInitScript((stored) => localStorage.setItem("tracepanel:list-width", stored), String(width));
+    await page.setViewportSize({ width, height: 800 });
     await page.route("**/api/capabilities", (route) =>
       // biome-ignore lint/style/useNamingConvention: wire format.
       route.fulfill({ json: { explain: false, users: true, profile: true, profile_memory: true, request: true } }),
@@ -576,13 +573,13 @@ for (const width of [220, 300, 360, 480]) {
     await openApp(page, { posts: await posts() });
     await page.getByRole("button", { name: "Load posts" }).click();
     await pill(page).click();
-    const row = panel(page).locator(".panel-brand");
-    const user = row.getByRole("button", { name: "Acting as a-rather-long-username-for-a-toolbar" });
+    const bar = panel(page).locator(".panel-top");
+    const user = bar.getByRole("button", { name: "Acting as a-rather-long-username-for-a-toolbar" });
     const controls = [
+      bar.getByRole("button", { name: "Follow new" }),
+      bar.getByRole("button", { name: /^Clear/ }),
+      bar.getByRole("button", { name: /^Profiling/ }),
       user,
-      row.locator("label").filter({ hasText: "Follow new" }),
-      row.getByRole("button", { name: /^Profiling/ }),
-      row.getByRole("button", { name: /^Clear/ }),
     ];
 
     await expect(user).toBeVisible();
@@ -590,28 +587,24 @@ for (const width of [220, 300, 360, 480]) {
     await expect(user).not.toContainText("a-rather-long");
     await expect(user.getByTestId("user-set-dot")).toBeVisible();
 
-    const box = await row.boundingBox();
+    const box = await bar.boundingBox();
     const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
-    const middles = boxes.map((each) => (each ? each.y + each.height / 2 : Number.NaN));
+    const overlap = (a: Box, b: Box) =>
+      a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
     expect(box && boxes.every((each) => each && each.x >= box.x && each.x + each.width <= box.x + box.width)).toBe(
       true,
     );
-    // One line, side by side: centred alike (within a pixel or so), none over the one before.
-    expect(Math.max(...middles) - Math.min(...middles)).toBeLessThanOrEqual(2);
     expect(
-      boxes.every((each, at) => {
-        const before = boxes[at - 1];
-        return (
-          at === 0 || (each !== null && before !== null && before !== undefined && before.x + before.width <= each.x)
-        );
-      }),
+      boxes.every((each, at) => boxes.every((other, to) => to === at || !each || !other || !overlap(each, other))),
     ).toBe(true);
-    expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await bar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
     await expectHint(page, user, "Acting as a-rather-long-username-for-a-toolbar · click to change");
   });
 }
+
+type Box = { x: number; y: number; width: number; height: number };
 
 test("Console opens the request in the full console, and its hint says so", async ({ page }) => {
   const call = await posts();

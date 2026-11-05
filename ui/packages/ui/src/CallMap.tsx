@@ -600,6 +600,7 @@ export function CallMap({
   onPicked?: PickedHandler | undefined;
   /** Beside the root row's name, in a tree with no summary over it. */
   rootMark?: ReactNode;
+  rootTime?: RowContext["rootTime"];
   issuesIn?: RowContext["issuesIn"];
   onIssues?: RowContext["onIssues"];
   /** Beside the tree: opens the Profile tab, a code row's profile. */
@@ -684,6 +685,7 @@ export function CallMap({
                 issuesIn: wiring.issuesIn,
                 onIssues: wiring.onIssues,
                 rootMark: wiring.rootMark,
+                rootTime: wiring.rootTime,
                 collapsed,
                 onToggle: toggle,
                 marks,

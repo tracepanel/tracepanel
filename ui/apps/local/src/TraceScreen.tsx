@@ -65,6 +65,7 @@ export interface TraceScreenProps {
   variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
   detailsHost?: HTMLElement | null | undefined;
   actionsHost?: HTMLElement | null | undefined;
+  recordTime?: TraceViewProps["recordTime"];
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];

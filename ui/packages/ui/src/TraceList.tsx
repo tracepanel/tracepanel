@@ -77,6 +77,8 @@ export interface TraceRow {
   counted?: boolean | undefined;
   /** A view whose calls' numbers are still on their way: its own pending, never a part of them (its time stays). */
   awaiting?: boolean | undefined;
+  /** Not stored yet, on its way (it ended moments ago): not a record the store let go. */
+  arriving?: boolean | undefined;
   /** Cut short with no answer yet: its time so far (µs), as a call's row of a view's chain says it. */
   cut?: number | null | undefined;
   /** For a call no trace answered: the host it went to. */
@@ -352,7 +354,7 @@ function ListItem({
           onSelect={onSelect}
           share={Math.min(trace.duration / (longest ?? trace.duration), 1)}
           // Asked for its chain and none came: its traces have left the local store.
-          gone={chains?.counts !== undefined && counts === undefined && !row.open && !row.awaiting}
+          gone={chains?.counts !== undefined && counts === undefined && !row.open && !row.awaiting && !row.arriving}
         />
       </li>
     );

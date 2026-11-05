@@ -37,6 +37,8 @@ export interface RowContext {
   onIssues?: ((tab?: TabOf) => void) | undefined;
   /** Beside the root row's name: what the whole record found, as its closed row says it. */
   rootMark?: ReactNode;
+  /** The root row's time as the record's closed row (and the pill) say it: the time the page waited, its own. */
+  rootTime?: number | undefined;
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
   selected: string | null;
@@ -257,6 +259,11 @@ export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
   }
   // Cut short, no answer yet: its time is where it was cut, not how slow it was (lib/live): never amber or red.
   if (isCut(span)) return <RowTime time={span.duration} slow={undefined} title={cutNote(span.duration)} />;
+  // The record's own time, one number wherever it shows: what the page waited, what the server took on hover.
+  if (span.parent_id === null && ctx.rootTime !== undefined && ctx.rootTime > span.duration) {
+    const title = `The page waited ${duration(ctx.rootTime)}; the server took ${duration(span.duration)}`;
+    return <RowTime time={ctx.rootTime} slow={undefined} title={title} />;
+  }
   const slow = span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id));
   return <RowTime time={span.duration} slow={slow} title={timeTitle(span, ctx.trace)} />;
 }

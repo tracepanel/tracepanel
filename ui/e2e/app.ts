@@ -150,6 +150,16 @@ export const pill = (page: Page) => page.getByRole("button", { name: /^tracepane
 /** The panel the pill opens, in its frame. */
 export const panel = (page: Page) => page.frameLocator("iframe");
 
+/** The panel's list: the tab's records, the newest first, the open one as its call tree. */
+export const panelList = (page: Page) =>
+  panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
+
+/** The list's records: a closed one's row, the open one's first row (its request, its view). */
+export const records = (page: Page) => panelList(page).locator(".tp-record, .tp-map-row[data-root]");
+
+/** Every row of the list: the records, and the open one's call tree. */
+export const panelRows = (page: Page) => panelList(page).locator(".tp-map-row");
+
 /** The header's auto-refresh menu: its button says the choice ("Every 15s", "Live", "Live · paused"). */
 export const autoRefresh = (page: Page) =>
   page
