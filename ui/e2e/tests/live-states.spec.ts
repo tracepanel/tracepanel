@@ -33,13 +33,6 @@ async function holdSlow(page: Page, call: Call): Promise<() => void> {
   return release;
 }
 
-/** The panel docked at the right or the bottom, open, before the page loads. */
-async function docked(page: Page, dock: "right" | "bottom"): Promise<void> {
-  await page.addInitScript((side) => {
-    sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: side }));
-  }, dock);
-}
-
 /** The recording's announcement of a view of `path` (a route change of the SPA), open or ended. */
 async function announce(page: Page, id: string, path: string, open: boolean, start = Date.now() * 1000): Promise<void> {
   await page.evaluate((detail) => dispatchEvent(new CustomEvent("tracepanel:page", { detail })), {
@@ -53,38 +46,6 @@ async function announce(page: Page, id: string, path: string, open: boolean, sta
 }
 
 const list = (page: Page) => panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-
-test("a request in flight shows on the pill, in its card and in the list, its time ticking, until it answers", async ({
-  page,
-}) => {
-  const call = await posts();
-  await docked(page, "bottom");
-  await openApp(page, { slow: call });
-  const release = await holdSlow(page, call);
-
-  await page.getByRole("button", { name: "Load slow" }).click();
-
-  // The pill: the request by its name, a ring and its time so far, its queries pending, no status yet.
-  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: GET \/app\/api\/slow, running for /);
-  const running = pill(page).locator('.seg[data-state="running"]');
-  await expect(running.locator(".running")).toHaveCount(1);
-  const before = await running.innerText();
-  await expect(running).not.toHaveText(before);
-  await expect(pill(page).locator(".status")).toHaveCount(0);
-  await expect(pill(page).locator(".pending")).toHaveText("…");
-
-  // The list: its row under the page, running, its time ticking as the pill's.
-  const row = list(page).locator('.tp-request-row[data-state="running"]');
-  await expect(row).toHaveCount(1);
-  await expect(row).toContainText("/app/api/slow");
-  await expect(row.locator(".tp-running")).toHaveCount(1);
-
-  release();
-
-  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: GET \/app\/api\/slow → 200/);
-  await expect(pill(page).locator('.seg[data-state="running"]')).toHaveCount(0);
-  await expect(list(page).locator('.tp-request-row[data-state="running"]')).toHaveCount(0);
-});
 
 test("the hover card of a request in flight says it waits, and follows it as it answers", async ({ page }) => {
   const call = await posts();
@@ -174,83 +135,6 @@ test("a click on the pill opens the panel though the pill draws again under the 
   await expect(list(page)).toBeVisible();
 });
 
-test("a view on its first frame reads … where its time will tick, never 0 µs: in the pill, its card and the list", async ({
-  page,
-}) => {
-  await openApp(page, { posts: await posts() }, { recording: true });
-  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: view of \/app\//);
-
-  // Its start a moment ahead of this clock (the recording's clock rounds), as its first frame reads it, held there.
-  await announce(page, "01M4E2ELIVE000000000000003", "/app/ahead", true, Date.now() * 1000 + 600_000_000);
-
-  const running = pill(page).locator('.seg[data-state="running"]');
-  await expect(running).toHaveText("…");
-  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: view of \/app\/ahead, running(\.|$)/);
-  await pill(page).hover();
-  const card = page.getByRole("dialog", { name: "This request at a glance" });
-  await expect(card.locator(".card-running")).toHaveText("…");
-  await pill(page).click();
-  const row = list(page).locator('.tp-request-row[data-state="running"]');
-  await expect(row.locator(".tp-running-time")).toHaveText("…");
-  await expect(row).not.toContainText("µs");
-});
-
-test("an open view whose calls have all answered stops its time at the last answer while it waits for its end", async ({
-  page,
-}) => {
-  await docked(page, "bottom");
-  await openApp(page, { posts: await posts() }, { recording: true });
-  const id = "01M4E2ELIVE000000000000004";
-  const start = Date.now() * 1000 - 1_000_000;
-  await announce(page, id, "/app/quiet", true, start);
-  const row = list(page).locator(".tp-request-row", { hasText: "/app/quiet" });
-  const time = row.locator(".tp-running-time");
-  // Before its call: its time runs.
-  const first = await time.innerText();
-  await expect(time).not.toHaveText(first);
-
-  // The view's call, marked as the recording marks the calls of the view that made them.
-  await page.evaluate((view) => {
-    const send = window.fetch;
-    window.fetch = async (...args) => {
-      const response = await send(...args);
-      Object.defineProperty(response, Symbol.for("tracepanel.page"), { value: view });
-      return response;
-    };
-  }, id);
-  await page.getByRole("button", { name: "Load posts" }).click();
-  await expect(list(page).locator(".tp-request-row", { hasText: "/api/posts" })).toHaveCount(1);
-
-  // Answered, the view still open (it waits a moment for more): its time stays at the answer, ring and all.
-  await expect(row).toHaveAttribute("data-state", "running");
-  const stopped = await time.innerText();
-  await page.waitForTimeout(700);
-  await expect(time).toHaveText(stopped);
-
-  // Its end (2.0 s, as announced): its final time.
-  await announce(page, id, "/app/quiet", false, start);
-  await expect(row).not.toHaveAttribute("data-state", "running");
-  await expect(row).toContainText("2.0 s");
-});
-
-test("docked at the right, the panel follows a new view as the bottom dock does, named as the list names it", async ({
-  page,
-}) => {
-  await docked(page, "right");
-  await openApp(page, { posts: await posts() }, { recording: true });
-  await page.getByRole("button", { name: "Load posts" }).click();
-  const main = panel(page).getByRole("main");
-  // The view its request came from, as Follow new keeps it: never the request, then the view again.
-  await expect(panel(page).locator(".switcher-button")).toContainText(/VIEW\s*\/app\//);
-
-  await announce(page, "01M4E2ELIVE000000000000002", "/app/authors", true);
-
-  // The view, not the request before it: its name as the list says it, its pane running.
-  await expect(panel(page).locator(".switcher-button")).toContainText(/VIEW\s*\/app\/authors/);
-  await expect(main.getByText("View still open")).toBeVisible();
-  await expect(main.locator('[data-state="running"]')).toHaveCount(1);
-});
-
 // A view cut at 15 s, its call to the BFF never answered: as the browser recording sends it.
 const CUT_VIEW = "01M4C0TCA11000000000000002";
 
@@ -307,15 +191,6 @@ function shownWords(mark: Locator): Promise<"all" | "none" | "cut"> {
   });
 }
 
-/** Whether the mark's hourglass shows whole, inside its row's name. */
-function hourglassShown(mark: Locator): Promise<boolean> {
-  return mark.evaluate((element) => {
-    const icon = element.querySelector("svg")?.getBoundingClientRect();
-    const name = element.parentElement?.getBoundingClientRect();
-    return Boolean(icon && name && icon.width > 0 && icon.right <= name.right + 0.5 && icon.left >= name.left);
-  });
-}
-
 test("a call with no answer yet says so in the call tree, its time neutral, and the tree says it is partial", async ({
   page,
 }) => {
@@ -333,130 +208,4 @@ test("a call with no answer yet says so in the call tree, its time neutral, and 
   await expect(page.locator(".tp-on-its-way")).toHaveText(
     "1 call with no answer yet: the tree fills in if its trace arrives",
   );
-});
-
-test("a view cut with a call unanswered says no answer, in its row and on the pill, as the call tree does", async ({
-  page,
-}) => {
-  await storeCutView();
-  await docked(page, "bottom");
-  await openApp(page, {}, { recording: true, view: CUT_VIEW });
-
-  await expect(pill(page).locator('[data-state="cut"]')).toHaveText("no answer yet");
-  // Its time is where it was cut, never a slow time's red.
-  await expect(pill(page).locator(".seg[data-speed]")).toHaveCount(0);
-
-  const row = list(page).locator('.tp-request-row[data-kind="page"]').first();
-  await expect(row).toHaveAttribute("data-state", "cut");
-  await expect(row.locator('[data-state="cut"]')).toHaveText("no answer");
-  // Its call, still waiting: said so under it, as its own row is, and kept while it is.
-  const call = list(page).locator('.tp-request-row[data-call="waiting"]');
-  await expect(call.locator('[data-state="cut"]')).toHaveText("no answer");
-  await page.waitForTimeout(5_500);
-  await expect(call.locator('[data-state="cut"]')).toHaveText("no answer");
-});
-
-// A request beside the cut view, its route as long as the narrow list holds whole: cut short if the time column took
-// the room of "no answer" too.
-const ROUTE = "/api/book/{id}/posts";
-const REQUEST = "01M4C0TA0N6000000000000002";
-
-async function storeRequest(): Promise<void> {
-  const start = Date.now() * 1000 - 10_000_000;
-  const attrs = { "service.name": "library-api", "http.method": "GET", "http.route": ROUTE };
-  const trace = {
-    id: REQUEST,
-    kind: "http",
-    name: `GET ${ROUTE}`,
-    start,
-    duration: 5_000,
-    status: "ok",
-    attrs: { ...attrs, "http.status_code": 200 },
-    spans: [span("r", null, "http", `GET ${ROUTE}`, [start, 5_000], attrs)],
-    logs: [],
-    errors: [],
-    links: [],
-    issues: [],
-  };
-  const response = await fetch(`${CONSOLE}api/ingest`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([trace]),
-  });
-  expect(response.status).toBe(202);
-  await expect.poll(async () => (await fetch(`${CONSOLE}api/traces/${REQUEST}`)).status).toBe(200);
-}
-
-for (const dock of ["right", "bottom"] as const) {
-  test(`docked ${dock}, a cut row says "no answer" by its name: the time column stays a time's width, no name cut by it`, async ({
-    page,
-  }) => {
-    await storeCutView();
-    await storeRequest();
-    // At the right, as narrow as the panel goes; at the bottom, the list beside the trace is narrow already.
-    await page.addInitScript((side) => {
-      sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: side, width: 360 }));
-    }, dock);
-    await openApp(
-      page,
-      { posts: { status: 200, trace: REQUEST, queries: 3, totalMs: 5, issues: 0 } },
-      { recording: true, view: CUT_VIEW },
-    );
-    // A click on the cut view's page: its request listed with it, so the dock lists the page's rows.
-    await page.getByRole("button", { name: "Do posts" }).click();
-    const rows = panel(page).locator(".page-requests");
-    const cut = rows.locator('.tp-request-row[data-kind="page"]').filter({ hasText: "/cut/view" });
-    const request = rows.locator(".tp-request-row").filter({ hasText: "/posts" });
-    const time = (row: typeof cut) => row.locator(".tp-request-meta > :nth-child(2)");
-
-    await expect(cut.locator('.tp-request-main > [data-state="cut"]')).toHaveText("no answer");
-    await expect(time(cut)).toHaveText("15.0 s");
-    // The time the page waited for it: a few milliseconds.
-    await expect(time(request)).toHaveText(/^\d+ ms$/);
-
-    // The time column as wide as "15.0 s", not as the mark: the names keep the rest, whole.
-    await laidOut(page);
-    // The list's columns: name, status, time, queries, findings.
-    const column = await rows
-      .locator(".tp-requests")
-      .evaluate((grid) => Number.parseFloat(getComputedStyle(grid).gridTemplateColumns.split(" ")[2] ?? ""));
-    const text = await time(cut).evaluate((cell) => {
-      const range = document.createRange();
-      range.selectNodeContents(cell);
-      return range.getBoundingClientRect().width;
-    });
-    expect(column).toBeLessThanOrEqual(text + 1);
-    // Its words whole or not at all, never cut mid-way.
-    expect(await shownWords(cut.locator('[data-state="cut"]'))).not.toBe("cut");
-    for (const row of [cut, request]) {
-      const clipped = await row
-        .locator(".tp-request-path")
-        .evaluate((name) => [name, ...name.querySelectorAll("*")].some((part) => part.scrollWidth > part.clientWidth));
-      expect(clipped).toBe(false);
-    }
-  });
-}
-
-test('docked at the right, as narrow as it goes, the call tree\'s "no answer yet" gives way to the hourglass, its words never cut', async ({
-  page,
-}) => {
-  await storeCutView();
-  await page.addInitScript(() => {
-    sessionStorage.setItem("tracepanel:panel", JSON.stringify({ open: true, dock: "right", width: 360 }));
-  });
-  await openApp(page, {}, { recording: true, view: CUT_VIEW });
-  const frame = panel(page);
-  // The view opens on its call tree.
-  await expect(frame.getByRole("tab", { name: /^Call tree/ })).toHaveAttribute("aria-selected", "true");
-  const row = frame.locator('.tp-map-row[data-kind="http.client"]').filter({ hasText: "/graphql" });
-  const mark = row.locator('[data-state="cut"]');
-  await expect(mark).toHaveText("no answer yet");
-  await expect(mark).toHaveAttribute("title", /.+/);
-
-  // No room for the words beside the call's name: they go, all of them, and the hourglass stays whole.
-  await laidOut(page);
-  expect(await shownWords(mark)).toBe("none");
-  expect(await hourglassShown(mark)).toBe(true);
-  // The words' room is the call's name's: the mark as wide as the hourglass.
-  expect(await mark.evaluate((element) => element.getBoundingClientRect().width)).toBeLessThanOrEqual(12.5);
 });

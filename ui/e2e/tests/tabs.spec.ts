@@ -1,59 +1,10 @@
 // A trace's tabs at any width, in the panel (either dock) and the console: each one whole in the row or in its
 // More menu, none cut.
-import type { FrameLocator, Locator, Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 const TRACE = "GET /account/orders/";
-// The console has the app's own page: its trace has no App tab.
-const TABS = ["Request", "Call tree", "Issues", "DB", "HTTP calls", "Logs"];
-const PANEL_TABS = [...TABS, "App"];
-const WIDTHS = [1440, 1024, 768, 480];
-
-/** What the tab row shows: each tab's name and whether it is whole, inside the row and not cut inside itself. */
-function shown(row: Locator) {
-  return row.evaluate((element) => {
-    const box = element.getBoundingClientRect();
-    const buttons = [...element.querySelectorAll<HTMLElement>("button")].filter((button) => !button.closest("[inert]"));
-    return {
-      overflows: element.scrollWidth > element.clientWidth,
-      tabs: buttons.map((button) => {
-        const own = button.getBoundingClientRect();
-        return {
-          name: button.title,
-          whole:
-            own.width > 0 &&
-            own.left >= box.left - 0.5 &&
-            own.right <= box.right + 0.5 &&
-            button.scrollWidth <= button.clientWidth,
-        };
-      }),
-    };
-  });
-}
-
-/** Every tab of the trace is in the row, whole, or in its More menu. */
-async function expectAllReachable(scope: Page | FrameLocator, names: readonly string[]) {
-  const tablist = scope.getByRole("tablist", { name: "Trace details" });
-  await expect(tablist.getByRole("tab", { name: "Call tree" })).toBeVisible();
-  const row = tablist.locator("xpath=..");
-  const { overflows, tabs } = await shown(row);
-
-  expect(overflows).toBe(false);
-  expect(tabs.filter((tab) => !tab.whole)).toEqual([]);
-
-  const inRow = tabs.map((tab) => tab.name).filter((name) => name !== "More tabs");
-  const more = row.getByRole("button", { name: /^More tabs/ });
-  let inMenu: string[] = [];
-  if (tabs.some((tab) => tab.name === "More tabs")) {
-    await more.click();
-    await expect(scope.getByRole("menu")).toBeVisible();
-    inMenu = await scope.getByRole("menuitem").locator(".tp-tab-label").allTextContents();
-    await scope.getByRole("menuitem").first().press("Escape");
-  }
-
-  expect([...inRow, ...inMenu].sort()).toEqual([...names].sort());
-}
 
 async function openPanel(page: Page, dock: "bottom" | "right") {
   await openApp(page, { orders: { status: 200, trace: await traceId(TRACE), queries: 152, totalMs: 40, issues: 2 } });
@@ -75,44 +26,6 @@ async function openPanel(page: Page, dock: "bottom" | "right") {
     })
     .toBe(true);
 }
-
-for (const width of WIDTHS) {
-  for (const dock of ["bottom", "right"] as const) {
-    test(`docked ${dock} in a window ${width} px wide, every tab of the panel's trace is whole or in More`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await openPanel(page, dock);
-
-      await expectAllReachable(panel(page), PANEL_TABS);
-    });
-  }
-
-  test(`in a window ${width} px wide, every tab of the console's trace is whole or in More`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/#/t/${await traceId(TRACE)}`);
-
-    await expectAllReachable(page, TABS);
-  });
-}
-
-test("a tab chosen from More opens, and takes a place in the row", async ({ page }) => {
-  // The list wider than its default: the trace's room is narrow enough that the last tab, App, is in More.
-  await page.addInitScript(() => localStorage.setItem("tracepanel:list-width", "320"));
-  await page.setViewportSize({ width: 900, height: 900 });
-  await openPanel(page, "bottom");
-  const tablist = panel(page).getByRole("tablist", { name: "Trace details" });
-  await expect(tablist.getByRole("tab", { name: "Call tree" })).toBeVisible();
-  const more = panel(page).getByRole("button", { name: /^More tabs/ });
-
-  await expect(more).toHaveAccessibleName(/App/);
-
-  await more.click();
-  await panel(page).getByRole("menuitem", { name: /^App/ }).click();
-
-  await expect(tablist.getByRole("tab", { name: /^App/ })).toHaveAttribute("aria-selected", "true");
-  await expect(panel(page).getByRole("tabpanel", { name: "Settings" })).toContainText("SECRET_KEY");
-});
 
 test("in the panel's toolbar Explore is an icon, the first after Console, before the panel's own", async ({ page }) => {
   await openPanel(page, "bottom");

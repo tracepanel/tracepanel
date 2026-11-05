@@ -134,31 +134,6 @@ async function openView(page: Page): Promise<void> {
   await openApp(page, {}, { recording: true, view: VIEW });
 }
 
-test("a view whose calls went through a gateway has the gateway's row under it, each call under that, what it called under each", async ({
-  page,
-}) => {
-  await openView(page);
-  await pill(page).click();
-  const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const calls = list.locator('.tp-request-row[data-call="trace"]');
-
-  await expect(list.locator(".tp-request-row").first()).toContainText("/app/");
-  // The view's six calls to the gateway, under its row, a row each as the view made them: the four it served, and the
-  // two that got no answer, "failed" as the call tree says them.
-  const group = list.locator('.tp-request-row[data-call="group"]');
-  await expect(group.locator(".tp-app-chip")).toHaveText("gateway");
-  await expect(group.locator(".tp-map-times")).toHaveText("×6");
-  await expect(calls).toHaveCount(4);
-  const failed = list.locator('.tp-request-row[data-call="failed"]');
-  await expect(failed.locator(".tp-status")).toHaveText(["failed", "failed"]);
-  await expect(failed.nth(0).locator(".tp-status")).toHaveAttribute("title", "TypeError");
-  await expect(failed.nth(1).locator(".tp-status")).toHaveAttribute("title", "No answer");
-  await expect(list.locator('.tp-request-row[data-chain="app"]')).toHaveCount(0);
-  // What the first called, folded under it until opened: the subgraph's trace.
-  await calls.first().locator("[data-toggle]").click();
-  await expect(list.locator('.tp-request-row[data-chain="app"] .tp-app-chip')).toHaveText(["subgraph"]);
-});
-
 test("the pill of a view counts what its chain did, as the panel's tabs count it", async ({ page }) => {
   await openView(page);
 

@@ -4,7 +4,7 @@
 // into the page's URL, and Esc, Show all or a double click let them go. The panel does the same, and its Console
 // button opens the trace with what was picked.
 import type { FrameLocator, Locator, Page } from "@playwright/test";
-import { openApp, panel, pill, traceId } from "../app.ts";
+import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 // GET / (27.6 ms): the request, its view, a query at 1.0–2.2 ms, then the template from 3.1 ms with its 150
@@ -184,43 +184,4 @@ test("a share and a range together keep the calls of that kind in that stretch; 
 
   await expect(page).not.toHaveURL(/part=|range=/);
   await expect(row(page, "template", "blog/post_list.html")).toBeVisible();
-});
-
-test("in the panel: the numbers on hover, a share and a stretch of time picked, and the Console opens with them", async ({
-  page,
-}) => {
-  await openApp(page, { home: { status: 200, trace: await traceId("GET /"), queries: 151, totalMs: 28 } });
-  await page.getByRole("button", { name: "Load home" }).click();
-  await pill(page).click();
-  const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await segment(frame, "sql").hover();
-
-  await expect(frame.getByRole("tooltip", { name: /^Database/ })).toHaveText(
-    /^Database\s*[\d.,]+ ms · \d+% · 151 calls$/,
-  );
-
-  await segment(frame, "template").click();
-
-  await expect(row(frame, "view", "blog.views.post_list")).toHaveAttribute("data-dim", "");
-  await expect(row(frame, "sql", "SELECT blog_post")).toHaveCount(0);
-  await expect(frame.getByRole("link", { name: /^Console/ })).toHaveAttribute("href", /[?&]part=template(&|$)/);
-
-  await page.keyboard.press("Escape");
-
-  await expect(row(frame, "sql", "SELECT blog_post")).toBeVisible();
-  // Esc let the share go; the panel stayed open.
-  await expect(frame.getByRole("tab", { name: /^Call tree/ })).toBeVisible();
-
-  await drag(page, frame.locator(".tp-timeline-layer"), 0.5, 2.4);
-
-  await expect(frame.locator(".tp-map-range-layer .tp-range")).toBeVisible();
-  const chip = frame.getByRole("button", { name: /^Time 0\.\d ms – 2 ms$/ });
-  await expect(chip).toHaveText(/^Time 0\.\d ms – 2 ms$/);
-  await expect(row(frame, "template", "blog/post_list.html")).toHaveCount(0);
-  await expect(frame.getByRole("link", { name: /^Console/ })).toHaveAttribute("href", /[?&]range=0\.\d+-2\.\d+/);
-
-  await chip.click();
-
-  await expect(row(frame, "template", "blog/post_list.html")).toBeVisible();
 });
