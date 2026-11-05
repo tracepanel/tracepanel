@@ -487,6 +487,15 @@ function useRowPicked(
   useEffect(() => {
     if (external) onPicked?.(found ? (scopeOfNode(found.node) ?? null) : null);
   }, [external, picked]);
+  // A row picked from elsewhere (an issue's link) may be off screen: it comes into view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked is what moves the view.
+  useEffect(() => {
+    if (!external) return;
+    const frame = requestAnimationFrame(() =>
+      document.querySelector('.dt-map-row[aria-current="true"]')?.scrollIntoView({ block: "nearest" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [external, selected]);
   const select = external ? (key: string) => (key === selected ? undefined : held.pick(key)) : held.select;
   return { selected, select, close: held.close, external };
 }

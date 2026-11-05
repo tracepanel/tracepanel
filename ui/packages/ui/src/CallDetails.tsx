@@ -158,10 +158,8 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
 
 function SpanTitle({ span, trace, parent }: { span: Span; trace: Trace; parent: Span | undefined }) {
   const offset = duration(Math.max(span.start - trace.start, 0));
-  // Beside the tree, how long it took: the row says what it was.
-  if (useContext(KindWords) !== null) {
-    return <p className="dt-map-details-title">Took {duration(span.duration)}</p>;
-  }
+  // Beside the tree, the details' own head says what it is and how long it took.
+  if (useContext(KindWords) !== null) return null;
   return (
     <p className="dt-map-details-title">
       {spanKindLabel(span.kind, trace.attrs, parent?.kind)} · started at +{offset} · took {duration(span.duration)}

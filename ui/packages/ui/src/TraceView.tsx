@@ -47,7 +47,7 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { type Member, type SpanScope, scopedIssues, scopedSpans, stripTraceOf } from "./lib/scope";
+import { type Member, type SpanScope, scopedIssues, scopedSpans, scopeWindow, stripTraceOf } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
@@ -434,6 +434,17 @@ function RecordIssues({ issues }: { issues: readonly { kind: IssueKind }[] }) {
 
 /** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
 const DETAILS_HIDES: ReadonlySet<string> = new Set(["share"]);
+
+/** What is selected and how long it took: the row itself may be scrolled away, or have come from a link. */
+function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
+  const [from, to] = scopeWindow(chain.members, scope);
+  return (
+    <h3 className="dt-details-title">
+      <span>{scope.label}</span>
+      <span className="dt-details-took">{duration(to - from)}</span>
+    </h3>
+  );
+}
 
 function rowStrip(chain: TraceScope): Trace | null {
   return chain.scope ? stripTraceOf(chain.members, chain.scope) : null;
@@ -1076,11 +1087,14 @@ export function TraceView({
           <WaterfallParts
             traceId={trace.id}
             head={
-              <RowStrip
-                trace={!chain.scope && active === "request" ? trace : active === "tree" ? rowStrip(chain) : null}
-                related={chain.scope ? undefined : related}
-                onSelect={openAt}
-              />
+              <>
+                {chain.scope && active === "tree" ? <RowTitle chain={chain} scope={chain.scope} /> : null}
+                <RowStrip
+                  trace={!chain.scope && active === "request" ? trace : active === "tree" ? rowStrip(chain) : null}
+                  related={chain.scope ? undefined : related}
+                  onSelect={openAt}
+                />
+              </>
             }
             rows={treePane}
             tabs={tabs.length > 1 ? tabsBar : null}
