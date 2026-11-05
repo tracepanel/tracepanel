@@ -3660,3 +3660,26 @@ div.dt-map-row[data-kind="code"] {
   border-top-right-radius: 999px;
   border-bottom-right-radius: 999px;
 }
+
+/* A record's marks in columns of their own (errors, findings, queries): straight down the list. */
+.dt-record-marks {
+  display: grid;
+  grid-template-columns: auto 2.75rem 3.25rem;
+  align-items: center;
+  height: auto;
+  overflow: visible;
+}
+.dt-record-errors,
+.dt-record-issues {
+  display: flex;
+  justify-content: flex-end;
+}
+.dt-record-queries {
+  display: flex;
+  justify-content: flex-start;
+  padding-left: 0.375rem;
+}
+/* Not the chips' wrap guard: here every column is there, the grid keeps them to one line. */
+.dt-record-marks::before {
+  display: none;
+}

@@ -212,6 +212,16 @@ function MoreRows({ onMore }: { onMore: () => void }) {
   );
 }
 
+/**
+ * The time closed records' bars are shares of: the longest but for the slowest tenth, so that one stuck request (a
+ * 15 s timeout) doesn't flatten every other bar to a dot; those few reach the end. Linear: 300 ms is half of 600.
+ */
+function typicalLongest(durations: readonly number[]): number {
+  const sorted = [...durations].sort((a, b) => a - b);
+  const at = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9));
+  return Math.max(1, sorted[at] ?? 1);
+}
+
 export function TraceList({
   rows,
   selectedId,
@@ -226,7 +236,7 @@ export function TraceList({
   onMore,
 }: TraceListProps) {
   const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
-  const longest = Math.max(1, ...rows.map((row) => row.trace.duration));
+  const longest = typicalLongest(rows.map((row) => row.trace.duration));
   const props = {
     longest,
     openContent,
@@ -293,7 +303,7 @@ function ListItem({
   longest,
   openContent,
 }: Omit<TraceListProps, "rows"> & {
-  /** The longest record listed: closed records' bars are shares of it. */
+  /** The scale of closed records' bars: the longest listed but for a few far longer (see typicalLongest). */
   longest?: number;
   row: TraceRow;
   fold: RowFold | null | undefined;
@@ -334,7 +344,7 @@ function ListItem({
           row={{ ...row, trace }}
           fresh={fresh}
           onSelect={onSelect}
-          share={Math.sqrt(trace.duration / (longest ?? trace.duration))}
+          share={Math.min(trace.duration / (longest ?? trace.duration), 1)}
         />
       </li>
     );
@@ -400,7 +410,7 @@ export function RecordRow({
 }: {
   /** How far in it sits: a call of a view still open shows under it. */
   depth?: number | undefined;
-  /** Closed: its time against the longest listed, on a root's scale so that one slow record doesn't flatten the rest. */
+  /** Closed: its time against the list's typical longest, linear; a far longer one reaches the end. */
   share?: number | undefined;
   row: TraceRow;
   fresh: boolean;
@@ -434,10 +444,17 @@ export function RecordRow({
             {live ? null : <span className="dt-record-ago">{ago(trace.start)}</span>}
           </span>
           <StatusSlot status={page ? null : trace.http_status} />
-          <span className="dt-map-chips">
-            <Errors count={trace.errors} />
-            <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
-            <Queries count={trace.queries} />
+          {/* A column each, the same on every row: its marks line up down the list, empty or not. */}
+          <span className="dt-map-chips dt-record-marks">
+            <span className="dt-record-errors">
+              <Errors count={trace.errors} />
+            </span>
+            <span className="dt-record-issues">
+              <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
+            </span>
+            <span className="dt-record-queries">
+              <Queries count={trace.queries} />
+            </span>
           </span>
         </span>
         <span className="dt-map-track">

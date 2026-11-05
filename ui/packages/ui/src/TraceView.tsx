@@ -1129,12 +1129,16 @@ export function TraceView({
       onProfileTab={waterfall ? () => setActive("profile") : undefined}
       rootMark={
         waterfall ? (
-          <>
-            <RecordIssues issues={chainFindings(chain, findings)} />
-            <span data-opens="sql">
+          // In the closed records' columns (TraceList): the open one's marks under theirs.
+          <span className="dt-record-marks">
+            <span className="dt-record-errors" />
+            <span className="dt-record-issues">
+              <RecordIssues issues={chainFindings(chain, findings)} />
+            </span>
+            <span className="dt-record-queries" data-opens="sql">
               <Queries count={scopedSpans(chain.members, null, callsOfTab("sql")).length} />
             </span>
-          </>
+          </span>
         ) : undefined
       }
       issuesIn={
