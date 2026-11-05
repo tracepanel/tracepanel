@@ -2614,7 +2614,7 @@ body {
 
 /* On a row, slow is said by its time, in the colour every slow time has: no word beside it. */
 .panel-wf .dt-map-row [data-kind^="slow"] {
-  display: none;
+  display: none !important;
 }
 .panel-wf .dt-map-row:has([data-kind^="slow"]) .dt-map-time {
   color: var(--dt-error);
