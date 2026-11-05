@@ -47,7 +47,7 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { type Member, type SpanScope, scopedIssues, scopedSpans } from "./lib/scope";
+import { type Member, type SpanScope, scopedIssues, scopedSpans, stripTraceOf } from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
@@ -434,6 +434,28 @@ function RecordIssues({ issues }: { issues: readonly { kind: IssueKind }[] }) {
 
 /** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
 const DETAILS_HIDES: ReadonlySet<string> = new Set(["share"]);
+
+function rowStrip(chain: TraceScope): Trace | null {
+  return chain.scope ? stripTraceOf(chain.members, chain.scope) : null;
+}
+
+/** Heads the details: where the time of what is selected went. */
+function RowStrip({
+  trace,
+  related,
+  onSelect,
+}: {
+  trace: Trace | null;
+  related: Related | undefined;
+  onSelect: (target: MarkTarget) => void;
+}) {
+  if (!trace) return null;
+  return (
+    <header className="dt-details-head">
+      <TimeStrip trace={trace} related={related} onSelect={onSelect} />
+    </header>
+  );
+}
 
 function WaterfallParts({
   traceId,
@@ -1054,11 +1076,11 @@ export function TraceView({
           <WaterfallParts
             traceId={trace.id}
             head={
-              !chain.scope && active === "request" ? (
-                <header className="dt-details-head">
-                  <TimeStrip trace={trace} related={related} onSelect={openAt} />
-                </header>
-              ) : null
+              <RowStrip
+                trace={!chain.scope && active === "request" ? trace : active === "tree" ? rowStrip(chain) : null}
+                related={chain.scope ? undefined : related}
+                onSelect={openAt}
+              />
             }
             rows={treePane}
             tabs={tabs.length > 1 ? tabsBar : null}

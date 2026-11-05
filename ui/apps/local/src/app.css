@@ -2466,7 +2466,7 @@ body {
   display: none !important;
 }
 
-/* Rows stay clean: closed records' times and marks in columns, marks as words with no boxes, profiles on their tab. */
+/* Rows stay clean: closed records' times and marks in columns, profiles on their tab. */
 .dt-record .dt-map-chips {
   flex: none;
   justify-content: flex-end;
@@ -2474,11 +2474,6 @@ body {
 }
 .dt-record-ago {
   margin-left: auto;
-}
-.panel-wf .dt-map-row .dt-map-chips [data-kind],
-.panel-wf .dt-map-row .dt-request-chips > * {
-  padding-inline: 0 !important;
-  background: none !important;
 }
 .panel-wf .dt-map-row [title*="profile" i] {
   display: none !important;
@@ -2505,4 +2500,21 @@ body {
   .panel-filter > kbd {
     display: none;
   }
+}
+
+/* Profile's tabs name the app: its section doesn't again, nor a lone table. */
+.panel-wf-details [data-one-app] [data-split-head] > span:first-child {
+  display: none !important;
+}
+.dt-profile-one {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  padding-top: 0.75rem;
+}
+.dt-profile-one > [role="tablist"] {
+  margin-inline: 1rem;
+}
+.dt-profile-one > .dt-app-profile {
+  justify-self: stretch;
 }

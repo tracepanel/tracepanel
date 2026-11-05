@@ -348,3 +348,34 @@ export function scopedParts(
     return [{ member, windows: part === "whole" ? null : part.windows }];
   });
 }
+
+/**
+ * What a row's own time strip draws: the trace it served, whole, or its trace cut to the span and what ran under
+ * it. Nothing for a group of repeats or a span with nothing under it: its row says all there is.
+ */
+export function stripTraceOf(members: readonly Member[], scope: SpanScope): Trace | null {
+  const [target, ...others] = scope.targets;
+  if (!target || others.length > 0) return null;
+  const served = members.find((member) => member.via === target);
+  if (served) return served.trace;
+  const found = find(members, target);
+  const member = found && members[found.at];
+  if (!(found && member)) return null;
+  const root = found.span;
+  if (!root) return member.trace;
+  const under = new Set([root.id]);
+  const spans = member.trace.spans.filter((span) => {
+    if (span.id === root.id) return false;
+    if (!under.has(String(span.parent_id))) return false;
+    under.add(span.id);
+    return true;
+  });
+  if (spans.length === 0) return null;
+  return {
+    ...member.trace,
+    start: root.start,
+    duration: root.duration,
+    // biome-ignore lint/style/useNamingConvention: the span's own field.
+    spans: [{ ...root, parent_id: null }, ...spans],
+  };
+}

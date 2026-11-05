@@ -1,5 +1,15 @@
-import { type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
+import { HiddenColumns } from "./DataTable";
 import { bytes, duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import {
@@ -1320,7 +1330,27 @@ function chainSummary(apps: readonly AppProfile[], memories: ReadonlyMap<string,
 /** Each app's time: what it adds up to, then its flame. */
 function ChainTime({ apps }: { apps: readonly AppProfile[] }) {
   const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
+  const beside = useContext(HiddenColumns) !== null;
+  const [picked, setPicked] = useState<string | null>(null);
   if (apps.length === 0) return <p className="dt-note">Nothing profiled under this.</p>;
+  if (beside) {
+    // Beside the tree there is room for one: the apps as tabs, no table of what the tab then says.
+    const app = apps.find((each) => each.app === picked) ?? apps[0];
+    const view = app && views.get(app.app);
+    return (
+      <div className="dt-profile-one" data-one-app="">
+        {apps.length > 1 && app ? (
+          <Segmented
+            label="App"
+            segments={apps.map((each) => ({ id: each.app, label: each.app }))}
+            value={app.app}
+            onChange={setPicked}
+          />
+        ) : null}
+        {app && view ? <AppProfileSection key={app.app} app={app} view={view} /> : null}
+      </div>
+    );
+  }
   return (
     <>
       <ProfileSums apps={apps} views={views} />
