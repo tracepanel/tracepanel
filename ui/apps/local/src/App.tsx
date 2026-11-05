@@ -352,12 +352,22 @@ function PanelWaterfall({
   const [detailsHost, setDetailsHost] = useState<HTMLElement | null>(null);
   const [actionsHost, setActionsHost] = useState<HTMLElement | null>(null);
   const list = useRef<HTMLDivElement>(null);
-  // The record opened, at the top of the rows: closing the one above it would move it away from the click.
+  // The record opened stays under the click: the one closed above it would move it up, the list scrolls it back.
+  // Opened another way (Follow, a link), the list scrolls only to bring it into view.
+  const clicked = useRef<number | null>(null);
+  const rowTop = (id: string) => {
+    const row = list.current?.querySelector(`[data-record="${CSS.escape(id)}"]`);
+    return row ? row.getBoundingClientRect().top : null;
+  };
   // biome-ignore lint/correctness/useExhaustiveDependencies: the record opened, not each thing it draws.
   useEffect(() => {
-    const frame = requestAnimationFrame(() =>
-      list.current?.querySelector(".dt-requests-open")?.parentElement?.scrollIntoView({ block: "start" }),
-    );
+    const frame = requestAnimationFrame(() => {
+      const row = list.current?.querySelector(".dt-requests-open .dt-map-row");
+      const before = clicked.current;
+      clicked.current = null;
+      if (row && before !== null && list.current) list.current.scrollTop += row.getBoundingClientRect().top - before;
+      else row?.scrollIntoView({ block: "nearest" });
+    });
     return () => cancelAnimationFrame(frame);
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
@@ -429,7 +439,10 @@ function PanelWaterfall({
                   currentId={currentId}
                   chains={chains}
                   opensOn={opensOn}
-                  onSelect={(id) => go({ name: "trace", id })}
+                  onSelect={(id) => {
+                    clicked.current = rowTop(id);
+                    go({ name: "trace", id });
+                  }}
                   openContent={
                     rootId ? (
                       <TraceScreen

@@ -413,6 +413,7 @@ export function RecordRow({
       <button
         type="button"
         className="dt-map-row dt-record"
+        data-record={trace.id}
         data-kind={trace.kind}
         data-live={live ? "" : undefined}
         aria-current={live ? "true" : undefined}
