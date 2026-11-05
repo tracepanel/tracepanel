@@ -666,7 +666,7 @@ export function KindsMenu({
   const label = kinds.length > 0 ? `Showing ${kinds.length === 1 ? "1 kind" : `${kinds.length} kinds`}` : "Show";
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint title={label} detail="Which calls the tree shows: only SQL, only GraphQL… The rest are hidden." off={open}>
+      <Hint title={kinds.length > 0 ? label : "Show only some kinds"} off={open}>
         <PopoverTrigger asChild>
           <button
             type="button"
