@@ -3705,4 +3705,5 @@ div.dt-map-row[data-kind="code"] {
 /* Its traces gone from the store: the row quiet, its bar too. */
 .dt-record[data-gone] {
   opacity: 0.55;
+  cursor: default !important;
 }

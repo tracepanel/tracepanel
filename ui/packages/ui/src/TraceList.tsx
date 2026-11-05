@@ -444,7 +444,9 @@ export function RecordRow({
         data-live={live ? "" : undefined}
         aria-current={live ? "true" : undefined}
         data-new={fresh ? "" : undefined}
-        onClick={() => onSelect(target ?? trace.id)}
+        aria-disabled={gone || undefined}
+        // Gone from the store, there is nothing to open: it stays a quiet line, its note on hover.
+        onClick={() => (gone ? undefined : onSelect(target ?? trace.id))}
       >
         <span className="dt-map-name" style={indentOf(depth)}>
           <span className="dt-map-lead">
