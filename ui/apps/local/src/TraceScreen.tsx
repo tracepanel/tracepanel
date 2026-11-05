@@ -95,6 +95,9 @@ export interface TraceScreenProps {
   arriving?: boolean | undefined;
   /** Still running in the browser (lib/live): a view still open, a request the page waits for. Its pane says so. */
   running?: Running | undefined;
+  /** In the panel's waterfall: a trace of this one's chain to pick the row of; and what to do when it has none. */
+  focusTrace?: string | undefined;
+  onOutsideChain?: ((id: string) => void) | undefined;
   /** In the panel's waterfall, in place of the screens for a trace not here yet. */
   waiting?: ReactNode;
 }

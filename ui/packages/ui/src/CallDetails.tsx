@@ -325,7 +325,6 @@ function ServedBy({
         <p className="dt-map-details-title" title={note}>
           {split}
         </p>
-        <OpenRun run={served.run} words={RUN_WORDS.call} links={links} remote={served.remote} whole={served.whole} />
         <ProfileLink open={servedProfile(served, onTraceProfile)} />
       </section>
     );

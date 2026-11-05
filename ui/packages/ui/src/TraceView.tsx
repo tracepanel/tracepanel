@@ -474,6 +474,8 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
   );
 }
 
+const FOCUS_WAIT_MS = 1_500;
+
 function rowStrip(chain: TraceScope): Trace | null {
   return chain.scope ? stripTraceOf(chain.members, chain.scope) : null;
 }
@@ -550,6 +552,10 @@ export interface TraceViewProps {
    */
   variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
   /** `waterfall`: where the selected row's details and their tabs go, beside the rows. */
+  /** A trace of its chain to pick the row of, in the tree as it stands. */
+  focusTrace?: string | undefined;
+  /** The chain has loaded and hasn't `focusTrace`: it is no row of this tree. */
+  onOutsideChain?: ((id: string) => void) | undefined;
   detailsHost?: HTMLElement | null | undefined;
   /** `waterfall`: where Explore goes, among the panel's buttons. */
   actionsHost?: HTMLElement | null | undefined;
@@ -973,6 +979,8 @@ export function TraceView({
   initialMemory,
   onMemoryChange,
   variant = "full",
+  focusTrace,
+  onOutsideChain,
   detailsHost,
   actionsHost,
   // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
@@ -992,6 +1000,16 @@ export function TraceView({
 
   // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
   const chain = useTraceScope(trace, related, loadChain, initialUnder);
+  const focusRow = focusTrace
+    ? (chain.members.find((member) => member.id === focusTrace)?.via ?? undefined)
+    : undefined;
+  const inChain = chain.members.some((member) => member.id === focusTrace);
+  // Given time to load, a chain without it doesn't have it.
+  useEffect(() => {
+    if (!focusTrace || inChain) return;
+    const timer = window.setTimeout(() => onOutsideChain?.(focusTrace), FOCUS_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [focusTrace, inChain, onOutsideChain]);
   useUnderRow(chain.members, initialUnder, memory, setTreeSpan);
   const tabbed = useChainTabs(trace, chain, findings, waterfall);
   // A query's EXPLAIN by the app of its trace: the call tree's details and the DB tab alike.
@@ -1041,7 +1059,7 @@ export function TraceView({
       reloadRelated={reloadRelated}
       loadRelated={loadRelated}
       links={links}
-      initialSpan={treeSpan}
+      initialSpan={focusRow ?? treeSpan}
       explainOf={explainOf}
       onTraceProfile={onTraceProfile}
       profilesIn={held.profilesIn}

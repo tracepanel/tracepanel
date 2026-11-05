@@ -345,14 +345,22 @@ function PanelWaterfall({
     return () => cancelAnimationFrame(frame);
   }, [selectedId]);
   const trace = route.name === "trace" ? route : null;
-  const opened = rows.find((row) => row.trace.id === selectedId);
   const details = useDetailsSplit(dock);
   const map = useMapWidth();
   const [filter, setFilter] = useState("");
-  const records = filteredRecords(listRows, filter, selectedId);
+  // The waterfall stays put: a link to a trace in the open record's chain picks its row there. Only a trace outside
+  // the chain opens on its own.
+  const shownRecord = useRef<string | null>(null);
+  const [outside, setOutside] = useState<string | null>(null);
+  const isRecord = listRows.some((row) => row.trace.id === selectedId);
+  if (isRecord) shownRecord.current = selectedId;
+  const rootId = isRecord || outside === selectedId ? selectedId : (shownRecord.current ?? selectedId);
+  const focusTrace = rootId !== selectedId ? (selectedId ?? undefined) : undefined;
+  const records = filteredRecords(listRows, filter, rootId);
+  const opened = rows.find((row) => row.trace.id === rootId);
   return (
     <div className="panel" data-v2="" style={{ ...details.style, ...map.style }}>
-      <header className="panel-top" data-dock={dock}>
+      <header className="panel-top" data-dock={dock} data-focus={focusTrace ? "" : undefined}>
         <div className="panel-top-rows">
           <LogoMark className="size-5" />
           <PanelFilter value={filter} onChange={setFilter} />
@@ -372,19 +380,21 @@ function PanelWaterfall({
                   compact={true}
                   services={manyApps(rows)}
                   rows={records}
-                  selectedId={selectedId}
+                  selectedId={rootId}
                   currentId={currentId}
                   chains={chains}
                   opensOn={opensOn}
                   onSelect={(id) => go({ name: "trace", id })}
                   openContent={
-                    selectedId ? (
+                    rootId ? (
                       <TraceScreen
                         key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
-                        id={selectedId}
+                        id={rootId}
+                        focusTrace={focusTrace}
+                        onOutsideChain={setOutside}
                         source={source}
-                        arriving={arrivingIn(rows, stored, selectedId)}
-                        running={runningIn(rows, selectedId)}
+                        arriving={arrivingIn(rows, stored, rootId)}
+                        running={runningIn(rows, rootId)}
                         variant="waterfall"
                         waiting={
                           opened ? (

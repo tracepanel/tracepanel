@@ -20,7 +20,7 @@ import {
 import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { ArrowUpToLineIcon } from "lucide-react";
+import { LocateFixedIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNewIds } from "./hooks";
 import { ProfileToggle } from "./ProfileToggle";
@@ -50,7 +50,7 @@ function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value:
           aria-pressed={follow}
           onClick={() => onFollow(!follow)}
         >
-          <ArrowUpToLineIcon />
+          <LocateFixedIcon className="size-4" />
         </button>
       </Hint>
     );
