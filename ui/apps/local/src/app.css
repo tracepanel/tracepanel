@@ -2620,3 +2620,8 @@ body {
   color: var(--dt-error);
   font-weight: 600;
 }
+
+/* A row's marks end at the column's edge, whatever else the row holds. */
+.panel-wf .dt-map-row .dt-map-chips {
+  justify-content: flex-end;
+}
