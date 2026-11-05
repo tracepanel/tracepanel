@@ -269,6 +269,16 @@ function PanelActions({
   );
 }
 
+/** What a record still open has called so far, its rows right after it: they show before it ends. */
+function callsUnder(rows: readonly TraceRow[], record: TraceRow): readonly TraceRow[] {
+  const ordered = inOrder(true, rows);
+  const at = ordered.findIndex((row) => row.trace.id === record.trace.id);
+  if (at < 0) return [];
+  const level = record.depth ?? 0;
+  const next = ordered.findIndex((row, index) => index > at && (row.depth ?? 0) <= level);
+  return ordered.slice(at + 1, next < 0 ? undefined : next);
+}
+
 /** The records a filter finds by their names; the one open stays, its rows are filtered in place. */
 function filteredRecords(rows: readonly TraceRow[], filter: string, selectedId: string | null): readonly TraceRow[] {
   const wanted = filter.trim().toLowerCase();
@@ -380,6 +390,16 @@ function PanelWaterfall({
                           opened ? (
                             <>
                               <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={true} />
+                              {callsUnder(rows, opened).map((call) => (
+                                <RecordRow
+                                  key={call.key ?? call.trace.id}
+                                  row={call}
+                                  fresh={false}
+                                  depth={1}
+                                  live={Boolean(call.open)}
+                                  onSelect={(id) => go({ name: "trace", id })}
+                                />
+                              ))}
                               {detailsHost ? createPortal(<TraceLoading variant="waterfall" />, detailsHost) : null}
                             </>
                           ) : undefined

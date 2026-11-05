@@ -354,7 +354,10 @@ export function RecordRow({
   onSelect,
   live = false,
   share,
+  depth = 0,
 }: {
+  /** How far in it sits: a call of a view still open shows under it. */
+  depth?: number | undefined;
   /** Closed: its time against the longest listed, on a root's scale so that one slow record doesn't flatten the rest. */
   share?: number | undefined;
   row: TraceRow;
@@ -373,7 +376,7 @@ export function RecordRow({
       data-new={fresh ? "" : undefined}
       onClick={() => onSelect(target ?? trace.id)}
     >
-      <span className="dt-map-name" style={indentOf(0)}>
+      <span className="dt-map-name" style={indentOf(depth)}>
         <span className="dt-map-lead">
           <span className="dt-map-caret" data-toggle="">
             <ChevronRightIcon />
