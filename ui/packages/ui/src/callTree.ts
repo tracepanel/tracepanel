@@ -379,6 +379,39 @@ export type FilterId = (typeof FILTERS)[number]["id"];
 
 const FILTER_OF = new Map<string, FilterId>(FILTERS.flatMap((filter) => filter.kinds.map((kind) => [kind, filter.id])));
 
+/** Each kind's colour that has one of its own (`--tp-k-*`): the others are code's, as the time strip says it. */
+const FILTER_COLOURS: Readonly<Record<string, string>> = {
+  sql: "sql",
+  redis: "redis",
+  cache: "cache",
+  datastore: "datastore",
+  messaging: "messaging",
+  http: "http",
+  rpc: "http",
+  storage: "storage",
+  llm: "llm",
+  migration: "migration",
+  signal: "signal",
+  template: "template",
+  mail: "mail",
+  task: "messaging",
+  channels: "messaging",
+  transaction: "sql",
+  error: "log",
+  log: "log",
+};
+
+/** A kind's colour, the bars' own: the closest share where a kind has none of its own (GraphQL, functions: code). */
+export function filterColor(id: string): string {
+  return FILTER_COLOURS[id] ?? "view";
+}
+
+/** A span kind's colour as the Show menu has it: none for a kind no filter names (a request, a view). */
+export function kindColor(kind: string): string | undefined {
+  const filter = FILTER_OF.get(kind);
+  return filter ? filterColor(filter) : undefined;
+}
+
 function kindOf(node: Node): string {
   if (node.type === "span") return node.span.kind;
   if (node.type === "group") return node.spans[0]?.kind ?? "";

@@ -3,7 +3,7 @@ export { CallMap, RowFilter, RowKinds } from "./CallMap";
 export { CallsList } from "./CallsList";
 export { CallsChart, Histogram, LatencyChart, LogsChart, Stat, StatGrid } from "./Charts";
 export * from "./CopyButton";
-export { FILTERS } from "./callTree";
+export { FILTERS, filterColor, kindColor } from "./callTree";
 export { type DataColumn, type DataRows, DataTable } from "./DataTable";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";

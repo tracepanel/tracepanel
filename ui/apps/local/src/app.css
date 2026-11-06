@@ -1959,7 +1959,7 @@ body {
 .tp-record-ago {
   flex: none;
   color: var(--tp-text-3);
-  font-size: 0.75rem;
+  font-size: var(--tp-size-xs);
   white-space: nowrap;
 }
 

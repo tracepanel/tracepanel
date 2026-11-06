@@ -4,6 +4,7 @@ import {
   DockBottomIcon,
   DockRightIcon,
   FILTERS,
+  filterColor,
   Hint,
   KindBadge,
   PageName,
@@ -291,31 +292,6 @@ export function showsKinds(spanKinds: readonly string[] | undefined, kinds: read
 export function offeredKinds(spanKinds: readonly (readonly string[] | undefined)[], kinds: readonly string[]) {
   const present = new Set(spanKinds.flatMap((each) => each ?? []));
   return [...FILTERS, LOGS].filter((filter) => kinds.includes(filter.id) || hasFilter(present, filter));
-}
-
-/** A kind's colour, the bars' own: the closest share where a kind has none of its own (GraphQL, functions: code). */
-function filterColor(id: string): string {
-  const own: Record<string, string> = {
-    sql: "sql",
-    redis: "redis",
-    cache: "cache",
-    datastore: "datastore",
-    messaging: "messaging",
-    http: "http",
-    rpc: "http",
-    storage: "storage",
-    llm: "llm",
-    migration: "migration",
-    signal: "signal",
-    template: "template",
-    mail: "mail",
-    task: "messaging",
-    channels: "messaging",
-    transaction: "sql",
-    error: "log",
-    log: "log",
-  };
-  return own[id] ?? "view";
 }
 
 /** The kinds offered first: what a request's calls mostly are. The rest follow. */

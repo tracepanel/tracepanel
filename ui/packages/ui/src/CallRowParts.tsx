@@ -1,7 +1,7 @@
 import { ScrollTextIcon } from "lucide-react";
 import { type CSSProperties, createContext, type ReactNode, useContext } from "react";
 import type { CodeInfo } from "./CallCode";
-import { type Mark, type Node, type ServedRun, SKEW_NOTE_MIN, type SpanNode } from "./callTree";
+import { kindColor, type Mark, type Node, type ServedRun, SKEW_NOTE_MIN, type SpanNode } from "./callTree";
 import { duration } from "./format";
 import { ChevronRightIcon } from "./icons";
 import { NoAnswer } from "./LiveMarks";
@@ -492,9 +492,30 @@ export function SpanFold({
   return (
     <>
       <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-      <KindBadge kind={rowKind(node.span, ctx.trace, parent)} muted={true} className="tp-map-kind" />
+      <KindBadge
+        kind={rowKind(node.span, ctx.trace, parent)}
+        muted={true}
+        className="tp-map-kind"
+        {...badgeColour(node)}
+      />
     </>
   );
+}
+
+/**
+ * A badge in its kind's colour, as the Show menu has it (SQL and transactions blue, calls green, GraphQL and
+ * functions code's): the row's bar keeps its share's. A failed or warned row keeps the badge in its status's.
+ */
+function badgeColour(node: SpanNode): { "data-kind-colour"?: string; style?: CSSProperties } {
+  return ["error", "warn"].includes(rowStatus(node)) ? {} : kindBadgeColour(node.span.kind);
+}
+
+/** A kind's badge in its kind's colour, where the Show menu gives it one. */
+export function kindBadgeColour(kind: string | undefined): { "data-kind-colour"?: string; style?: CSSProperties } {
+  const colour = kind ? kindColor(kind) : undefined;
+  if (!colour) return {};
+  const value = `var(--tp-k-${colour})`;
+  return { "data-kind-colour": colour, style: { "--tp-k": value, "--tp-k-ink": value } as CSSProperties };
 }
 
 /** A row's kind as its badge says it: a browser's view or action as its list names it (view, click, bg). */

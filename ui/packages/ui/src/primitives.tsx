@@ -1,5 +1,13 @@
 import { AppWindowIcon, ArrowRightIcon, HourglassIcon } from "lucide-react";
-import { type ComponentType, createContext, type ReactNode, useContext, useLayoutEffect, useRef } from "react";
+import {
+  type ComponentType,
+  type CSSProperties,
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { useBeside } from "./beside";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
@@ -43,17 +51,24 @@ export function MethodBadge({
  */
 export function FailedStatus({ failure }: { failure?: string | undefined }) {
   return (
-    <span className="tp-status" data-tone="error" title={failure ?? "No answer"}>
+    <span
+      className="tp-status"
+      data-tone="error"
+      data-boxed={useBeside() ? "" : undefined}
+      title={failure ?? "No answer"}
+    >
       failed
     </span>
   );
 }
 
 export function StatusBadge({ status }: { status: number | null | undefined }) {
+  // Beside the waterfall a status is its tone's pill on white too: the rows' one spot of an answer's colour.
+  const boxed = useBeside();
   if (status === null || status === undefined) return null;
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";
   return (
-    <span className="tp-status" data-tone={tone}>
+    <span className="tp-status" data-tone={tone} data-boxed={boxed ? "" : undefined}>
       {status}
     </span>
   );
@@ -344,16 +359,26 @@ export function KindBadge({
   kind,
   muted = false,
   className,
+  style,
+  "data-kind-colour": colour,
 }: {
   kind: string;
   muted?: boolean | undefined;
   className?: string | undefined;
+  /** Its kind's own colour, where the row's share would colour it otherwise (`--tp-k`, `--tp-k-ink`). */
+  style?: CSSProperties | undefined;
+  "data-kind-colour"?: string | undefined;
 }) {
   // A call's kind is its own word (a span may be a "command"); a trace's in short.
   const own = muted ? kind : shortKind(kind);
   const word = useContext(KindWords)?.[own.toLowerCase()] ?? own;
   return (
-    <span className={cn("tp-kind", className)} data-muted={muted ? "" : undefined}>
+    <span
+      className={cn("tp-kind", className)}
+      data-muted={muted ? "" : undefined}
+      data-kind-colour={colour}
+      style={style}
+    >
       {word}
     </span>
   );
@@ -445,6 +470,14 @@ export interface AppChipPick {
  * a table's); the full size where it heads something or filters. With `pick`, it is the filter: a button with its
  * count, pressed while the list shows only that app.
  */
+/** An app's own colour: one of six (`--tp-app-*`) by its name, the same app the same everywhere. */
+export function appColour(name: string): string {
+  // FNV-1a: names alike but for their end (library-api, library-bff) land apart.
+  let hash = 0x811c9dc5;
+  for (const char of name) hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 0x01000193);
+  return `var(--tp-app-${(hash >>> 0) % 6})`;
+}
+
 export function AppChip({
   name,
   runtime,
@@ -461,7 +494,12 @@ export function AppChip({
   const label = <span className="tp-app-name">{name}</span>;
   if (!pick) {
     return (
-      <span className="tp-app-chip" data-size={size} title={runtime ? `${name} · ${runtime}` : name}>
+      <span
+        className="tp-app-chip"
+        data-size={size}
+        title={runtime ? `${name} · ${runtime}` : name}
+        style={{ "--tp-app": appColour(name) } as CSSProperties}
+      >
         {mark}
         {label}
       </span>
@@ -472,6 +510,7 @@ export function AppChip({
       type="button"
       className="tp-app-chip tp-map-filter"
       data-size={size}
+      style={{ "--tp-app": appColour(name) } as CSSProperties}
       aria-pressed={pick.pressed}
       title={pick.title}
       onClick={pick.onPress}

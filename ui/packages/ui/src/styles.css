@@ -55,6 +55,15 @@
   --tp-text-2: #b9bfcd;
   --tp-text-3: #8c93a6;
 
+  /* An app's own colour, one of six by its name (AppChip): no runtime's brand, the same app the same everywhere; none
+     of a status's or a finding's (green, amber, red). */
+  --tp-app-0: #7dd3fc;
+  --tp-app-1: #f9a8d4;
+  --tp-app-2: #c4b5fd;
+  --tp-app-3: #5eead4;
+  --tp-app-4: #a5b4fc;
+  --tp-app-5: #d6b98c;
+
   --tp-accent: #bc9cff;
   --tp-accent-strong: #7c4ff0;
   --tp-accent-bg: rgb(165 135 255 / 0.14);
@@ -191,7 +200,15 @@
 
   --tp-text: #09090b;
   --tp-text-2: #3f3f46;
-  --tp-text-3: #71717a;
+
+  --tp-app-0: #0369a1;
+  --tp-app-1: #be185d;
+  --tp-app-2: #6d28d9;
+  --tp-app-3: #0f766e;
+  --tp-app-4: #4338ca;
+  --tp-app-5: #8a6d3b;
+  /* Muted, and still 4.5:1 on a row's tint (a selected row's, the open record's). */
+  --tp-text-3: #63636b;
 
   --tp-accent: #6232d6;
   --tp-accent-strong: #7c4ff0;
@@ -440,6 +457,24 @@ code,
   height: 0.375rem;
   border-radius: 50%;
   background: currentColor;
+}
+/* Boxed (beside the panel's waterfall): its tone's pill, its dot kept. */
+:root[data-theme="light"] .tp-status[data-boxed] {
+  gap: 0.25rem;
+  padding: 1px 0.375rem;
+  font-weight: 600;
+}
+:root[data-theme="light"] .tp-status[data-tone="ok"][data-boxed] {
+  background: var(--tp-ok-bg);
+}
+:root[data-theme="light"] .tp-status[data-tone="info"][data-boxed] {
+  background: var(--tp-info-bg);
+}
+:root[data-theme="light"] .tp-status[data-tone="warn"][data-boxed] {
+  background: var(--tp-warn-bg);
+}
+:root[data-theme="light"] .tp-status[data-tone="error"][data-boxed] {
+  background: var(--tp-error-bg);
 }
 /* The empty slot as wide as a dot and a code. */
 :root[data-theme="light"] .tp-status-empty::before {
@@ -1918,8 +1953,9 @@ details[data-focused] > .tp-sql-group {
   max-width: 100%;
   height: 1.625rem;
   padding: 0 0.625rem;
-  border: 1px solid var(--tp-border);
+  border: 1px solid color-mix(in srgb, var(--tp-app, var(--tp-border)) 35%, transparent);
   border-radius: 999px;
+  background: color-mix(in srgb, var(--tp-app, transparent) 9%, transparent);
   color: var(--tp-text-2);
   font: 500 var(--tp-size-xs) / 1 var(--tp-font);
   white-space: nowrap;
@@ -1942,6 +1978,10 @@ details[data-focused] > .tp-sql-group {
   flex: none;
   width: 0.875rem;
   height: 0.875rem;
+}
+/* Its mark in the app's colour: the monogram's letters and its square. */
+.tp-app-chip .tp-icon {
+  color: var(--tp-app, currentColor);
 }
 .tp-app-chip[data-size="compact"] .tp-icon {
   width: 0.6875rem;
@@ -3143,11 +3183,20 @@ div.tp-map-row[data-kind="code"] {
   --tp-k-ink: var(--tp-warn-strong);
 }
 /* The kind's badge: a soft fill of its share's colour and the word in it, one size and case for every kind. */
-.tp-map-row[data-category] .tp-map-kind[data-muted] {
+.tp-map-row[data-category] .tp-map-kind[data-muted],
+.tp-map-kind[data-muted][data-kind-colour] {
   color: var(--tp-k-ink, var(--tp-k));
   background: color-mix(in srgb, var(--tp-k) 14%, transparent);
 }
-.tp-map-row[data-category="django"] .tp-map-kind[data-muted] {
+/* On white the share's colour is light for a word on its own tint: the word darker, toward the text's. */
+:root[data-theme="light"] .tp-map-row[data-category] .tp-map-kind[data-muted],
+:root[data-theme="light"] .tp-map-kind[data-muted][data-kind-colour] {
+  color: color-mix(in oklab, var(--tp-k-ink, var(--tp-k)) 70%, var(--tp-text));
+}
+:root[data-theme="light"] .tp-map-kind[data-muted][data-kind-colour] {
+  background: color-mix(in srgb, var(--tp-k) 14%, transparent);
+}
+.tp-map-row[data-category="django"] .tp-map-kind[data-muted]:not([data-kind-colour]) {
   background: var(--tp-faint);
 }
 /* A wait is no share's work: outlined, empty, as the strip hatches it. */
@@ -3289,7 +3338,7 @@ div.tp-map-row[data-kind="code"] {
 }
 .tp-llm-role {
   flex: none;
-  font-size: 0.75rem;
+  font-size: var(--tp-size-xs);
   font-weight: 600;
   color: var(--tp-text-3);
 }
@@ -3327,7 +3376,7 @@ div.tp-map-row[data-kind="code"] {
   border-radius: 0.25rem;
   background: var(--tp-faint);
   font-family: var(--tp-mono);
-  font-size: 0.75rem;
+  font-size: var(--tp-size-xs);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
