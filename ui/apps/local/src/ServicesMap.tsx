@@ -104,12 +104,19 @@ function fitScale(diagram: Size, canvas: Size): number {
 }
 
 /**
- * The first view: the zoom the user chose on an earlier visit, else fitted; a map too big to fit at half size opens at
- * half size, its top in view, where its boxes still read (Fit shows it whole).
+ * The first view: the zoom the user chose on an earlier visit where the whole map fits at it, else fitted (a map grown
+ * since never opens cut off at its sides); a map too big to fit at half size opens at half size, its top in view,
+ * where its boxes still read (Fit shows it whole).
  */
 function firstView(diagram: Size, canvas: Size): View {
-  const k = storedZoom() ?? Math.max(fitScale(diagram, canvas), FIRST_ZOOM);
+  const stored = storedZoom();
+  const k = stored !== null && fits(diagram, canvas, stored) ? stored : Math.max(fitScale(diagram, canvas), FIRST_ZOOM);
   return centered(diagram, canvas, k);
+}
+
+/** Whether the whole diagram is in the canvas at zoom k, under the toolbar. */
+function fits(diagram: Size, canvas: Size, k: number): boolean {
+  return diagram.width * k <= canvas.width - 2 * PAD && diagram.height * k <= canvas.height - TOP - PAD;
 }
 
 /** The view zoomed to k around a point of the canvas: what is under it stays under it. */
@@ -493,7 +500,7 @@ function RoleBox({ placed, hovering }: { placed: Placed<Box>; hovering: Hovering
       placed={placed}
       to={href(appTarget(box.app))}
       // A role it didn't name reads "app".
-      icon={<AppMark runtime={box.runtime} labelled />}
+      icon={<AppMark runtime={box.runtime} labelled app={box.service} />}
       name={box.app.role || "app"}
       detail={box.runtime}
       failed={box.app.errors}

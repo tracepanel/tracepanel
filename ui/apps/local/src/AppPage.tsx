@@ -68,7 +68,7 @@ function RoleLinks({ roles }: { roles: readonly ServiceApp[] }) {
 function Title({ service, runtime }: { service: string; runtime: string | null }) {
   return (
     <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight [&_svg]:size-6 [&_.tp-monogram]:size-6">
-      <AppMark runtime={runtime} />
+      <AppMark runtime={runtime} app={service} />
       {service}
     </h1>
   );

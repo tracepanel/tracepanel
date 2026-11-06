@@ -45,6 +45,7 @@ export {
   AliasChip,
   AppChip,
   AppMark,
+  appColour,
   DetailsFooter,
   Empty,
   IssueChip,

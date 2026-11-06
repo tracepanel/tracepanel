@@ -51,7 +51,13 @@ interface Line {
 function appLine(app: Project, most: number, onOpen: (() => void) | undefined): Line {
   return {
     key: `app:${app.service}`,
-    name: <Name icon={<AppMark runtime={app.runtime} labelled />} name={app.service} detail={app.runtime} />,
+    name: (
+      <Name
+        icon={<AppMark runtime={app.runtime} labelled app={app.service} />}
+        name={app.service}
+        detail={app.runtime}
+      />
+    ),
     kind: "App",
     roles: app.roles.map((role) => role.role),
     calls: app.traces,

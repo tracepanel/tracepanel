@@ -440,13 +440,29 @@ export function StateBadge({ state }: { state: string }) {
  * switcher): its runtime's when known, else the plain app icon, so an app has a mark everywhere. `labelled` names the
  * plain icon "App" where the mark stands for the app (a map's box), not beside its name.
  */
-export function AppMark({ runtime, labelled = false }: { runtime?: string | null | undefined; labelled?: boolean }) {
+export function AppMark({
+  runtime,
+  labelled = false,
+  app,
+}: {
+  runtime?: string | null | undefined;
+  labelled?: boolean;
+  /** The app it marks: in its colour then (appColour), as its chip has it everywhere. */
+  app?: string | undefined;
+}) {
   const kind = runtime ? runtimeKind(runtime) : null;
-  if (kind) return <RuntimeIcon kind={kind} />;
-  return labelled ? (
+  const mark = kind ? (
+    <RuntimeIcon kind={kind} />
+  ) : labelled ? (
     <AppWindowIcon className="tp-icon size-3.5" role="img" aria-label="App" />
   ) : (
     <AppWindowIcon className="tp-icon size-3.5" aria-hidden="true" />
+  );
+  if (!app) return mark;
+  return (
+    <span className="contents" style={{ color: appColour(app) }}>
+      {mark}
+    </span>
   );
 }
 
@@ -465,7 +481,7 @@ export interface AppChipPick {
  * count, pressed while the list shows only that app.
  */
 /** An app's own colour: one of six (`--tp-app-*`) by its name, the same app the same everywhere. */
-function appColour(name: string): string {
+export function appColour(name: string): string {
   // FNV-1a: names alike but for their end (library-api, library-bff) land apart.
   let hash = 0x811c9dc5;
   for (const char of name) hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 0x01000193);

@@ -685,7 +685,7 @@ function switchingClass(busy: boolean): string {
 /** Which app the console shows: every one, or one of them. A rail shows the chosen app's mark. */
 function AppSwitcher({ scope, rail }: { scope: AppScope; rail: boolean }) {
   const chosen = scope.apps.find((app) => app.service === scope.service);
-  const mark = (app: App | undefined) => (app ? <AppMark runtime={app.runtime} /> : <LayersIcon />);
+  const mark = (app: App | undefined) => (app ? <AppMark runtime={app.runtime} app={app.service} /> : <LayersIcon />);
   const label = chosen ? chosen.service : "All apps";
   const busy = scope.pending != null;
   const switching = switchingClass(busy);
