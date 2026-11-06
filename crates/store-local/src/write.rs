@@ -619,8 +619,20 @@ fn write_issues(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
 }
 
 /// Link a service's trace to the trace that called it, by the W3C ids both carry, whichever is written first: the
-/// caller's span that carried the trace on is the callee's parent.
+/// caller's span that carried the trace on is the callee's parent. A call that carried no W3C ids (a page's own
+/// document, requested before its scripts ran) names the trace that served it instead (`tracepanel.served_by`).
 pub(crate) fn link_calls(db: &Connection, trace: &Trace) -> rusqlite::Result<()> {
+    for span in &trace.spans {
+        let Some(served) = text(span.attrs.get("tracepanel.served_by")) else {
+            continue;
+        };
+        db.prepare_cached(
+            "INSERT INTO links (trace_id, kind, linked_trace, linked_span)
+             SELECT ?1, 'called_by', ?2, ?3
+             WHERE NOT EXISTS (SELECT 1 FROM links WHERE trace_id = ?1 AND kind = 'called_by')",
+        )?
+        .execute(params![served, trace.id, span.id])?;
+    }
     let Some(w3c_trace) = text(trace.attrs.get("w3c.trace_id")) else {
         return Ok(());
     };

@@ -740,6 +740,52 @@ mod tests {
     }
 
     #[test]
+    fn a_page_s_document_links_the_trace_that_served_it_whichever_comes_first() {
+        let dir =
+            std::env::temp_dir().join(format!("tracepanel-store-document-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = path_in(&dir);
+        let mut store = Store::open(&path).unwrap();
+        let received = |doc: Value| Received {
+            trace: serde_json::from_value(doc.clone()).unwrap(),
+            doc: doc.to_string(),
+        };
+        // The server's trace of the page, no W3C parent: the browser asked for it before any script ran.
+        let page = received(serde_json::json!({
+            "id": "PAGE", "kind": "http", "name": "GET /books/", "start": 1, "duration": 8, "status": "ok",
+            "attrs": {"service.name": "shop", "service.role": "web"},
+            "spans": [], "logs": [], "errors": [], "links": [], "issues": [],
+        }));
+        // The browser's view: its document request names the trace that served it.
+        let view = received(serde_json::json!({
+            "id": "VIEW", "kind": "page", "name": "/books/", "start": 0, "duration": 20, "status": "ok",
+            "attrs": {"service.name": "browser", "service.role": "browser"},
+            "spans": [{
+                "id": "VIEW-document", "parent_id": null, "kind": "http.client", "name": "GET /books/",
+                "start": 0, "duration": 10, "status": "ok",
+                "attrs": {"http.request.method": "GET", "tracepanel.served_by": "PAGE"},
+            }],
+            "logs": [], "errors": [], "links": [], "issues": [],
+        }));
+        store.write(&[view]).unwrap();
+        store.write(&[page]).unwrap();
+        let reader = Reader::new(&path);
+
+        let from_view = reader.related("VIEW").unwrap();
+        assert_eq!(
+            (
+                from_view["calls"].as_array().unwrap().len(),
+                &from_view["calls"][0]["id"],
+                &from_view["via"]["PAGE"]
+            ),
+            (1, &Value::from("PAGE"), &Value::from("VIEW-document"))
+        );
+
+        assert_eq!(reader.related("PAGE").unwrap()["called_by"]["id"], "VIEW");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn an_upgraded_app_is_one_app_labelled_as_it_runs_now() {
         let dir =
             std::env::temp_dir().join(format!("tracepanel-store-upgrade-{}", std::process::id()));
