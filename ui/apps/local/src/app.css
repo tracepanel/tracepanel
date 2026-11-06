@@ -124,6 +124,16 @@ a {
   background: var(--tp-hover);
   color: var(--tp-text);
 }
+/* A tool that is on says so in a word beside its icon (Following, Profiling, the kinds shown): off, the icon alone. */
+.icon-button[data-labelled] {
+  grid-auto-flow: column;
+  gap: 0.3125rem;
+  width: auto;
+  padding: 0 0.5rem;
+  font-size: var(--tp-size-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
 .icon-button:disabled {
   opacity: 0.4;
 }
