@@ -2,6 +2,7 @@ import { CircleXIcon, TriangleAlertIcon } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
 import { Beside } from "./beside";
 import { indentOf } from "./CallCode";
+import { OpText } from "./CallRowParts";
 import { Badge } from "./components/ui/badge";
 import { ago, dayTime, duration, isSlow } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
@@ -447,7 +448,11 @@ function RecordLead({
         muted={true}
         className="tp-map-kind"
       />
-      <span className="tp-map-text">{page ? pageName(trace.name) : trace.name}</span>
+      {page ? (
+        <span className="tp-map-text">{pageName(trace.name)}</span>
+      ) : (
+        <OpText text={trace.name} kind={trace.kind} />
+      )}
       {/* On hover its moment: records alike ("VIEW / 4m ago") still part by when each was. */}
       {when ? (
         <span className="tp-record-ago" title={dayTime(trace.start)}>

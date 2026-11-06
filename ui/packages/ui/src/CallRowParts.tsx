@@ -222,6 +222,8 @@ export function SpanName({ span }: { span: Span }) {
 
 // What a call does, then what to: SELECT shop_product, GET api.example.com/users, SET session:*.
 const OP = /^([A-Z][A-Z_]+)( .*)$/;
+/** The kinds whose name starts with an HTTP method: a request served and a call made, coloured alike. */
+const HTTP_KINDS: ReadonlySet<string> = new Set(["http", "http.client"]);
 
 /**
  * A call's text, its operation set apart: a statement's verb or a command a little stronger than what it acts on,
@@ -233,7 +235,7 @@ export function OpText({ text, kind, className }: { text: string; kind: string |
   if (!op) return <span className={classes}>{text}</span>;
   return (
     <span className={classes}>
-      <span className="tp-map-op" data-method={kind === "http.client" ? op[1] : undefined}>
+      <span className="tp-map-op" data-method={kind && HTTP_KINDS.has(kind) ? op[1] : undefined}>
         {op[1]}
       </span>
       {op[2]}
