@@ -39,7 +39,7 @@ async function explaining(page: Page, explains: Record<string, boolean>): Promis
 /** The view's call tree, the authors' steps open: the second one's service trace's query, its details. */
 async function linkedQuery(page: Page) {
   await page.goto(`/#/t/${await chain()}?tab=calls`);
-  const step = page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const step = page.getByRole("button", { name: /^fn Book\.author/i }).first();
   await step.locator(".tp-map-caret[data-toggle]").click();
   // Each call's trace open under it: the second author's query is the second.
   const queries = page.getByRole("button", { name: /^sql SELECT author/i });

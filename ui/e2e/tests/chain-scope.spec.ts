@@ -26,7 +26,7 @@ test("Inside this span: a group of steps opens its services' queries; only its o
   const view = await chain();
   await page.goto(`/#/t/${view}?tab=calls`);
   await page
-    .getByRole("button", { name: /^function Book\.author/i })
+    .getByRole("button", { name: /^fn Book\.author/i })
     .first()
     .click();
   const under = page.getByRole("list", { name: "Inside these calls" });

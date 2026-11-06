@@ -19,7 +19,8 @@ function opened(scope: Scope): Locator {
 /** The row of a call merged with the trace it served, by its method and path. */
 function hop(scope: Scope, call: string): Locator {
   const text = call.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  return scope.getByRole("button", { name: new RegExp(`^http\\.client ${text} served by`, "i") });
+  // A call is named by its method: its kind's word goes, the method says it.
+  return scope.getByRole("button", { name: new RegExp(`^${text} served by`, "i") });
 }
 
 test("in the console, a linked trace's way back is the trace as it was: crumbs, Esc, the browser's Back and Forward", async ({
@@ -74,7 +75,7 @@ test("in the console, a reload opens the same view: its tab, its row, the Profil
   ).toHaveAttribute("aria-selected", "true");
 
   await tab(page, /^Call tree/).click();
-  const steps = page.getByRole("button", { name: /^function Book\.author ×3/ });
+  const steps = page.getByRole("button", { name: /^fn Book\.author ×3/ });
   await steps.click();
   await page.reload();
 

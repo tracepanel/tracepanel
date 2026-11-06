@@ -1,5 +1,6 @@
-import { type ReactNode, useContext } from "react";
+import type { ReactNode } from "react";
 import { AsReceived } from "./AsReceived";
+import { useBeside } from "./beside";
 import { hopTimes, Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
 import { appName, type Linked, OpenRun } from "./CallRows";
 import { type Explain, QueryPlan } from "./CallTable";
@@ -18,7 +19,7 @@ import { attrsWhere } from "./lib/values";
 import type { TraceLinks } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { PropTable } from "./PropTable";
-import { AppChip, KindWords, SectionHeading } from "./primitives";
+import { AppChip, SectionHeading } from "./primitives";
 import { isRequestDetail, RequestParts, requestParts } from "./RequestParts";
 import { RunChips } from "./RunChips";
 import { SqlCode } from "./SqlCode";
@@ -168,7 +169,7 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
 function SpanTitle({ span, trace, parent }: { span: Span; trace: Trace; parent: Span | undefined }) {
   const offset = duration(Math.max(span.start - trace.start, 0));
   // Beside the tree, the details' own head says what it is and how long it took.
-  if (useContext(KindWords) !== null) return null;
+  if (useBeside()) return null;
   return (
     <p className="tp-map-details-title">
       {spanKindLabel(span.kind, trace.attrs, parent?.kind)} · started at +{offset} · took {duration(span.duration)}
@@ -241,7 +242,7 @@ function SpanPlace({
   parent: Span | undefined;
   bare: boolean;
 }) {
-  const beside = useContext(KindWords) !== null;
+  const beside = useBeside();
   if (!(bare && beside)) return null;
   const share = (span.duration / Math.max(trace.duration, 1)) * 100;
   return (
@@ -325,7 +326,7 @@ function ServedBy({
   links: TraceLinks | undefined;
   onTraceProfile: TraceProfileOpener | undefined;
 }) {
-  const waterfall = useContext(KindWords) !== null;
+  const waterfall = useBeside();
   if (waterfall) {
     const [split, note] = hopTimes(span, served).split("\n");
     return (
@@ -401,7 +402,7 @@ function Fields({ rows }: { rows: readonly NameValue[] }) {
 function SpanAttributes({ span, attrs, titled }: { span: Span; attrs: Attrs; titled: boolean }) {
   const template = span.kind === "template";
   const llm = span.kind === "llm";
-  const waterfall = useContext(KindWords) !== null;
+  const waterfall = useBeside();
   const rest = withoutMessages(withoutContext(attrs));
   // Beside the tree, as the record's own row has them: the same switch, the same groups.
   if (waterfall && !template && !llm) return <RootAttributes attrs={rest} />;

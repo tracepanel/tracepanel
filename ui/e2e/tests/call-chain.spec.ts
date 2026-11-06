@@ -261,8 +261,8 @@ async function bar(row: ReturnType<Page["getByRole"]>): Promise<{ left: number; 
 /** The row of a call merged with the trace it served, by its method and path. */
 function hop(scope: Page | ReturnType<typeof panel>, call: string) {
   const text = call.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  // The panel names a call by its method alone (its kind words are short there): the page by its kind too.
-  return scope.getByRole("button", { name: new RegExp(`^(http\\.client )?${text} served by`, "i") });
+  // A call is named by its method alone, in the console and the panel: its kind's word goes, the method says it.
+  return scope.getByRole("button", { name: new RegExp(`^${text} served by`, "i") });
 }
 
 /** The server's part of a merged call's bar, left and right edge on the page. */
@@ -276,19 +276,17 @@ test("a resolver run per item groups as one row; open, each runs its call, and t
   page,
 }) => {
   await resolvers(page);
-  const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const group = page.getByRole("button", { name: /^fn Book\.author/i }).first();
 
   await expect(group).toContainText(`×${AUTHORS}`);
   await expect(group).toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^GET 127\.0\.0\.1\/authors/i })).toHaveCount(0);
 
   await group.locator(".tp-map-caret[data-toggle]").click();
 
-  await expect(page.getByRole("button", { name: /^function Book\.author \d+ ms$/i })).toHaveCount(AUTHORS);
+  await expect(page.getByRole("button", { name: /^fn Book\.author \d+ ms$/i })).toHaveCount(AUTHORS);
   // Each call one row with the trace it served: no row of its own for the service's trace.
-  await expect(
-    page.getByRole("button", { name: /^http\.client GET \/authors\/\d+ served by library-api/i }),
-  ).toHaveCount(AUTHORS);
+  await expect(page.getByRole("button", { name: /^GET \/authors\/\d+ served by library-api/i })).toHaveCount(AUTHORS);
   await expect(page.locator('.tp-map-row[data-kind="task"]')).toHaveCount(0);
   const call = hop(page, "GET /authors/2");
   await expect(call).toHaveAttribute("aria-expanded", "false");
@@ -302,7 +300,7 @@ test("calls side by side show the time they ran from first to last; what they to
   page,
 }) => {
   await resolvers(page);
-  const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const group = page.getByRole("button", { name: /^fn Book\.author/i }).first();
   const time = group.locator(".tp-map-time");
 
   // 36 resolvers of 3.2 ms each, 20 µs apart: 3.9 ms from the first's start to the last's end, 115 ms added up.
@@ -321,7 +319,7 @@ test("another app's trace on its own clock is drawn inside its call, its rows to
 }) => {
   const bff = await resolvers(page);
   await page
-    .getByRole("button", { name: /^function Book\.author/i })
+    .getByRole("button", { name: /^fn Book\.author/i })
     .first()
     .locator(".tp-map-caret[data-toggle]")
     .click();
@@ -357,7 +355,7 @@ test("a served request longer than its call by the caller's clock ends with the 
 }) => {
   await resolvers(page);
   await page
-    .getByRole("button", { name: /^function Book\.author/i })
+    .getByRole("button", { name: /^fn Book\.author/i })
     .first()
     .locator(".tp-map-caret[data-toggle]")
     .click();
@@ -384,7 +382,7 @@ test("a click's call tree opens the whole chain: the BFF, each service call, the
 
   // The BFF's trace, open under the click's call, with its own calls in it: the 36 to one endpoint one row.
   await expect(bff).toHaveAttribute("aria-expanded", "true");
-  const group = page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i });
+  const group = page.getByRole("button", { name: /^GET 127\.0\.0\.1\/authors\/\{id\}/i });
   await expect(group).toContainText(`×${AUTHORS}`);
   await expect(group).toHaveAttribute("aria-expanded", "false");
 
@@ -408,7 +406,7 @@ test("a click's call tree opens the whole chain: the BFF, each service call, the
   for (const row of [bff, books, pricing]) {
     await expect(row).toHaveAttribute("data-kind", "http.client");
     await expect(row).toHaveAttribute("data-hop", "");
-    await expect(row.locator(".tp-map-kind")).toHaveText("http.client");
+    await expect(row.locator(".tp-map-kind")).toHaveText("http");
   }
   await expect(page.locator('.tp-map-row[data-kind="task"]')).toHaveCount(0);
 
@@ -422,11 +420,11 @@ test("an N+1 of calls to a service opens to each call, each with the service's t
   page,
 }) => {
   await chain(page);
-  const group = page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i });
+  const group = page.getByRole("button", { name: /^GET 127\.0\.0\.1\/authors\/\{id\}/i });
 
   await group.locator(".tp-map-caret[data-toggle]").click();
 
-  const authors = page.getByRole("button", { name: /^http\.client GET \/authors\/\d+ served by/i });
+  const authors = page.getByRole("button", { name: /^GET \/authors\/\d+ served by/i });
   await expect(authors).toHaveCount(AUTHORS);
   for (const row of await authors.all()) await expect(row).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("button", { name: /^sql SELECT author\.name/i })).toHaveCount(0);
@@ -537,7 +535,7 @@ test("a merged call's details: the call, then what served it", async ({ page }) 
 
 test("a call no trace served is a row as before: its host, no app, nothing under it", async ({ page }) => {
   await page.goto(`/#/t/${await traceId('/books › click "Delete"')}?tab=calls`);
-  const call = page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/api\/books/i });
+  const call = page.getByRole("button", { name: /^GET 127\.0\.0\.1\/api\/books 500/i });
 
   await expect(call).toBeVisible();
   await expect(call).not.toHaveAttribute("data-hop");
@@ -548,13 +546,13 @@ test("a call no trace served is a row as before: its host, no app, nothing under
 
 test("an N+1 of calls is said once, on its group's row: its calls don't each say it", async ({ page }) => {
   await resolvers(page);
-  const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const group = page.getByRole("button", { name: /^fn Book\.author/i }).first();
 
   await expect(group.locator('[data-slot="badge"]')).toHaveText("N+1");
 
   await group.locator(".tp-map-caret[data-toggle]").click();
 
-  const calls = page.getByRole("button", { name: /^http\.client GET \/authors\/\d+ served by/i });
+  const calls = page.getByRole("button", { name: /^GET \/authors\/\d+ served by/i });
   await expect(calls).toHaveCount(AUTHORS);
   await expect(page.locator('.tp-map-rows [data-slot="badge"]')).toHaveText(["N+1"]);
 });
@@ -563,7 +561,7 @@ test("a group's details say where its calls ran from when they all did from one 
   await resolvers(page);
 
   await page
-    .getByRole("button", { name: /^function Book\.author/i })
+    .getByRole("button", { name: /^fn Book\.author/i })
     .first()
     .click();
 
@@ -574,7 +572,7 @@ test("a group's details say where its calls ran from when they all did from one 
 test("a group's details without one place its calls ran from have no from", async ({ page }) => {
   await chain(page);
 
-  await page.getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i }).click();
+  await page.getByRole("button", { name: /^GET 127\.0\.0\.1\/authors\/\{id\}/i }).click();
 
   const details = page.getByRole("complementary", { name: "Details" });
   await expect(details).toContainText(`${AUTHORS} similar HTTP calls`);
@@ -614,7 +612,7 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
   page,
 }) => {
   await resolvers(page);
-  const group = () => page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const group = () => page.getByRole("button", { name: /^fn Book\.author/i }).first();
   await group().locator(".tp-map-caret[data-toggle]").click();
   await hop(page, "GET /authors/1").click();
 
@@ -629,7 +627,7 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
   await page.reload();
   await hop(page, "GET /books").locator(".tp-map-caret[data-toggle]").click();
   await page
-    .getByRole("button", { name: /^http\.client GET 127\.0\.0\.1\/authors\/\{id\}/i })
+    .getByRole("button", { name: /^GET 127\.0\.0\.1\/authors\/\{id\}/i })
     .locator(".tp-map-caret[data-toggle]")
     .click();
   await chipsShowTheirText(page);

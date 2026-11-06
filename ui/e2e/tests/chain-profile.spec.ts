@@ -55,10 +55,10 @@ test("Inside this span: a step's profile is the BFF's stretch of its time and th
 }) => {
   const view = await bffApart(page);
   await page.goto(`/#/t/${view}?tab=calls`);
-  const group = page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const group = page.getByRole("button", { name: /^fn Book\.author/i }).first();
   await group.locator(".tp-map-caret[data-toggle]").click();
   await page
-    .getByRole("button", { name: /^function Book\.author \d+(\.\d+)? ms$/i })
+    .getByRole("button", { name: /^fn Book\.author \d+(\.\d+)? ms$/i })
     .first()
     .click();
   const under = page.locator(".tp-under-this");

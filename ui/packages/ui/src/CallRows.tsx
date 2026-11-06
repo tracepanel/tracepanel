@@ -421,12 +421,15 @@ function GroupName({
   const first = node.spans[0];
   return (
     <>
-      <KindBadge
-        kind={spanKindLabel(first?.kind, ctx.trace.attrs)}
-        muted={true}
-        className="tp-map-kind"
-        {...kindBadgeColour(first?.kind)}
-      />
+      {/* HTTP calls' kind goes, as a call's does: their method says it (GET in its colour). */}
+      {first?.kind === "http.client" ? null : (
+        <KindBadge
+          kind={spanKindLabel(first?.kind, ctx.trace.attrs)}
+          muted={true}
+          className="tp-map-kind"
+          {...kindBadgeColour(first?.kind)}
+        />
+      )}
       <OpText text={callTemplate(first)} kind={first?.kind} />
       {/* How many, right after what: never pushed away from its name. */}
       <Times count={node.spans.length} />

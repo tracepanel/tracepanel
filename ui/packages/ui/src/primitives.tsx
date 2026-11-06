@@ -51,24 +51,18 @@ export function MethodBadge({
  */
 export function FailedStatus({ failure }: { failure?: string | undefined }) {
   return (
-    <span
-      className="tp-status"
-      data-tone="error"
-      data-boxed={useBeside() ? "" : undefined}
-      title={failure ?? "No answer"}
-    >
+    <span className="tp-status" data-tone="error" data-boxed="" title={failure ?? "No answer"}>
       failed
     </span>
   );
 }
 
 export function StatusBadge({ status }: { status: number | null | undefined }) {
-  // Beside the waterfall a status is its tone's pill on white too: the rows' one spot of an answer's colour.
-  const boxed = useBeside();
   if (status === null || status === undefined) return null;
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";
+  // Its tone's pill on white too, wherever a status shows: the console's lists, its call tree, the panel, the pill.
   return (
-    <span className="tp-status" data-tone={tone} data-boxed={boxed ? "" : undefined}>
+    <span className="tp-status" data-tone={tone} data-boxed="">
       {status}
     </span>
   );
@@ -351,7 +345,6 @@ export const WATERFALL_KINDS: Readonly<Record<string, string>> = {
   graphql: "gql",
   template: "tpl",
   framework: "fw",
-  handler: "fn",
   "http.client": "http",
 };
 
@@ -371,7 +364,8 @@ export function KindBadge({
 }) {
   // A call's kind is its own word (a span may be a "command"); a trace's in short.
   const own = muted ? kind : shortKind(kind);
-  const word = useContext(KindWords)?.[own.toLowerCase()] ?? own;
+  // The short words everywhere a call tree shows (the console's and the panel's): one look for one kind.
+  const word = (useContext(KindWords) ?? WATERFALL_KINDS)[own.toLowerCase()] ?? own;
   return (
     <span
       className={cn("tp-kind", className)}

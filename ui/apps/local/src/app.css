@@ -1868,9 +1868,6 @@ body {
 .tp-trace[data-variant="waterfall"] .tp-map-head {
   grid-template-columns: minmax(20rem, 1fr) minmax(0, var(--wf-map, 8rem)) 4rem;
 }
-.tp-trace[data-variant="waterfall"] .tp-map-lead[data-http] > .tp-map-kind {
-  display: none;
-}
 /* One width for a kind's badge on every row of the panel, the open record's and the others': no row jumps. */
 .tp-trace[data-variant="waterfall"] .tp-map-kind,
 .panel-wf .tp-map-lead > .tp-map-kind {
@@ -2363,12 +2360,6 @@ body {
   right: 1rem;
 }
 
-/* On a row, slow is said by its time, in the colour every slow time has. */
-.panel-wf .tp-map-row:has([data-issue-kind^="slow"]) .tp-map-time {
-  color: var(--tp-error);
-  font-weight: 600;
-}
-
 /* A row's marks end at the column's edge, whatever else the row holds. */
 .panel-wf .tp-map-row .tp-map-chips {
   justify-content: flex-end;
@@ -2447,28 +2438,4 @@ body {
   padding: 0.5rem 0.75rem;
   color: var(--tp-text-3);
   font-size: var(--tp-size-xs);
-}
-
-/* The panel's bars, records' and calls' alike, nearly their track's height: a solid stroke of time to read at a
-   glance in the narrow column, not a hairline. */
-.panel-wf .tp-map-bar {
-  top: 1px;
-  bottom: 1px;
-  /* Rounded, not a capsule: a short one stays a small block, never a dot read as a status's. */
-  border-radius: 2px;
-}
-.panel-wf .tp-map-bar[data-past] {
-  border-radius: 2px 0 0 2px;
-}
-.panel-wf .tp-map-bar[data-piece] {
-  border-radius: 0;
-}
-.panel-wf .tp-map-bar[data-piece]:first-child {
-  border-radius: 2px 0 0 2px;
-}
-.panel-wf .tp-map-bar[data-piece]:last-child {
-  border-radius: 0 2px 2px 0;
-}
-.panel-wf .tp-map-bar[data-piece]:only-child {
-  border-radius: 2px;
 }

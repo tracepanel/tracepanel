@@ -17,10 +17,7 @@ for (const width of [1440, 900]) {
     await page.setViewportSize({ width, height: 900 });
     const id = await traceId("PATCH /campaigns/{id}/report");
     await page.goto(`/#/t/${id}?tab=calls`);
-    await page
-      .getByRole("button", { name: /^transaction/ })
-      .first()
-      .click();
+    await page.getByRole("button", { name: /^tx/ }).first().click();
     const rows = page.locator('.tp-map-row:is([data-kind="sql"], [data-kind="transaction"])');
     await expect(rows).toHaveCount(5);
 
@@ -41,7 +38,7 @@ for (const width of [1440, 900]) {
 
 test("a row's fold opens and closes its rows without opening its details; the arrow keys do too", async ({ page }) => {
   await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=calls`);
-  const row = page.getByRole("button", { name: /^transaction/ }).first();
+  const row = page.getByRole("button", { name: /^tx/ }).first();
   const fold = row.locator(".tp-map-caret[data-toggle]");
   const details = page.getByRole("complementary", { name: "Details" });
 
@@ -72,10 +69,7 @@ test("a call's details give its fields and all its attributes one column of name
   page,
 }) => {
   await page.goto(`/#/t/${await traceId("PATCH /campaigns/{id}/report")}?tab=calls`);
-  await page
-    .getByRole("button", { name: /^transaction/ })
-    .first()
-    .click();
+  await page.getByRole("button", { name: /^tx/ }).first().click();
   await page.locator('.tp-map-row[data-kind="sql"]').first().click();
   const values = page.locator(":is(.tp-map-side, .tp-map-inline) dd");
   await expect(values.first()).toBeVisible();

@@ -2,7 +2,7 @@ import { ScrollTextIcon } from "lucide-react";
 import { type CSSProperties, createContext, type ReactNode, useContext } from "react";
 import type { CodeInfo } from "./CallCode";
 import { kindColor, type Mark, type Node, type ServedRun, SKEW_NOTE_MIN, type SpanNode } from "./callTree";
-import { duration } from "./format";
+import { duration, isSlow } from "./format";
 import { ChevronRightIcon } from "./icons";
 import { NoAnswer } from "./LiveMarks";
 import type { Category } from "./lib/breakdown";
@@ -171,9 +171,18 @@ export function barPlace(trace: Trace, start: number, length: number): { style: 
  * A row's time, tabular, in the text's colour: its bar says its share of the trace, and a call slow for what it is
  * has its issue (a slow query, a slow HTTP call), not a time in red that reads as a failure.
  */
-export function RowTime({ time, title }: { time: number; title?: string | undefined }) {
+export function RowTime({
+  time,
+  title,
+  slow = false,
+}: {
+  time: number;
+  title?: string | undefined;
+  /** The record's own time, slow for what it is (isSlow): amber, as its row in a list says it. */
+  slow?: boolean | undefined;
+}) {
   return (
-    <span className="tp-map-time" title={title}>
+    <span className="tp-map-time" title={title} data-slow={slow ? "" : undefined}>
       {duration(time)}
     </span>
   );
@@ -242,11 +251,12 @@ export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
   // Cut short, no answer yet: its time is where it was cut (lib/live).
   if (isCut(span)) return <RowTime time={span.duration} title={cutNote(span.duration)} />;
   // The record's own time, one number wherever it shows: what the page waited, what the server took on hover.
-  if (span.parent_id === null && ctx.rootTime !== undefined && ctx.rootTime > span.duration) {
+  const root = span.parent_id === null;
+  if (root && ctx.rootTime !== undefined && ctx.rootTime > span.duration) {
     const title = `The page waited ${duration(ctx.rootTime)}; the server took ${duration(span.duration)}`;
-    return <RowTime time={ctx.rootTime} title={title} />;
+    return <RowTime time={ctx.rootTime} title={title} slow={isSlow({ ...ctx.trace, duration: ctx.rootTime })} />;
   }
-  return <RowTime time={span.duration} title={timeTitle(span, ctx.trace)} />;
+  return <RowTime time={span.duration} title={timeTitle(span, ctx.trace)} slow={root && isSlow(ctx.trace)} />;
 }
 
 /** A span's bar; a call cut short runs to where it was cut, fading out there, never a 0-width mark. */

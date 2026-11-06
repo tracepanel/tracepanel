@@ -33,7 +33,7 @@ test("Inside this span: a group of steps opens the records under it, its service
   const view = await chain();
   await page.goto(`/#/t/${view}?tab=calls`);
   await page
-    .getByRole("button", { name: /^function Book\.author/i })
+    .getByRole("button", { name: /^fn Book\.author/i })
     .first()
     .click();
 
@@ -66,10 +66,10 @@ test("Inside this span: a group of steps opens the records under it, its service
 test("a service's trace in the tree: under it, its own records; a record leads back to its row", async ({ page }) => {
   const view = await chain();
   await page.goto(`/#/t/${view}?tab=calls`);
-  const step = page.getByRole("button", { name: /^function Book\.author/i }).first();
+  const step = page.getByRole("button", { name: /^fn Book\.author/i }).first();
   await step.locator(".tp-map-caret[data-toggle]").click();
   // The call and the service's trace it reached, one row: what is under it is the service's.
-  await page.getByRole("button", { name: /^http\.client GET \/authors\/2 served by shop/i }).click();
+  await page.getByRole("button", { name: /^GET \/authors\/2 served by shop/i }).click();
   const details = page.getByRole("complementary", { name: "Details" });
   await expect(details.getByRole("region", { name: "Call" })).toBeVisible();
   await expect(details.getByRole("region", { name: "Served by shop" })).toBeVisible();

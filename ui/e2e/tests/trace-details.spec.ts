@@ -92,9 +92,7 @@ test("a query a template made says so in the DB tab; in the call tree its templa
   // It hangs under the template's own row: the template isn't said again beside it.
   await expect(query).toBeVisible();
   await expect(query.locator(".tp-from-template")).toHaveCount(0);
-  await expect(page.locator(".tp-map-row").filter({ hasText: "blog/post_list.html" }).first()).toContainText(
-    "template",
-  );
+  await expect(page.locator(".tp-map-row").filter({ hasText: "blog/post_list.html" }).first()).toContainText("tpl");
 });
 
 test("Explore leads to the endpoint's calls, the issue and the logs around the trace", async ({ page }) => {

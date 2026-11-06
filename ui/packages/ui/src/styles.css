@@ -2299,12 +2299,9 @@ details[data-focused] > .tp-sql-group {
     display: none;
   }
 }
-/* As narrow as the panel docked right, an HTTP call's kind goes: its method says it (GET in its colour), and its
-   path and answer have the room. */
-@container map-rows (max-width: 26rem) {
-  .tp-map-lead[data-http] > .tp-map-kind {
-    display: none;
-  }
+/* An HTTP call's kind goes, as wide as the tree is: its method says it (GET in its colour), as the panel has it. */
+.tp-map-lead[data-http] > .tp-map-kind {
+  display: none;
 }
 /* Narrower still, the alias goes: the row's details and its title keep it, the call and its issue stay. */
 @container map-rows (max-width: 40rem) {
@@ -3231,13 +3228,15 @@ div.tp-map-row[data-kind="code"] {
 }
 
 /* Bars: slimmer, rounded, in the share's colour; a call that took much of the trace says so in its time. */
+/* Nearly their track's height, in the console's tree and the panel's alike: a solid stroke of time to read at a
+   glance. Rounded, not a capsule: a short one stays a small block, never a dot read as a status's. */
 .tp-map-bar {
-  top: 3px;
-  bottom: 3px;
-  border-radius: 999px;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 2px;
 }
 .tp-map-bar[data-past] {
-  border-radius: 999px 0 0 999px;
+  border-radius: 2px 0 0 2px;
 }
 /* A call merged with the trace served for it: the call's whole time pale (the way there and back, a queue), the
    server's part solid inside it. */
@@ -3679,12 +3678,12 @@ div.tp-map-row[data-kind="code"] {
   border-radius: 0;
 }
 .tp-map-bar[data-piece]:first-child {
-  border-top-left-radius: 999px;
-  border-bottom-left-radius: 999px;
+  border-top-left-radius: 2px;
+  border-bottom-left-radius: 2px;
 }
 .tp-map-bar[data-piece]:last-child {
-  border-top-right-radius: 999px;
-  border-bottom-right-radius: 999px;
+  border-top-right-radius: 2px;
+  border-bottom-right-radius: 2px;
 }
 
 /* A record's marks in columns of their own (errors, findings, queries): straight down the list. */
@@ -3732,7 +3731,11 @@ div.tp-map-row[data-kind="code"] {
   display: contents;
 }
 
-/* A record slow for what it is, as the agent counts it (slowFrom): its time amber, never red: slow is no failure. */
-.tp-map-time [data-slow] {
+/* Slow, said by its time, amber and bold, never red (slow is no failure): a record slow for what it is, as the agent
+   counts it (slowFrom), selected or not; a call with a slow issue of its own (a slow query, a slow HTTP call). */
+.tp-map-time[data-slow],
+.tp-map-time [data-slow],
+.tp-map-row:has(> .tp-map-name [data-issue-kind^="slow"]) > .tp-map-time {
   color: var(--tp-warn-strong);
+  font-weight: 600;
 }
