@@ -33,6 +33,8 @@ export interface SpanScope {
   targets: readonly string[];
   label: string;
   only: boolean;
+  /** A merged call's: the call alone and the app that served it (its row's chip), `label` the two in words. */
+  hop?: { call: string; app: string; runtime: string | undefined } | undefined;
   /** A code or wait row's: its trace's stretches (µs since that trace started), what its profile is of. */
   at?: CodeStretch | undefined;
   /** A log record's or an error's row: when it was (µs), and when its trace started, its row's "+210 ms". */

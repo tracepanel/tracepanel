@@ -642,3 +642,17 @@ test("no chip of the tree's rows is shown without its text, wide or narrow, in t
 
   await chipsShowTheirText(frame);
 });
+
+test("a merged call's details are titled as its row says it: the call, its app's chip, no kind", async ({ page }) => {
+  const { click } = await links(page);
+  await openApp(page, { save: { status: 200, trace: click, queries: 0, totalMs: 40 } });
+  await page.getByRole("button", { name: "Load save" }).click();
+  await pill(page).click();
+  const frame = panel(page);
+  await hop(frame, "GET /books").click();
+  const title = frame.locator(".tp-details-title");
+
+  await expect(title.locator(".tp-details-hop")).toContainText("GET /books");
+  await expect(title.locator(".tp-app-chip")).toHaveText("library-api");
+  await expect(title.locator(".tp-map-kind")).toHaveCount(0);
+});

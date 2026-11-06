@@ -39,6 +39,7 @@ import { type CatchUp, useChain } from "./hooks/useChain";
 import { CloseIcon } from "./icons";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { quietSpans } from "./lib/quiet";
+import { traceRuntime } from "./lib/runtime";
 import type { CodeStretch, SpanScope } from "./lib/scope";
 import type { Slice, TimeRange, Windows } from "./lib/slice";
 import { splitByProfile } from "./lib/timeShares";
@@ -320,7 +321,14 @@ function spanScope({ span, served }: SpanNode): SpanScope {
 /** What is under a merged call: its span's, which takes the trace served for it too. */
 function hopScope(span: Span, served: ServedRun): SpanScope {
   const app = appName(served);
-  return { targets: [span.id], label: app ? `${hopText(span)} → ${app}` : span.name, only: false };
+  if (!app) return { targets: [span.id], label: span.name, only: false };
+  const runtime = traceRuntime(served.whole?.attrs ?? {});
+  return {
+    targets: [span.id],
+    label: `${hopText(span)} → ${app}`,
+    only: false,
+    hop: { call: hopText(span), app, runtime },
+  };
 }
 
 function detailsOf(

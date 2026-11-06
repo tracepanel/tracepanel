@@ -56,7 +56,16 @@ import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
-import { KindBadge, KindWords, RoutePath, StatusBadge, TraceBadge, WATERFALL_KINDS, WaitingIcon } from "./primitives";
+import {
+  AppChip,
+  KindBadge,
+  KindWords,
+  RoutePath,
+  StatusBadge,
+  TraceBadge,
+  WATERFALL_KINDS,
+  WaitingIcon,
+} from "./primitives";
 import { RequestInfo } from "./RequestInfo";
 import { Queries } from "./RunChips";
 import { UnderThis, underCounts } from "./ScopeBar";
@@ -495,12 +504,20 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
   const kind = scope.at?.kind ?? scopeKind(chain.members, scope);
   return (
     <h3 className="tp-details-title">
-      {kind ? (
-        <KindWords.Provider value={WATERFALL_KINDS}>
-          <KindBadge kind={kind} muted={true} className="tp-map-kind" />
-        </KindWords.Provider>
-      ) : null}
-      <span className="tp-details-name">{scope.label}</span>
+      {/* As its row says it: a merged call by itself and its app's chip, no kind (its row has none). */}
+      {kind && !scope.hop ? <KindBadge kind={kind} muted={true} className="tp-map-kind" /> : null}
+      {scope.hop ? (
+        <span className="tp-details-name tp-details-hop">
+          <span className="truncate">{scope.hop.call}</span>
+          <span className="tp-map-hop" aria-hidden="true">
+            →
+          </span>
+          <span className="sr-only">served by</span>
+          <AppChip name={scope.hop.app} runtime={scope.hop.runtime} compact />
+        </span>
+      ) : (
+        <span className="tp-details-name">{scope.label}</span>
+      )}
       {scope.moment ? (
         // A record or an error is a moment, not a stretch: when, as its row says it.
         <span className="tp-details-took" title={`Logged ${since(scope.moment.time, scope.moment.start)}`}>
