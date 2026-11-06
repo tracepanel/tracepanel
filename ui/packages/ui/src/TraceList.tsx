@@ -3,7 +3,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
 import { Beside } from "./beside";
 import { indentOf } from "./CallCode";
 import { Badge } from "./components/ui/badge";
-import { ago, duration } from "./format";
+import { ago, dayTime, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { NoAnswer, Pending, Running } from "./LiveMarks";
 import { ISSUE_LABELS } from "./labels";
@@ -431,7 +431,12 @@ function RecordLead({
         className="tp-map-kind"
       />
       <span className="tp-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
-      {when ? <span className="tp-record-ago">{ago(trace.start)}</span> : null}
+      {/* On hover its moment: records alike ("VIEW / 4m ago") still part by when each was. */}
+      {when ? (
+        <span className="tp-record-ago" title={dayTime(trace.start)}>
+          {ago(trace.start)}
+        </span>
+      ) : null}
     </span>
   );
 }
