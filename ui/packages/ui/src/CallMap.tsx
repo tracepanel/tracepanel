@@ -712,7 +712,6 @@ export function CallMap({
   related,
   links,
   initialSpan,
-  initialCover,
   head,
   ...wiring
 }: {
@@ -761,7 +760,7 @@ export function CallMap({
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
   const { chain, tree, hidden, issues } = useMapTree(trace, related, issueBySpan, current.logs, wiring);
-  const asked = useCovered(tree, initialSpan, initialCover);
+  const asked = useCovered(tree, initialSpan, wiring.initialCover);
   const { codeRow, setCodeRow, selected, select, close, external, map, side, rows, collapsed, toggle } = useMapPicks(
     tree,
     trace,
