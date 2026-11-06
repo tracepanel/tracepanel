@@ -6,7 +6,6 @@ import {
   Hint,
   isGone,
   type ListChains,
-  Logo,
   LogoMark,
   memoryFromParams,
   parseSlice,
@@ -30,31 +29,26 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { useTabHistory } from "./hooks";
-import { readLastTab, writeLastTab } from "./lastTab";
-import { forgetUnless, goBackInPanel, restoringFor, setCurrentView, useBackStep } from "./panelBack";
+import { readLastTab } from "./lastTab";
+import { forgetUnless, restoringFor, setCurrentView, useBackStep } from "./panelBack";
 import { useChainOpen, useKnownApps, useRowChains, useTabRows } from "./panelChains";
-import { type Dock, SplitHandle, tellWidget, useDock, useSplit } from "./panelLayout";
+import { type Dock, tellWidget, useDock, useSplit } from "./panelLayout";
 import {
   BackTo,
-  currentTrace,
   DockButton,
   KindsMenu,
-  ListToggles,
   ListTools,
   offeredKinds,
   opensOnTab,
   PANEL_LINKS,
-  PANEL_V2,
-  PageRequests,
   PanelProfile,
-  RequestSwitcher,
   readFollow,
   sectionFor,
   showsKinds,
   useShownKinds,
   writeFollow,
 } from "./panelList";
-import { arrivingIn, followTarget, inOrder, manyApps, pageScope, requestCount, runningIn, withRuns } from "./panelRows";
+import { arrivingIn, followTarget, inOrder, manyApps, pageScope, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
 import {
   DetailsSplitter,
@@ -69,9 +63,8 @@ import {
 } from "./panelSplit";
 import { RefreshProvider } from "./refresh";
 import { go, href, type Route, useRoute } from "./routes";
-import { SearchPalette } from "./SearchPalette";
 import { ShareAction } from "./ShareDialog";
-import { NAV, ThemeToggle } from "./Sidebar";
+import { ThemeToggle } from "./Sidebar";
 import { ScopeProvider } from "./scope";
 import { tabOf } from "./TracePage";
 import { TraceLoading, TraceScreen } from "./TraceScreen";
@@ -186,19 +179,6 @@ function usePanelView(route: Route, id: string | null, slice: Readonly<Record<st
   };
 }
 
-/** ⌘K, as in the console: a trace opens here, anything else in the console, in a new tab. */
-function useSearchKey(setSearching: (change: (open: boolean) => boolean) => void): void {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
-      event.preventDefault();
-      setSearching((open) => !open);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [setSearching]);
-}
-
 /**
  * Follow new: opens each request that arrives. The history the panel opens with is what was already there, not a new
  * request: the request a link asked for (the pill's card) stays on screen. Only requests that arrive after it are
@@ -227,7 +207,7 @@ function useEscapeCloses(): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (PANEL_V2 || !goBackInPanel(currentTrace())) tellWidget("tracepanel:close");
+      tellWidget("tracepanel:close");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -608,10 +588,10 @@ function PanelApp({ route }: { route: Route }) {
   const history = useTabHistory();
   // The latest rows first, older ones as the list is scrolled to its end: the list asks for, and counts, only those.
   const [roots, setRoots] = useState(LIST_PAGE);
-  const { rows, stored, runs, counts, more } = useTabRows(history, PANEL_V2 ? roots : undefined);
+  const { rows, stored, runs, counts, more } = useTabRows(history, roots);
   const listed = withRuns(rows, runs);
   // The list says what each chain adds up to: the waterfall needs no chain loaded per row for its numbers.
-  const rowChains = useRowChains(PANEL_V2 && counts ? NO_ROWS : listed, stored);
+  const rowChains = useRowChains(counts ? NO_ROWS : listed, stored);
   // Each view's calls from its chain in the rows they were in flight (withViewCalls): the list shows these.
   const settled = settledIn(rowChains.settled, rows, stored);
   const known = withLoads(useKnownApps(listed), listed, history?.runtime ?? undefined);
@@ -619,22 +599,18 @@ function PanelApp({ route }: { route: Route }) {
   const [chainOpen, toggleChain] = useChainOpen();
   const currentId = history?.current ?? null;
   const pageRows = pageScope(history, rows);
-  const pageShown = pageScope(history, shown.rows);
   const selectedId =
     route.name === "trace" ? route.id : (currentId ?? rows.find((row) => row.depth === 0)?.trace.id ?? null);
   // A linked trace opened from another view: the way back to it, as it was.
   const back = useBackStep(selectedId);
 
   const dock = useDock();
-  const splitRef = useRef<HTMLDivElement>(null);
   const split = useSplit(dock);
   const [follow, setFollow] = useState(readFollow);
-  const [tab, setTab] = useState(readLastTab);
+  const [tab] = useState(readLastTab);
   const sliced = usePanelSlice(selectedId, route);
   const view = usePanelView(route, selectedId, sliced.params);
   const [clearing, setClearing] = useState(false);
-  const [searching, setSearching] = useState(false);
-  useSearchKey(setSearching);
   const onFollow = (value: boolean) => {
     setFollow(value);
     writeFollow(value);
@@ -642,7 +618,7 @@ function PanelApp({ route }: { route: Route }) {
   const chains: ListChains = {
     apps: shown.apps,
     loading: rowChains.loading,
-    counts: (PANEL_V2 ? counts : undefined) ?? rowChains.counts,
+    counts: counts ?? rowChains.counts,
     settled,
     cut: rowChains.cut,
     open: chainOpen,
@@ -660,187 +636,47 @@ function PanelApp({ route }: { route: Route }) {
   const selectedKind = listed.find((row) => row.trace.id === selectedId)?.trace.kind;
   const consoleAt = () =>
     `${base}${consoleHref(selectedId, { ...view.address(), from: sectionFor(selectedKind), ...sliced.params })}`;
-  const toolbarInTrace = split && selectedId !== null;
   const switchUser = <SwitchUser source={source} onSwitched={() => tellWidget("tracepanel:reload")} />;
-  const panelActions = (explore?: ReactNode) => (
-    <PanelActions
-      user={toolbarInTrace ? null : switchUser}
-      consoleAt={consoleAt}
-      explore={explore}
-      traceId={selectedId}
-      dock={dock}
-    />
-  );
+
   // What Clear empties, as the list counts it: the tab's records (a page and what it called are one), all of them.
-  const records = PANEL_V2 ? (history?.entries.filter((entry) => entry.parent === null).length ?? 0) : tabRows.length;
+  const records = history?.entries.filter((entry) => entry.parent === null).length ?? 0;
   const tabCount = `${records} ${records === 1 ? "request" : "requests"}`;
-  if (PANEL_V2) {
-    return (
-      <PanelWaterfall
-        route={route}
-        selectedId={selectedId}
-        rows={rows}
-        listRows={recordsOf(inOrder(true, shown.rows), selectedId)
-          .reverse()
-          .map((row) => {
-            const arriving = arrivingIn(rows, stored, row.trace.id) === true;
-            const awaiting = !row.awaiting && callsArriving(rows, row, stored);
-            return arriving || awaiting ? { ...row, arriving, awaiting: row.awaiting || awaiting } : row;
-          })}
-        onMore={more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined}
-        stored={stored}
-        chains={chains}
-        opensOn={opensOn}
-        currentId={currentId}
-        listTools={
-          <ListTools
-            follow={follow}
-            onFollow={onFollow}
-            onClear={() => setClearing(true)}
-            clearLabel={`Clear ${tabCount}`}
-          />
-        }
-        toolbar={<BackTo view={back} rows={listed} bare={false} />}
-        actions={(explore) => (
-          <PanelActions user={switchUser} consoleAt={consoleAt} explore={explore} traceId={selectedId} dock={dock} />
-        )}
-        dock={dock}
-        empty={history !== null && tabRows.length === 0}
-        sliced={sliced}
-        view={view}
-        clearing={clearing}
-        setClearing={setClearing}
-      />
-    );
-  }
-
-  // Docked at the bottom with a request open, the panel has no bar of its own: the logo over the list and the trace's
-  // toolbar make one row across it (as in browser devtools).
-
   return (
-    <div className="panel">
-      <SearchPalette
-        open={searching}
-        onOpenChange={setSearching}
-        source={source}
-        items={NAV}
-        openRoute={(target) =>
-          target.name === "trace" ? go(target) : window.open(`${base}${href(target)}`, "_blank", "noopener")
-        }
-      />
-      {toolbarInTrace ? null : (
-        <header className="bar">
-          {/* The runtime is on the pill: the panel shows whose it is, not what served the page again. */}
-          <Logo className="shrink-0 gap-1.5 text-md [&_svg]:size-6" />
-          {split ? null : (
-            <RequestSwitcher
-              rows={shown.rows}
-              pageCount={requestCount(pageRows)}
-              selectedId={selectedId}
-              currentId={history?.current ?? null}
-              opensOn={opensOn}
-              onClear={() => setClearing(true)}
-            />
-          )}
-          <div className="bar-actions">{panelActions()}</div>
-        </header>
-      )}
-      {!split && (pageShown.length > 1 || pageShown.some((row) => row.open)) ? (
-        <PageRequests
-          rows={pageShown}
-          selectedId={selectedId}
-          chains={chains}
-          opensOn={opensOn}
+    <PanelWaterfall
+      route={route}
+      selectedId={selectedId}
+      rows={rows}
+      listRows={recordsOf(inOrder(true, shown.rows), selectedId)
+        .reverse()
+        .map((row) => {
+          const arriving = arrivingIn(rows, stored, row.trace.id) === true;
+          const awaiting = !row.awaiting && callsArriving(rows, row, stored);
+          return arriving || awaiting ? { ...row, arriving, awaiting: row.awaiting || awaiting } : row;
+        })}
+      onMore={more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined}
+      stored={stored}
+      chains={chains}
+      opensOn={opensOn}
+      currentId={currentId}
+      listTools={
+        <ListTools
           follow={follow}
           onFollow={onFollow}
           onClear={() => setClearing(true)}
+          clearLabel={`Clear ${tabCount}`}
         />
-      ) : null}
-      <div className={split ? "panel-split" : "panel-main"} data-brand={toolbarInTrace ? "" : undefined} ref={splitRef}>
-        {/* Over the list, level with the trace's tabs: one toolbar row across the dock, as in browser devtools. */}
-        {toolbarInTrace ? (
-          // A container (`brand`): as the list narrows, the wordmark goes first, then Follow new's name, then the user's.
-          <div className="panel-brand @container/brand">
-            <Logo className="shrink-0 gap-1.5 text-md @max-[26rem]/brand:[&>span]:hidden [&_svg]:size-5" />
-            {switchUser}
-            {/* No count here: the rows are right below; Clear's tooltip says how many. */}
-            <span className="ml-auto flex shrink-0 items-center gap-1">
-              <ListToggles
-                follow={follow}
-                onFollow={onFollow}
-                onClear={() => setClearing(true)}
-                clearLabel={`Clear ${tabCount}`}
-              />
-            </span>
-          </div>
-        ) : null}
-        {split ? (
-          <PageRequests
-            scope="tab"
-            head={!toolbarInTrace}
-            rows={inOrder(split, shown.rows)}
-            selectedId={selectedId}
-            currentId={currentId}
-            chains={chains}
-            opensOn={opensOn}
-            follow={follow}
-            onFollow={onFollow}
-            onClear={() => setClearing(true)}
-          />
-        ) : null}
-        {split ? <SplitHandle container={splitRef} /> : null}
-        <main className="panel-body">
-          {selectedId ? (
-            <TraceScreen
-              // A link to another tab of the trace on screen opens that tab: a new screen, not a kept state. A new
-              // request keeps the screen: the trace on it stays until the next one is loaded, with no blank between.
-              // An app's row in the list opens the trace under that app: a new screen too.
-              key={route.name === "trace" ? `${route.tab ?? ""}|${route.under ?? ""}` : ""}
-              id={selectedId}
-              source={source}
-              arriving={arrivingIn(rows, stored, selectedId)}
-              running={runningIn(rows, selectedId)}
-              variant={split ? "strip" : "compact"}
-              // A link to a tab (the pill's card opens a finding on Issues) wins over the last tab used.
-              initialTab={route.name === "trace" ? tabOf(route.tab) : undefined}
-              initialUnder={route.name === "trace" ? route.under : undefined}
-              preferredTab={tab}
-              onTabChange={(next) => {
-                // Only the tabs worth opening every trace on are kept (not Profile or App): see lastTab.ts.
-                writeLastTab(next);
-                setTab(readLastTab());
-              }}
-              initialSlice={sliced.slice}
-              onSliceChange={sliced.onChange}
-              onTabShown={view.onTabShown}
-              initialMemory={view.initialMemory}
-              onMemoryChange={view.onMemoryChange}
-              actions={split ? panelActions : undefined}
-              lead={<BackTo view={back} rows={listed} bare={!split} />}
-              links={PANEL_LINKS}
-              explore={(trace) => exploreFor(trace, (route) => `${base}${href(route)}`)}
-            />
-          ) : history ? (
-            <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
-          ) : (
-            <div className="app-loading" role="status">
-              <span className="sr-only">Loading</span>
-            </div>
-          )}
-        </main>
-      </div>
-      <ClearDialog
-        mode="panel"
-        open={clearing}
-        onOpenChange={setClearing}
-        source={source}
-        onCleared={(permanent) => {
-          // Deleted for good, the current page's trace is gone too: the list starts empty.
-          tellWidget("tracepanel:clear", { all: permanent });
-          go({ name: "home" });
-        }}
-      />
-    </div>
+      }
+      toolbar={<BackTo view={back} rows={listed} bare={false} />}
+      actions={(explore) => (
+        <PanelActions user={switchUser} consoleAt={consoleAt} explore={explore} traceId={selectedId} dock={dock} />
+      )}
+      dock={dock}
+      empty={history !== null && tabRows.length === 0}
+      sliced={sliced}
+      view={view}
+      clearing={clearing}
+      setClearing={setClearing}
+    />
   );
 }
 

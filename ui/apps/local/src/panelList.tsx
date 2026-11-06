@@ -1,125 +1,45 @@
 import {
   ArrowLeftIcon,
-  ChevronDownIcon,
   ClearIcon,
   DockBottomIcon,
   DockRightIcon,
   FILTERS,
   Hint,
   KindBadge,
-  LayersIcon,
-  type ListChains,
   PageName,
   type TabId,
   TaskName,
   TraceBadge,
   type TraceLinks,
-  TraceList,
   type TraceRow,
   type TraceSummary,
 } from "@tracepanel/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@tracepanel/ui/components/ui/popover";
-import { useCloseOnBlur } from "@tracepanel/ui/hooks/useCloseOnBlur";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import { cn } from "@tracepanel/ui/lib/utils";
 import { ListFilterIcon, LocateFixedIcon } from "lucide-react";
-import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useNewIds } from "./hooks";
+import { useEffect, useState } from "react";
 import { ProfileToggle } from "./ProfileToggle";
 import { goBackInPanel, openLinked, type PanelView } from "./panelBack";
 import { tellWidget } from "./panelLayout";
-import { manyApps, requestCount } from "./panelRows";
 import { base, source } from "./panelSource";
-import { consoleLinks, go } from "./routes";
+import { consoleLinks } from "./routes";
 import { graphqlOperation, requestPath } from "./sections";
-
-/** The panel as one waterfall; the older one stays behind this for now. */
-export const PANEL_V2 = readItem("tracepanel:panel-v1") !== "1";
 
 /** Follow new: open each request as it arrives. */
 function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value: boolean) => void }) {
-  const byPointer = useRef(false);
-  if (PANEL_V2) {
-    return (
-      <Hint
-        title={follow ? "Following new requests" : "Follow new requests"}
-        detail="Opens each request as it arrives."
+  return (
+    <Hint title={follow ? "Following new requests" : "Follow new requests"} detail="Opens each request as it arrives.">
+      <button
+        type="button"
+        className={cn("icon-button", follow && "text-brand hover:text-brand")}
+        aria-label="Follow new"
+        aria-pressed={follow}
+        onClick={() => onFollow(!follow)}
       >
-        <button
-          type="button"
-          className={cn("icon-button", follow && "text-brand hover:text-brand")}
-          aria-label="Follow new"
-          aria-pressed={follow}
-          onClick={() => onFollow(!follow)}
-        >
-          <LocateFixedIcon className="size-4" />
-        </button>
-      </Hint>
-    );
-  }
-  return (
-    <label
-      className="toggle"
-      title="Open each new request as it arrives"
-      onPointerDown={() => (byPointer.current = true)}
-    >
-      <input
-        type="checkbox"
-        checked={follow}
-        onChange={(event) => {
-          onFollow(event.target.checked);
-          // A click on the label focuses the hidden box, and Chrome then rings it: a mouse doesn't need the ring.
-          if (byPointer.current) event.target.blur();
-          byPointer.current = false;
-        }}
-      />
-      <span className="toggle-track" aria-hidden="true" />
-      {/* In a narrow list's toolbar row, the switch alone: its name stays for screen readers and in the title. */}
-      <span className="@max-[21rem]/brand:sr-only">Follow new</span>
-    </label>
-  );
-}
-
-/** The list's count and its two controls: in the list's head, or in the dock's toolbar row over the list. */
-function ListControls({
-  count,
-  follow,
-  onFollow,
-  onClear,
-}: {
-  count: ReactNode;
-  follow: boolean;
-  onFollow: (value: boolean) => void;
-  onClear: () => void;
-}) {
-  return (
-    <>
-      <span className="list-count">{count}</span>
-      <span className="ml-auto flex shrink-0 items-center gap-1">
-        <ListToggles follow={follow} onFollow={onFollow} onClear={onClear} />
-      </span>
-    </>
-  );
-}
-
-/** Follow new, Profile and Clear: one tight group wherever the list's controls sit. */
-export function ListToggles({
-  follow,
-  onFollow,
-  onClear,
-  clearLabel,
-}: {
-  follow: boolean;
-  onFollow: (value: boolean) => void;
-  onClear: () => void;
-  clearLabel?: string | undefined;
-}) {
-  return (
-    <>
-      <FollowToggle follow={follow} onFollow={onFollow} />
-      <ProfileToggle source={source} />
-      <ClearButton onClear={onClear} label={clearLabel} />
-    </>
+        <LocateFixedIcon className="size-4" />
+      </button>
+    </Hint>
   );
 }
 
@@ -156,16 +76,6 @@ function ClearButton({ onClear, label = "Clear requests" }: { onClear: () => voi
         <ClearIcon />
       </button>
     </Hint>
-  );
-}
-
-/** As on the pill: a stack and the number of this page's requests. */
-function RequestCount({ count }: { count: number }) {
-  return (
-    <span className="switcher-count" title={`${count} ${count === 1 ? "request" : "requests"} on this page`}>
-      <LayersIcon />
-      {count}
-    </span>
   );
 }
 
@@ -298,8 +208,8 @@ function BackButton({ view, rows, bare }: { view: PanelView; rows: readonly Trac
   );
 }
 
-/** The trace on screen in the panel, as its address says. */
-export function currentTrace(): string | null {
+/** The trace on screen, by the panel's route. */
+function currentTrace(): string | null {
   const match = /^#\/t\/([^?]+)/.exec(location.hash);
   return match?.[1] ?? null;
 }
@@ -312,88 +222,6 @@ export const PANEL_LINKS: TraceLinks = {
   ...consoleLinks(base, true),
   openTrace: openLinked,
 };
-
-export function RequestSwitcher({
-  rows,
-  pageCount,
-  selectedId,
-  currentId,
-  opensOn,
-  onClear,
-}: {
-  rows: readonly TraceRow[];
-  /** This page's requests, as the pill counts them. */
-  pageCount: number;
-  selectedId: string | null;
-  currentId: string | null;
-  opensOn: OpensOn;
-  onClear: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const selected = rows.find((row) => row.trace.id === selectedId)?.trace;
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (event: PointerEvent) => {
-      if (root.current && !root.current.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      // This Esc closes the list, not the panel.
-      event.preventDefault();
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  const closeList = useCallback(() => setOpen(false), []);
-  useCloseOnBlur(open, closeList);
-
-  return (
-    <div className="switcher" ref={root}>
-      <button
-        type="button"
-        className="switcher-button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        {selected ? <TraceName trace={selected} /> : <span className="switcher-path">Requests</span>}
-        <RequestCount count={pageCount} />
-        <ChevronDownIcon />
-      </button>
-      {open ? (
-        <div className="switcher-popover">
-          <div className="switcher-caption">
-            Pages and requests in this browser tab
-            <ClearButton
-              onClear={() => {
-                setOpen(false);
-                onClear();
-              }}
-            />
-          </div>
-          <TraceList
-            rows={rows}
-            services={manyApps(rows)}
-            selectedId={selectedId}
-            currentId={currentId}
-            opensOn={opensOn}
-            onSelect={(id) => {
-              setOpen(false);
-              go({ name: "trace", id });
-            }}
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 /** The console list a request of this kind belongs to: the way back from its trace page there. */
 export function sectionFor(kind: string | undefined): string | undefined {
@@ -418,148 +246,6 @@ export function readFollow(): boolean {
 
 export function writeFollow(value: boolean): void {
   writeItem(FOLLOW_KEY, value ? "1" : "0", "sessionStorage");
-}
-
-/** Close enough to the end to count as reading the newest requests. */
-const BOTTOM_SLACK = 24;
-
-/**
- * New requests arrive at the bottom, as in a terminal: a list scrolled to its end stays there (and Follow always
- * scrolls), while a list scrolled up to read something stays put and counts what arrived below, for "↓ N new".
- */
-function useStickToBottom(
-  list: RefObject<HTMLElement | null>,
-  count: number,
-  follow: boolean,
-): { unseen: number; jump: () => void } {
-  const seen = useRef(count);
-  // The list's height before the latest rows: was it scrolled to the end then? Measured, not tracked through
-  // scroll events, which a hidden tab delivers late.
-  const height = useRef(0);
-  const [unseen, setUnseen] = useState(0);
-
-  const jump = useCallback(() => {
-    const element = list.current;
-    if (element) element.scrollTop = element.scrollHeight;
-    setUnseen(0);
-  }, [list]);
-
-  useEffect(() => {
-    const element = list.current;
-    if (!element) return;
-    const onScroll = () => {
-      if (element.scrollHeight - element.scrollTop - element.clientHeight <= BOTTOM_SLACK) setUnseen(0);
-    };
-    element.addEventListener("scroll", onScroll, { passive: true });
-    return () => element.removeEventListener("scroll", onScroll);
-  }, [list]);
-
-  // Before paint: the list never shows a frame scrolled away from its end.
-  useLayoutEffect(() => {
-    const element = list.current;
-    const added = count - seen.current;
-    seen.current = count;
-    const wasAtEnd =
-      !element || height.current === 0 || height.current - element.scrollTop - element.clientHeight <= BOTTOM_SLACK;
-    if (wasAtEnd || follow) {
-      if (element) element.scrollTop = endKeepingSelected(element);
-      setUnseen(0);
-    } else if (added > 0) setUnseen((value) => value + added);
-    height.current = element?.scrollHeight ?? 0;
-  }, [count, follow, list]);
-
-  return { unseen, jump };
-}
-
-/**
- * Where a list kept at its end scrolls to as rows arrive: its end, unless that would take the selected row up under
- * its sticky head (a view whose calls all came at once): then as far as keeps that row in sight, below the head.
- */
-function endKeepingSelected(element: HTMLElement): number {
-  const end = element.scrollHeight - element.clientHeight;
-  const selected = element.querySelector<HTMLElement>('.tp-request-row[aria-current="true"]');
-  if (!selected) return end;
-  const head = element.querySelector<HTMLElement>(".page-requests-head")?.offsetHeight ?? 0;
-  const top = selected.getBoundingClientRect().top - element.getBoundingClientRect().top + element.scrollTop;
-  return Math.max(0, Math.min(end, top - head));
-}
-
-/** The list of this page's requests, or the browser tab's: its class, its accessible name, its head's name. */
-const LIST_SCOPES = {
-  page: { className: "page-requests", label: "Requests made by this page", name: "This page" },
-  tab: { className: "page-requests panel-list", label: "Pages and requests in this browser tab", name: "This tab" },
-} as const;
-
-/**
- * The current page and every fetch/XHR it made, above the trace; docked at the bottom, every page and request of the
- * browser tab, beside the trace (`scope="tab"`).
- */
-export function PageRequests({
-  scope = "page",
-  head = true,
-  rows,
-  selectedId,
-  currentId = null,
-  follow,
-  onFollow,
-  onClear,
-  chains,
-  opensOn,
-}: {
-  scope?: "page" | "tab";
-  /** false where the dock's toolbar row carries the count and the controls. */
-  head?: boolean;
-  rows: readonly TraceRow[];
-  selectedId: string | null;
-  currentId?: string | null;
-  follow: boolean;
-  onFollow: (value: boolean) => void;
-  onClear: () => void;
-  /** Under the rows that called other apps: those apps' traces. */
-  chains?: ListChains | undefined;
-  opensOn: OpensOn;
-}) {
-  const fresh = useNewIds(rows.map((row) => row.key ?? row.trace.id));
-  const list = useRef<HTMLElement>(null);
-  const { unseen, jump } = useStickToBottom(list, rows.length, follow);
-  // Requests only, as the pill counts them: not the runs under them, not the browser's views and actions.
-  const requests = requestCount(rows);
-  const count = `· ${requests} ${requests === 1 ? "request" : "requests"}`;
-  const look = LIST_SCOPES[scope];
-  return (
-    <section ref={list} className={look.className} aria-label={look.label}>
-      {head ? (
-        <div className="page-requests-head">
-          <ListControls
-            count={
-              <>
-                {look.name} <span className="page-requests-count">{count}</span>
-              </>
-            }
-            follow={follow}
-            onFollow={onFollow}
-            onClear={onClear}
-          />
-        </div>
-      ) : null}
-      <TraceList
-        compact={true}
-        services={manyApps(rows)}
-        rows={rows}
-        selectedId={selectedId}
-        currentId={currentId}
-        newIds={fresh}
-        chains={chains}
-        opensOn={opensOn}
-        onSelect={(id) => go({ name: "trace", id })}
-      />
-      {unseen > 0 ? (
-        <button type="button" className="new-requests" onClick={jump}>
-          ↓ {unseen} new
-        </button>
-      ) : null}
-    </section>
-  );
 }
 
 /** Moves the panel to the other side: the bottom or the right. */

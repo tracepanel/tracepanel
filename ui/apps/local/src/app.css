@@ -2749,7 +2749,8 @@ body {
 .tp-record .tp-record-marks {
   flex: none;
 }
-.tp-record .tp-map-lead {
+.tp-record .tp-map-lead,
+.panel-wf .tp-map-row .tp-map-lead {
   min-width: 0;
 }
 
