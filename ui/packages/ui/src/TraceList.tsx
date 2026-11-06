@@ -1,5 +1,6 @@
 import { CircleXIcon, TriangleAlertIcon } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
+import { Beside } from "./beside";
 import { indentOf } from "./CallCode";
 import { Badge } from "./components/ui/badge";
 import { ago, duration } from "./format";
@@ -366,11 +367,15 @@ export function RecordRow({
       >
         <span className="tp-map-name" style={indentOf(depth)}>
           <RecordLead trace={trace} page={page} ago={!(live || depth > 0)} />
-          {failed === undefined ? (
-            <StatusSlot status={page ? null : trace.http_status} />
-          ) : (
-            <FailedStatus failure={failed} />
-          )}
+          {/* Its status the pill its call's row has in the tree, and with the tree's numbers: none while they are on
+              their way. A failure shows at once: its call may never send a trace. */}
+          <Beside value={true}>
+            {failed === undefined ? (
+              <StatusSlot status={page || pending ? null : trace.http_status} />
+            ) : (
+              <FailedStatus failure={failed} />
+            )}
+          </Beside>
           <RecordMarks trace={trace} pending={pending} className="tp-map-chips" />
         </span>
         <RecordTrack live={live} share={share} />

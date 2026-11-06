@@ -712,7 +712,14 @@ function recordMarksOf(record: TraceRow | undefined, chains: ListChains): ReactN
 function Waiting({ opened, rows, host }: { opened: TraceRow; rows: readonly TraceRow[]; host: HTMLElement | null }) {
   return (
     <>
-      <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={Boolean(opened.open)} current={true} />
+      <RecordRow
+        row={opened}
+        fresh={false}
+        onSelect={() => undefined}
+        live={Boolean(opened.open)}
+        current={true}
+        pending={true}
+      />
       {callsUnder(rows, opened).map((call) => (
         <RecordRow
           key={call.key ?? call.trace.id}
@@ -720,6 +727,7 @@ function Waiting({ opened, rows, host }: { opened: TraceRow; rows: readonly Trac
           fresh={false}
           depth={1}
           live={Boolean(call.open)}
+          pending={true}
           onSelect={(id) => go({ name: "trace", id })}
         />
       ))}
