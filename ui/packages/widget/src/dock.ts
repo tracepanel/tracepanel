@@ -10,20 +10,17 @@ export interface PanelDock {
   restore(saved: PanelState): void;
   /** The other side of the page. */
   toggle(): void;
-  fitBadge(): void;
   makeRoom(): void;
 }
 
 export function createDock({
   host,
   panel,
-  badge,
   handle,
   tellDock,
 }: {
   host: HTMLElement;
   panel: HTMLElement;
-  badge: HTMLElement;
   handle: HTMLElement;
   /** Tells the panel in its frame where it is docked. */
   tellDock: (dock: Dock) => void;
@@ -35,15 +32,7 @@ export function createDock({
   function setWidth(value: number): void {
     width = Math.round(Math.min(Math.max(value, MIN_WIDTH), window.innerWidth - 40));
     host.style.setProperty("--tracepanel-width", `${width}px`);
-    fitBadge();
   }
-
-  /** Whether the badge fits left of the right-docked panel, measured unfolded (no paint in between). */
-  function fitBadge(): void {
-    host.removeAttribute("data-crowded");
-    host.toggleAttribute("data-crowded", window.innerWidth - width < badge.offsetWidth + 32);
-  }
-  window.addEventListener("resize", fitBadge);
 
   // The page's own bottom padding, kept while the panel docked at the bottom takes its place, as devtools do.
   // Room under the page for the panel docked at the bottom, so its end scrolls into view above it: a block placed
@@ -145,7 +134,6 @@ export function createDock({
       setDock(saved.dock);
     },
     toggle: () => setDock(dock === "right" ? "bottom" : "right"),
-    fitBadge,
     makeRoom,
   };
 }

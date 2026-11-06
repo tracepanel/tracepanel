@@ -118,11 +118,11 @@ export const STYLE = `
   }
   .panel[data-open] { transform: none; visibility: visible; transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), width 200ms ease-out; }
   .panel[data-open] ~ .badge { right: calc(min(var(--tracepanel-width, 600px), max(70vw, 20rem), 100vw) + 16px); }
-  /* No room beside the panel (a narrow window): the panel shows the request, the badge folds to its logo,
-     its ring still the verdict. */
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge { width: 40px; padding: 0; justify-content: center; }
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge :is(.stats, .runtime) { display: none; }
-  :host([data-crowded]:not([data-dock="bottom"])) .panel[data-open] ~ .badge .brand { padding: 0; }
+  /* The panel open shows the request: the badge folds to its logo (what closes the panel), its ring still the
+     verdict. It no longer covers the page with what the panel already says. */
+  .panel[data-open] ~ .badge { width: 40px; padding: 0; justify-content: center; }
+  .panel[data-open] ~ .badge :is(.stats, .runtime) { display: none; }
+  .panel[data-open] ~ .badge .brand { padding: 0; }
   /* The theme (the console's Dark / Light / Auto choice, shared through localStorage) is the :host's data-theme. */
   .panel iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; color-scheme: dark; }
   :host([data-theme="light"]) .panel iframe { color-scheme: light; }

@@ -400,7 +400,6 @@ export function mount(options: WidgetOptions = {}): Widget {
   const dock = createDock({
     host,
     panel,
-    badge,
     handle,
     tellDock: (value) => frame?.contentWindow?.postMessage({ type: "tracepanel:dock", dock: value }, "*"),
   });
@@ -604,7 +603,6 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
     const count = all.length + untraced.length + flying.length;
     if (count > 1) addPage(stats, all, count);
-    dock.fitBadge();
     badge.dataset["verdict"] = verdict(all, counted);
     // No title: the hover card shows all of it (and more); screen readers get the summary.
     badge.setAttribute("aria-label", pillLabel(all, flying, count, runtime, counted));
@@ -626,7 +624,6 @@ export function mount(options: WidgetOptions = {}): Widget {
     const until = view?.open ? quietSince(view.id) : undefined;
     if (view) addView(stats, view, facts, until);
     else addWaiting(stats);
-    dock.fitBadge();
     badge.dataset["verdict"] = view?.status === "error" ? "error" : facts?.counts?.issues ? "warn" : "ok";
     badge.setAttribute("aria-label", idleLabel(view, runtime, facts?.counts ?? null, until));
   }
