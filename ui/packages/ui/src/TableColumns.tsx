@@ -517,7 +517,8 @@ function RemoveColumn({ label, side, onRemove }: { label: string; side: Side; on
       title={`Hide the ${label} column`}
       onClick={onRemove}
       className={cn(
-        "absolute top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100",
+        // 16px to see, 24px to hit (WCAG 2.5.8): a miss beside it doesn't start a drag of the column.
+        "absolute top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100 after:absolute after:-inset-1 after:content-['']",
         BUTTON_AT.get(side),
       )}
     >

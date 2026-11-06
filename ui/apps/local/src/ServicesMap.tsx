@@ -855,7 +855,12 @@ function LinkProblems({ diagram }: { diagram: Diagram }) {
             variant="error"
             size="compact"
             className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 border border-error/30"
-            style={{ left: middle.x, top: middle.y }}
+            // Opaque over its line: the red line doesn't run through its words.
+            style={{
+              left: middle.x,
+              top: middle.y,
+              background: "color-mix(in srgb, var(--color-error) 10%, var(--color-card))",
+            }}
           >
             {errors.toLocaleString()} failed
           </Badge>,
