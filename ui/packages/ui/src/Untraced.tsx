@@ -28,7 +28,7 @@ export function NotTraced({ spanId }: { spanId: string }) {
   const host = useUntraced(spanId);
   if (host === undefined) return null;
   return (
-    <span className="dt-not-traced" data-state="untraced" title={untracedNote(host)}>
+    <span className="tp-not-traced" data-state="untraced" title={untracedNote(host)}>
       not traced
     </span>
   );
@@ -47,7 +47,7 @@ export function NotTracedNote({ spanId }: { spanId: string }) {
   const host = useUntraced(spanId);
   if (host === undefined) return null;
   return (
-    <p className="dt-not-traced-note" data-state="untraced">
+    <p className="tp-not-traced-note" data-state="untraced">
       Not traced: {host} sent no trace for this call. {UNTRACED_WHY}
     </p>
   );

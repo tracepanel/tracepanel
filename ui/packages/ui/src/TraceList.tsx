@@ -1,11 +1,14 @@
-import { TriangleAlertIcon } from "lucide-react";
-import type { CSSProperties } from "react";
+import { CircleXIcon, TriangleAlertIcon } from "lucide-react";
+import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
+import { Beside } from "./beside";
+import { indentOf } from "./CallCode";
+import { OpText } from "./CallRowParts";
 import { Badge } from "./components/ui/badge";
-import { ago, duration } from "./format";
+import { ago, dayTime, duration, isSlow } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { NoAnswer, Pending, Running } from "./LiveMarks";
 import { ISSUE_LABELS } from "./labels";
-import type { ChainCounts } from "./lib/chainCounts";
+import { type RowCounts, withChain } from "./lib/chainCounts";
 import {
   type ChainApp,
   type ChainEntry,
@@ -16,23 +19,27 @@ import {
   WAITING_MS,
   waitingSummary,
 } from "./lib/chainRows";
+import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
 import { cutNote, NO_ANSWER } from "./lib/live";
-import { pageParts, redirectNote } from "./lib/page";
+import { pageName, pageParts, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
+import { cn } from "./lib/utils";
 import { RowFlame } from "./ProfileHint";
 import {
   AppChip,
   FailedStatus,
-  IssueChip,
   KindBadge,
+  KindWords,
   MethodBadge,
   StatusSlot,
   TailPath,
   TaskName,
   Times,
+  WATERFALL_KINDS,
 } from "./primitives";
+import { Queries } from "./RunChips";
 import type { IssueKind, TraceSummary } from "./types";
 import { untracedNote } from "./Untraced";
 
@@ -72,6 +79,8 @@ export interface TraceRow {
   counted?: boolean | undefined;
   /** A view whose calls' numbers are still on their way: its own pending, never a part of them (its time stays). */
   awaiting?: boolean | undefined;
+  /** Not stored yet, on its way (it ended moments ago): not a record the store let go. */
+  arriving?: boolean | undefined;
   /** Cut short with no answer yet: its time so far (µs), as a call's row of a view's chain says it. */
   cut?: number | null | undefined;
   /** For a call no trace answered: the host it went to. */
@@ -111,22 +120,17 @@ export interface CallGroup {
 
 export interface TraceListProps {
   rows: readonly TraceRow[];
+  /** The selected record, in its place: what it opens to (its call tree). */
+  openContent: ReactNode;
+  /** Older rows to show: called as the list's end scrolls into view. */
+  onMore?: (() => void) | undefined;
   selectedId?: string | null | undefined;
-  /** The page currently open in the browser tab. */
-  currentId?: string | null | undefined;
   /** Requests that just arrived: briefly highlighted. */
   newIds?: ReadonlySet<string> | undefined;
   /** One line per request, for short lists next to a trace. */
   compact?: boolean | undefined;
-  /** Several apps in the list: each request names the app that served it (a view or an action is the browser's). */
-  services?: boolean | undefined;
-  /** Under a row whose trace called other apps (the narrow list): their traces, folded in a row per app. */
+  /** What each record's chain added up to, and which are still on their way. */
   chains?: ListChains | undefined;
-  /**
-   * What a trace's row says it opens on, in its tooltip, when that isn't the call tree: the tab picked last
-   * (NAVIGATION.md, rule 3). An app's row of a chain always opens the call tree.
-   */
-  opensOn?: ((trace: TraceSummary) => string | undefined) | undefined;
   onSelect: (id: string) => void;
 }
 
@@ -144,7 +148,7 @@ export interface ListChains {
    * By the row's trace id: what its whole chain did (lib/chainCounts), as the pill and the trace's tabs count it. The
    * row says it, a view's too, whose own trace ran nothing.
    */
-  counts?: ReadonlyMap<string, ChainCounts> | undefined;
+  counts?: ReadonlyMap<string, RowCounts> | undefined;
   /**
    * The rows whose chain has loaded once: until then a row's numbers are pending, not a definite 0 that jumps once
    * its calls' traces are counted. Undefined where chains aren't loaded at all: a row's own numbers are all there is.
@@ -156,332 +160,326 @@ export interface ListChains {
   opensOn?: ((trace: TraceSummary) => string | undefined) | undefined;
 }
 
-/**
- * Whether a row's numbers aren't known yet: it runs, or its chain hasn't loaded once. A task run under a request
- * is listed with its own numbers: no chain is loaded for it.
- */
-function pendingIn(chains: ListChains | undefined, row: TraceRow): boolean {
-  if (row.open || row.awaiting) return true;
-  if (row.counted || row.call === "untraced" || row.failed !== undefined) return false;
-  return !row.run && chains?.settled !== undefined && !chains.settled.has(row.trace.id);
+/** The list's end: in view, it asks for older rows (and again, once they came, while it still is). */
+function MoreRows({ onMore }: { onMore: () => void }) {
+  const end = useRef<HTMLLIElement>(null);
+  const latest = useRef(onMore);
+  latest.current = onMore;
+  useEffect(() => {
+    const node = end.current;
+    if (!node) return;
+    const observer = new IntersectionObserver((seen) => {
+      if (seen.some((each) => each.isIntersecting)) latest.current();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <li ref={end} className="tp-requests-more">
+      Older requests…
+    </li>
+  );
 }
 
-/** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
-function withChain(trace: TraceSummary, counts: ChainCounts | undefined): TraceSummary {
-  if (!counts || counts.traces < 2) return trace;
-  // biome-ignore lint/style/useNamingConvention: wire format.
-  return { ...trace, queries: counts.queries, issues: counts.issues, issue_kinds: counts.kinds };
+/**
+ * The time closed records' bars are shares of: the longest but for the slowest tenth, so that one stuck request (a
+ * 15 s timeout) doesn't flatten every other bar to a dot; those few reach the end. Linear: 300 ms is half of 600.
+ */
+function typicalLongest(durations: readonly number[]): number {
+  const sorted = [...durations].sort((a, b) => a - b);
+  const at = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9));
+  return Math.max(1, sorted[at] ?? 1);
 }
 
 export function TraceList({
   rows,
   selectedId,
-  currentId,
   newIds,
   compact,
-  services,
   chains,
-  opensOn,
   onSelect,
+  openContent,
+  onMore,
 }: TraceListProps) {
-  const withOpens = chains && opensOn ? { ...chains, opensOn } : chains;
-  const props = { chains, withOpens, selectedId, currentId, newIds, compact, services, opensOn, onSelect };
+  const longest = typicalLongest(rows.map((row) => row.trace.duration));
+  const props = { longest, openContent, chains, selectedId, newIds, onSelect };
   return (
-    <ul className="dt-requests" data-compact={compact ? "" : undefined}>
-      {shownRows(rows, chains).map(({ row, fold, under }) => (
-        <ListItem key={row.key ?? row.trace.id} row={row} fold={fold} under={under} {...props} />
+    <ul className="tp-requests" data-compact={compact ? "" : undefined}>
+      {/* A trace opened from elsewhere (the one a call was served by) that isn't a row here: still open, first. */}
+      {selectedId && !rows.some((row) => row.trace.id === selectedId) ? (
+        <li>
+          <div className="tp-requests-open">{openContent}</div>
+        </li>
+      ) : null}
+      {rows.map((row) => (
+        <ListItem key={row.key ?? row.trace.id} row={row} {...props} />
       ))}
+      {/* Anew with each page: an end still in view once the rows came asks again. */}
+      {onMore ? <MoreRows key={rows.length} onMore={onMore} /> : null}
     </ul>
   );
 }
 
-/**
- * The rows on screen, each with its fold: those under a folded view, action or group of calls (deeper than it) hidden
- * until it opens again. `under`: a view, action or group with rows of its own right under it (its calls).
- */
-function shownRows(rows: readonly TraceRow[], chains: ListChains | undefined) {
-  const shown: { row: TraceRow; fold: RowFold | null | undefined; under: boolean }[] = [];
-  let hiddenBelow: number | null = null;
-  for (const [at, row] of rows.entries()) {
-    const depth = row.depth ?? 0;
-    if (hiddenBelow !== null && depth > hiddenBelow) continue;
-    hiddenBelow = null;
-    const under = (row.trace.kind === "page" || row.group !== undefined) && (rows[at + 1]?.depth ?? 0) > depth;
-    const fold = chains ? rowFold(chains, row.trace.id, row.folded, under) : undefined;
-    if (fold?.open === false) hiddenBelow = depth;
-    shown.push({ row, fold, under });
-  }
-  return shown;
-}
-
-/** One item of the list: a row (or a group's), and what its trace called under it. */
+/** One record of the list: its row, or, open, what it opens to. */
 function ListItem({
   row,
-  fold,
-  under,
   chains,
-  withOpens,
   selectedId,
-  currentId,
   newIds,
-  compact,
-  services,
-  opensOn,
   onSelect,
-}: Omit<TraceListProps, "rows"> & {
+  longest,
+  openContent,
+}: Pick<TraceListProps, "chains" | "selectedId" | "newIds" | "onSelect" | "openContent"> & {
+  /** The scale of closed records' bars: the longest listed but for a few far longer (see typicalLongest). */
+  longest?: number;
   row: TraceRow;
-  fold: RowFold | null | undefined;
-  under: boolean;
-  withOpens: ListChains | undefined;
 }) {
   const counts = chains?.counts?.get(row.trace.id);
   const trace = withChain(row.trace, counts);
   const fresh = newIds?.has(row.key ?? trace.id) ?? false;
-  const pending = pendingIn(chains, row);
-  if (row.group) {
+  const share = Math.min(trace.duration / (longest ?? trace.duration), 1);
+  // Open, its row is the first of what it opens to.
+  if (trace.id === selectedId) {
     return (
       <li>
-        <GroupRow
-          row={{ ...row, trace }}
-          group={row.group}
-          fold={fold}
-          pending={pending}
-          fresh={fresh}
-          onApp={chains?.onApp}
-          onSelect={onSelect}
-        />
+        {/* On its own scale, whatever the list's longest: its calls' bars read across the whole column. */}
+        <div className="tp-requests-open">{openContent}</div>
       </li>
     );
   }
   return (
     <li>
-      <ListRow
+      <RecordRow
         row={{ ...row, trace }}
-        fold={fold}
-        chained={counts !== undefined && counts.traces > 1}
-        pending={pending}
-        cut={row.cut ?? chains?.cut?.get(trace.id) ?? null}
-        selected={trace.id === selectedId}
-        current={trace.id === currentId}
         fresh={fresh}
-        compact={compact}
-        services={services}
-        opens={opensOn?.(trace)}
         onSelect={onSelect}
+        share={share}
+        pending={recordPending(row)}
+        // Asked for its chain and none came: its traces have left the local store.
+        gone={isGone(row, chains?.counts)}
       />
-      {withOpens && fold?.open !== false ? (
-        <RowChain
-          rowId={trace.id}
-          level={(row.depth ?? 0) + 1}
-          rows={under}
-          chains={withOpens}
-          selectedId={selectedId}
-          onSelect={onSelect}
-        />
-      ) : null}
     </li>
   );
 }
 
 /** One row of the list: its name, status and time, then its numbers (its chain's, `chained`). */
-function ListRow({
-  row: { trace, depth = 0, trigger, target, run, open, until, redirectedFrom, opens: target_, call, host, failed },
-  fold,
-  chained,
+/**
+ * A record that opens in place, as one row: closed, its tree's first row with how long ago in place of its
+ * bar's scale; `live`, open with no tree yet (still running, or on its way), a bar that breathes and its time.
+ */
+
+const GONE_NOTE = "Not in the local store anymore: newer traces took its place.";
+
+/** Asked for and not in the local store, nor on its way: newer traces took its place. */
+export function isGone(row: TraceRow, counts: ReadonlyMap<string, RowCounts> | undefined): boolean {
+  return counts !== undefined && !counts.has(row.trace.id) && !row.open && !row.awaiting && !row.arriving;
+}
+
+/** A record still waiting for its calls' traces: a view still open, or one whose calls' numbers are on their way. */
+export function recordPending(row: TraceRow): boolean {
+  return Boolean(row.open || row.awaiting);
+}
+
+/**
+ * What a record found, a column each, the same on every row: its marks line up down the list, empty or not. Its
+ * closed row and its open tree's first row say the same; "…" while its calls' traces are on their way.
+ */
+export function RecordMarks({
+  trace,
   pending,
-  cut,
-  selected,
-  current,
-  fresh,
-  compact,
-  services,
-  opens,
-  onSelect,
+  className,
 }: {
-  row: TraceRow;
-  /** Its chain's rows under it (the narrow list): open or folded, a caret; a placeholder for a row without. */
-  fold?: RowFold | null | undefined;
-  chained: boolean;
-  /** Its numbers aren't known yet: "…" in their place. */
+  trace: TraceSummary;
   pending: boolean;
-  /** Where its trace was cut with a call unanswered, if it was. */
-  cut: number | null;
-  selected: boolean;
-  current: boolean;
-  fresh: boolean;
-  compact: boolean | undefined;
-  services: boolean | undefined;
-  /** What it opens on, when it says (TraceListProps.opensOn). */
-  opens: string | undefined;
-  onSelect: (id: string) => void;
+  className?: string | undefined;
 }) {
   return (
-    <button
-      type="button"
-      className="dt-request-row"
-      data-depth={depth}
-      data-run={flag(run)}
-      data-kind={trace.kind === "page" ? "page" : undefined}
-      data-call={call}
-      {...liveProps(trace, open, cut)}
-      aria-current={selected ? "true" : undefined}
-      aria-label={traceLabel(trace, { trigger, target, current, open, cut: cut !== null, redirectedFrom })}
-      title={callTitle(trace, call, cut, host, failed) ?? opens}
-      {...foldProps(fold)}
-      data-new={fresh ? "" : undefined}
-      onClick={() => onSelect(target_ ?? trace.id)}
-    >
-      <span className="dt-request-main">
-        <RowCaret fold={fold} />
-        <RowName trace={trace} trigger={trigger} target={target} redirectedFrom={redirectedFrom} />
-        <RowApp trace={trace} shown={services} />
-        <RowMarks cut={open ? null : cut} untraced={call === "untraced" ? host : undefined} />
-        {current ? <ThisPage compact={compact} /> : null}
+    <span className={cn("tp-record-marks", className)}>
+      <span className="tp-record-errors">
+        <Errors count={trace.errors} />
       </span>
-      <RowMeta
-        trace={trace}
-        open={open}
-        until={until}
-        chained={chained}
-        pending={pending}
-        blank={numberless(call, failed)}
-        failed={failed}
-        compact={compact}
-      />
-    </button>
+      <span className="tp-record-issues">
+        {pending ? null : <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />}
+      </span>
+      <span className="tp-record-queries" data-opens="sql">
+        {pending ? <Pending what="Queries down its calls" /> : <Queries count={trace.queries} time={trace.db_time} />}
+      </span>
+    </span>
   );
 }
 
-/** A call no trace answered, or one that got no answer: no numbers to say. */
-function numberless(call: TraceRow["call"], failed: string | undefined): boolean {
-  return call === "untraced" || failed !== undefined;
+/** A record's status, as its call's row in the tree has it: none for a view, none while its numbers are on their way. */
+function RecordStatus({
+  trace,
+  failed,
+  pending,
+}: {
+  trace: TraceSummary;
+  failed: string | undefined;
+  pending: boolean;
+}) {
+  if (failed !== undefined) return <FailedStatus failure={failed} />;
+  return <StatusSlot status={trace.kind === "page" || pending ? null : trace.http_status} />;
 }
 
 /**
- * What a view's call with no trace to open says in its tooltip: its trace on its way, or none coming; a click opens
- * the view's call tree, which has the call.
+ * The open record's first row says what its closed row did: when it was, its status, what it found (RecordMarks).
  */
-function callTitle(
-  trace: TraceSummary,
-  call: TraceRow["call"],
-  cut: number | null,
-  host: string | undefined,
-  failed: string | undefined,
-) {
-  const name = rowName(trace);
-  if (failed !== undefined) return `${name}: failed, no answer came (${failed}). Opens the view's call tree.`;
-  if (call === "waiting") return `${waitingTitle(name, cut)} Opens the view's call tree.`;
-  if (call === "untraced" && host) return `${name}: ${untracedNote(host)} Opens the view's call tree.`;
-  return undefined;
+export function OpenRecordMarks({
+  trace,
+  failed,
+  pending,
+}: {
+  trace: TraceSummary;
+  failed: string | undefined;
+  pending: boolean;
+}) {
+  return (
+    <>
+      <span className="tp-record-ago" title={dayTime(trace.start)}>
+        {ago(trace.start)}
+      </span>
+      <Beside value={true}>
+        <RecordStatus trace={trace} failed={failed} pending={pending} />
+      </Beside>
+      <RecordMarks trace={trace} pending={pending} />
+    </>
+  );
 }
 
-/**
- * What a row says beside its name, as the call tree does: no answer yet (the time column keeps a time's width), or no
- * trace answered it and none will.
- */
-function RowMarks({ cut, untraced }: { cut: number | null; untraced: string | undefined }) {
-  if (cut !== null) return <NoAnswer at={cut} short={true} />;
-  return untraced ? <NotTracedMark host={untraced} /> : null;
+export function RecordRow({
+  row: { trace, open, until, target: _target, opens: target, failed },
+  fresh,
+  onSelect,
+  live = false,
+  share,
+  depth = 0,
+  gone = false,
+  pending = false,
+  current = false,
+}: {
+  /** The record open: its row the list's current one, live or not. */
+  current?: boolean | undefined;
+  /** Its traces are no longer in the local store: said, the row quiet. */
+  gone?: boolean | undefined;
+  /** Its calls' traces still on their way: no numbers yet, never a part of them. */
+  pending?: boolean | undefined;
+  /** How far in it sits: a call of a view still open shows under it. */
+  depth?: number | undefined;
+  /** Closed: its time against the list's typical longest, linear; a far longer one reaches the end. */
+  share?: number | undefined;
+  row: TraceRow;
+  fresh: boolean;
+  onSelect: (id: string) => void;
+  live?: boolean | undefined;
+}) {
+  const page = trace.kind === "page" ? pageParts(trace.name) : null;
+  return (
+    <KindWords.Provider value={WATERFALL_KINDS}>
+      <button
+        type="button"
+        className="tp-map-row tp-record"
+        data-record={trace.id}
+        {...recordState({ gone, live, current, fresh })}
+        data-kind={trace.kind}
+        // Its badge in its open tree's root colour: a view's is its code's, as the tree's first row has it.
+        data-category={page ? "code" : undefined}
+        // Gone from the store, there is nothing to open: it stays a quiet line, its note on hover.
+        onClick={() => (gone ? undefined : onSelect(target ?? trace.id))}
+      >
+        <span className="tp-map-name" style={indentOf(depth)}>
+          <RecordLead trace={trace} page={page} ago={!(live || depth > 0)} />
+          {/* Its status the pill its call's row has in the tree, and with the tree's numbers: none while they are on
+              their way. A failure shows at once: its call may never send a trace. */}
+          <Beside value={true}>
+            <RecordStatus trace={trace} failed={failed} pending={pending} />
+          </Beside>
+          <RecordMarks trace={trace} pending={pending} className="tp-map-chips" />
+        </span>
+        <RecordTrack live={live} share={share} />
+        <span className="tp-map-time">
+          <RowTime trace={trace} open={open} until={until} />
+        </span>
+      </button>
+    </KindWords.Provider>
+  );
+}
+
+/** A record row's state, as its attributes say it: gone, live, the open one, just arrived. */
+function recordState({
+  gone,
+  live,
+  current,
+  fresh,
+}: {
+  gone: boolean;
+  live: boolean;
+  current: boolean;
+  fresh: boolean;
+}) {
+  return {
+    "data-gone": gone ? "" : undefined,
+    title: gone ? GONE_NOTE : undefined,
+    "data-live": live ? "" : undefined,
+    "aria-current": live || current ? ("true" as const) : undefined,
+    "data-new": fresh ? "" : undefined,
+    "aria-disabled": gone || undefined,
+  };
+}
+
+/** A record's caret, badge and name, and when it was. */
+function RecordLead({
+  trace,
+  page,
+  ago: when,
+}: {
+  trace: TraceSummary;
+  page: ReturnType<typeof pageParts> | null;
+  /** A record says when; a call under the open one is a row of its tree, as its stored tree will say it. */
+  ago: boolean;
+}) {
+  return (
+    <span className="tp-map-lead">
+      <span className="tp-map-caret" data-toggle="">
+        <ChevronRightIcon />
+      </span>
+      <KindBadge
+        kind={page ? page.badge.toLowerCase() : spanKindLabel(trace.kind, {})}
+        muted={true}
+        className="tp-map-kind"
+      />
+      {page ? (
+        <span className="tp-map-text">{pageName(trace.name)}</span>
+      ) : (
+        <OpText text={trace.name} kind={trace.kind} />
+      )}
+      {/* On hover its moment: records alike ("VIEW / 4m ago") still part by when each was. */}
+      {when ? (
+        <span className="tp-record-ago" title={dayTime(trace.start)}>
+          {ago(trace.start)}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** A record's bar: running while it runs, its time on the list's scale once closed. */
+function RecordTrack({ live, share }: { live: boolean; share: number | undefined }) {
+  return (
+    <span className="tp-map-track">
+      {live ? <span className="tp-map-bar tp-record-live" /> : null}
+      {share === undefined ? null : (
+        <span className="tp-map-bar tp-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
+      )}
+    </span>
+  );
 }
 
 /** A call no trace answered and none will, as the call tree says it: muted, its reason in the tooltip. */
 function NotTracedMark({ host }: { host: string }) {
   return (
-    <span className="dt-not-traced" data-state="untraced" title={untracedNote(host)}>
+    <span className="tp-not-traced" data-state="untraced" title={untracedNote(host)}>
       not traced
-    </span>
-  );
-}
-
-/**
- * A view's calls to one host, one row over them, the shape of an app's row in a chain: its app's chip (the host until a
- * trace of theirs names the app), how many, their time on the clock (ticking while one runs), what they did. A click
- * opens the view's call tree, at that app's part once it is known.
- */
-function GroupRow({
-  row: { trace, depth = 1, open },
-  group,
-  fold,
-  pending,
-  fresh,
-  onApp,
-  onSelect,
-}: {
-  row: TraceRow;
-  group: CallGroup;
-  fold: RowFold | null | undefined;
-  pending: boolean;
-  fresh: boolean;
-  onApp: ((rowId: string, app: string) => void) | undefined;
-  onSelect: (id: string) => void;
-}) {
-  const name = group.app ?? group.host;
-  const calls = plural(group.count, "call", "calls");
-  return (
-    <button
-      type="button"
-      className="dt-request-row"
-      data-depth={depth}
-      data-call="group"
-      {...liveProps(trace, open, null)}
-      aria-label={`${name}, ${calls}${open ? ", running" : `, ${duration(trace.duration)}`}`}
-      title={`${name}: ${calls} of this view${group.app ? ` to ${group.host}` : ""}. Opens its call tree${group.app ? ` where ${group.app}'s part starts` : ""}.`}
-      {...foldProps(fold)}
-      data-new={fresh ? "" : undefined}
-      onClick={() => (group.app && onApp ? onApp(group.view, group.app) : onSelect(group.view))}
-    >
-      <span className="dt-request-main">
-        <RowCaret fold={fold} />
-        <AppChip name={name} runtime={group.runtime} compact />
-      </span>
-      <span className="dt-request-meta">
-        {group.count > 1 ? <Times count={group.count} /> : <StatusSlot status={null} />}
-        <RowTime trace={trace} open={open} until={undefined} />
-        <CompactMeta trace={trace} pending={pending} blank={group.untraced} />
-      </span>
-    </button>
-  );
-}
-
-/** A row's tone and its state (lib/live): running has no tone yet, a cut one says so. */
-function liveProps(trace: TraceSummary, open: boolean | undefined, cut: number | null) {
-  if (open) return { "data-state": "running" };
-  return { "data-tone": toneOf(trace), "data-state": cut === null ? undefined : "cut" };
-}
-
-/** A row's status, time and numbers: none of a status while it runs, its numbers pending until known. */
-function RowMeta({
-  trace,
-  open,
-  until,
-  chained,
-  pending,
-  blank,
-  failed,
-  compact,
-}: {
-  trace: TraceSummary;
-  open: boolean | undefined;
-  until: number | undefined;
-  chained: boolean;
-  pending: boolean;
-  /** No numbers to say: a call no trace answered. */
-  blank?: boolean | undefined;
-  /** A call that got no answer: what failed, its status "failed" (TraceRow.failed). */
-  failed?: string | undefined;
-  compact: boolean | undefined;
-}) {
-  const Meta = compact ? CompactMeta : FullMeta;
-  return (
-    <span className="dt-request-meta">
-      {/* No status of its own (a view, a task, a job): its slot kept, so the time lines up with a request's. */}
-      {failed !== undefined && !open ? (
-        <FailedStatus failure={failed} />
-      ) : (
-        <StatusSlot status={trace.kind === "page" || open ? null : trace.http_status} />
-      )}
-      <RowTime trace={trace} open={open} until={until} />
-      <Meta trace={trace} chained={chained} pending={pending} blank={blank} />
     </span>
   );
 }
@@ -500,46 +498,8 @@ function RowTime({
   until: number | undefined;
 }) {
   if (open) return <Running start={trace.start} until={until} />;
-  return <span>{duration(trace.duration)}</span>;
-}
-
-/** A row's chain folded or not: open until folded, as an app's row; null for a row whose trace called no app. */
-interface RowFold {
-  open: boolean;
-  onToggle: () => void;
-}
-
-/** A foldable row's state and keys; a row of a list without chains, none. */
-function foldProps(fold: RowFold | null | undefined) {
-  if (fold === undefined) return {};
-  return {
-    "aria-expanded": fold ? fold.open : undefined,
-    "data-fold": "",
-    onKeyDown: fold ? foldKeys(fold.open, fold.onToggle) : undefined,
-  };
-}
-
-/** Its caret, or the caret's room for a row with no chain, so the names line up. */
-function RowCaret({ fold }: { fold: RowFold | null | undefined }) {
-  if (fold === undefined) return null;
-  return fold ? <ChainCaret onToggle={fold.onToggle} /> : <span className="dt-map-caret" />;
-}
-
-/** Open until folded; a row that starts folded (`folded`, a view's call), folded until opened. */
-function rowFold(chains: ListChains, id: string, folded = false, calls = false): RowFold | null {
-  // A view's or an action's rows under it are its calls; anyone else's, its chain's.
-  if (!(calls || chains.apps.get(id)?.length)) return null;
-  const key = `row:${id}`;
-  return { open: chains.open.has(key) === folded, onToggle: () => chains.onToggle(key) };
-}
-
-/** The page open in the browser tab: narrow, a dot, so the path keeps its room (the row is also highlighted). */
-function ThisPage({ compact }: { compact: boolean | undefined }) {
-  return compact ? (
-    <span className="dt-this-page" role="img" aria-label="This page" title="This page" />
-  ) : (
-    <span className="dt-tag">this page</span>
-  );
+  // Slow for what it is, as the agent counts it: amber, not red (slow is no failure).
+  return <span data-slow={isSlow(trace) ? "" : undefined}>{duration(trace.duration)}</span>;
 }
 
 interface ChainRowsProps {
@@ -577,57 +537,6 @@ function ChainRows({ rowId, apps, level, chains, selectedId, onSelect }: ChainRo
 }
 
 /**
- * Under a list's row: its chain's rows, or a placeholder while they load the first time. A view with its calls listed
- * under it (`rows`) has none: they are what its chain is about, and a placeholder above them, the call's own below it,
- * would sandwich a real row between two that say nothing.
- */
-function RowChain({
-  rowId,
-  level,
-  rows,
-  chains,
-  selectedId,
-  onSelect,
-}: Omit<ChainRowsProps, "apps"> & { rows: boolean }) {
-  const apps = chains.apps.get(rowId);
-  if (!apps && chains.loading?.has(rowId)) return rows ? null : <ChainLoading level={level} />;
-  return (
-    <ChainRows rowId={rowId} apps={apps} level={level} chains={chains} selectedId={selectedId} onSelect={onSelect} />
-  );
-}
-
-/**
- * While a row's chain loads the first time (and it is slow): a placeholder where its apps' rows would go, as tall as
- * one, so the list says something is coming and nothing jumps when it is there.
- */
-function ChainLoading({ level }: { level: number }) {
-  return (
-    <div
-      className="dt-request-row"
-      data-chain="loading"
-      role="status"
-      aria-label="Loading the traces of this request's calls"
-      title="Loading the traces of this request's calls"
-      style={{ "--dt-chain-level": level } as CSSProperties}
-    >
-      <span className="dt-request-main">
-        <span className="dt-map-caret" />
-        {/* In a path's line box: the row is as tall as one with a name. */}
-        <span className="dt-request-path">
-          <span className="dt-skeleton dt-chain-skeleton" style={{ width: "4.5rem" }} />
-        </span>
-        <span className="dt-request-path">
-          <span className="dt-skeleton dt-chain-skeleton" style={{ width: "7rem" }} />
-        </span>
-      </span>
-      <span className="dt-request-meta">
-        <StatusSlot status={null} />
-      </span>
-    </div>
-  );
-}
-
-/**
  * A call whose trace hasn't arrived yet: dimmed, its method and path as the call says them, an hourglass. Its trace's
  * row takes its place once the agent has it; a call to a service that sends none is waited for WAITING_MS.
  */
@@ -638,20 +547,20 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
   const untraced = call.untraced;
   return (
     <div
-      className="dt-request-row"
+      className="tp-request-row"
       data-chain={untraced === undefined ? "waiting" : "untraced"}
       aria-disabled="true"
       title={untraced === undefined ? waitingTitle(name, call.cut) : `${name}: ${untracedNote(untraced)}`}
-      style={{ "--dt-chain-level": level } as CSSProperties}
+      style={{ "--tp-chain-level": level } as CSSProperties}
     >
-      <span className="dt-request-main">
-        <span className="dt-map-caret" />
+      <span className="tp-request-main">
+        <span className="tp-map-caret" />
         <RowName trace={summary} />
         {call.cut === null ? null : <NoAnswer at={call.cut} />}
         {untraced === undefined ? null : <NotTracedMark host={untraced} />}
       </span>
       {/* As the row of its trace will be: its status and time, its numbers pending until that trace comes. */}
-      <span className="dt-request-meta">
+      <span className="tp-request-meta">
         <StatusSlot status={summary.http_status} />
         <span>{duration(summary.duration)}</span>
         <CompactMeta trace={summary} pending={untraced === undefined} blank={untraced !== undefined} />
@@ -684,20 +593,20 @@ function ChainAppRows({ app, rowId, level, chains, selectedId, onSelect }: Chain
     <>
       <button
         type="button"
-        className="dt-request-row"
+        className="tp-request-row"
         data-chain="app"
         data-tone={toneOf(app.summary)}
-        style={{ "--dt-chain-level": level } as CSSProperties}
+        style={{ "--tp-chain-level": level } as CSSProperties}
         aria-expanded={open}
         title={`${app.app}: ${traces} for this request's calls. Opens its call tree where ${app.app}'s part starts, its tabs under ${app.app}.`}
         onClick={() => chains.onApp(rowId, app.app)}
         onKeyDown={foldKeys(open, toggle)}
       >
-        <span className="dt-request-main">
+        <span className="tp-request-main">
           <ChainCaret onToggle={toggle} />
           <AppChip name={app.app} runtime={chainAppRuntime(app)} compact />
         </span>
-        <span className="dt-request-meta">
+        <span className="tp-request-meta">
           {/* How many, as a run's row counts its traces: in the status column. */}
           {app.ids.length > 1 ? <Times count={app.ids.length} /> : <StatusSlot status={null} />}
           <span title={`${traces} on the clock`}>{duration(app.summary.duration)}</span>
@@ -753,14 +662,14 @@ function ChainItems({
       {all ? null : (
         <button
           type="button"
-          className="dt-request-row"
+          className="tp-request-row"
           data-chain="more"
-          style={{ "--dt-chain-level": level } as CSSProperties}
+          style={{ "--tp-chain-level": level } as CSSProperties}
           onClick={() => chains.onToggle(allKey)}
         >
-          <span className="dt-request-main">
-            <span className="dt-map-caret" />
-            <span className="dt-request-trigger">Show all {items.length}</span>
+          <span className="tp-request-main">
+            <span className="tp-map-caret" />
+            <span className="tp-request-trigger">Show all {items.length}</span>
           </span>
         </button>
       )}
@@ -783,21 +692,21 @@ function ChainRunRows({ run, rowId, level, chains, selectedId, onSelect }: Chain
     <>
       <button
         type="button"
-        className="dt-request-row"
+        className="tp-request-row"
         data-chain="run"
         data-tone={toneOf(run.summary)}
-        style={{ "--dt-chain-level": level } as CSSProperties}
+        style={{ "--tp-chain-level": level } as CSSProperties}
         aria-current={holdsSelected ? "true" : undefined}
         aria-expanded={open}
         title={`${run.route} ×${count} in a row · ${time} on the clock, from the first's start to the last's end`}
         onClick={toggle}
         onKeyDown={foldKeys(open, toggle)}
       >
-        <span className="dt-request-main">
+        <span className="tp-request-main">
           <ChainCaret onToggle={toggle} />
           <RowName trace={run.summary} />
         </span>
-        <span className="dt-request-meta">
+        <span className="tp-request-meta">
           <Times count={count} />
           <span>{time}</span>
           <CompactMeta trace={run.summary} />
@@ -830,10 +739,10 @@ function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: Cha
     <>
       <button
         type="button"
-        className="dt-request-row"
+        className="tp-request-row"
         data-chain="trace"
         data-tone={toneOf(row.summary)}
-        style={{ "--dt-chain-level": level } as CSSProperties}
+        style={{ "--tp-chain-level": level } as CSSProperties}
         aria-current={row.id === selectedId ? "true" : undefined}
         aria-expanded={nested ? open : undefined}
         aria-label={traceLabel(row.summary)}
@@ -841,12 +750,12 @@ function ChainTraceRows({ row, rowId, level, chains, selectedId, onSelect }: Cha
         onClick={() => onSelect(row.id)}
         onKeyDown={foldKeys(nested ? open : undefined, toggle)}
       >
-        <span className="dt-request-main">
-          {nested ? <ChainCaret onToggle={toggle} /> : <span className="dt-map-caret" />}
+        <span className="tp-request-main">
+          {nested ? <ChainCaret onToggle={toggle} /> : <span className="tp-map-caret" />}
           <RowName trace={row.summary} />
           <RowFlame trace={row.trace} />
         </span>
-        <span className="dt-request-meta">
+        <span className="tp-request-meta">
           <StatusSlot status={row.summary.http_status} />
           <span>{duration(row.summary.duration)}</span>
           <CompactMeta trace={row.summary} />
@@ -876,7 +785,7 @@ function ChainCaret({ onToggle }: { onToggle: () => void }) {
     // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keyboard folds with the arrows.
     // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys (foldKeys).
     <span
-      className="dt-map-caret"
+      className="tp-map-caret"
       data-toggle=""
       onClick={(event) => {
         event.stopPropagation();
@@ -886,16 +795,6 @@ function ChainCaret({ onToggle }: { onToggle: () => void }) {
       <ChevronRightIcon />
     </span>
   );
-}
-
-/** A data attribute that is there or not. */
-function flag(on: boolean | undefined): "" | undefined {
-  return on ? "" : undefined;
-}
-
-/** The app a request came from, when the list holds several and the agent has the request (a view is the browser's). */
-function RowApp({ trace, shown }: { trace: TraceSummary; shown: boolean | undefined }) {
-  return shown && trace.kind !== "page" && trace.service ? <AppChip name={trace.service} compact /> : null;
 }
 
 /**
@@ -918,18 +817,18 @@ function CompactMeta({
     return (
       <>
         <span />
-        <span className="dt-request-chips" />
+        <span className="tp-request-chips" />
       </>
     );
   }
   if (pending) {
     return (
       <>
-        <span className="dt-request-queries" data-zero="">
+        <span className="tp-request-queries" data-zero="">
           <DatabaseIcon size={12} />
           <Pending what="SQL queries" />
         </span>
-        <span className="dt-request-chips" />
+        <span className="tp-request-chips" />
       </>
     );
   }
@@ -938,63 +837,18 @@ function CompactMeta({
       <span />
     ) : (
       <span
-        className="dt-request-queries"
+        className="tp-request-queries"
         data-zero={trace.queries === 0 ? "" : undefined}
         title={`${trace.queries} SQL ${trace.queries === 1 ? "query" : "queries"}`}
       >
         <DatabaseIcon size={12} />
-        <span className="dt-request-queries-n">{trace.queries}</span>
+        <span className="tp-request-queries-n">{trace.queries}</span>
       </span>
     );
   return (
     <>
       {queries}
       <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />
-    </>
-  );
-}
-
-/** The wide list's numbers after the time: the queries, every finding, when it happened. */
-function FullMeta({
-  trace,
-  chained,
-  pending,
-  blank,
-}: {
-  trace: TraceSummary;
-  chained: boolean;
-  pending: boolean;
-  blank?: boolean | undefined;
-}) {
-  return (
-    <>
-      <span>{blank ? null : pending ? <Pending what="SQL queries" /> : queriesText(trace, chained)}</span>
-      {pending ? <span /> : <FullChips kinds={trace.issue_kinds} issues={trace.issues} />}
-      <span className="dt-request-time">{ago(trace.start)}</span>
-    </>
-  );
-}
-
-/** "3 queries"; nothing for a view or an action, which runs none itself, unless its chain's are counted. */
-function queriesText(trace: TraceSummary, chained: boolean): string {
-  if (trace.kind === "page" && !chained) return "";
-  return plural(trace.queries, "query", "queries");
-}
-
-/** Every finding by name; just their count while the kinds aren't known yet. */
-function FullChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
-  if (kinds === undefined) {
-    return issues > 0 ? (
-      <Badge variant="warn" size="compact">
-        {issues} {issues === 1 ? "issue" : "issues"}
-      </Badge>
-    ) : null;
-  }
-  return (
-    <>
-      {kinds.map((kind) => (
-        <IssueChip key={kind} kind={kind} />
-      ))}
     </>
   );
 }
@@ -1065,7 +919,7 @@ export function traceLabel(
 /** An htmx request: the element that sent it and where the answer went, after the path. */
 function HtmxTrigger({ trigger, target }: { trigger: string; target?: string | undefined }) {
   return (
-    <span className="dt-request-trigger">
+    <span className="tp-request-trigger">
       {" "}
       · {trigger}
       {target ? ` → ${target}` : ""}
@@ -1118,9 +972,9 @@ function RowName({
     <>
       <KindBadge kind={trace.kind} />
       {trace.kind === "task" ? (
-        <TaskName name={trace.name} className="dt-request-path" />
+        <TaskName name={trace.name} className="tp-request-path" />
       ) : (
-        <span className="dt-request-path">{trace.name.replace(/^WS /, "")}</span>
+        <span className="tp-request-path">{trace.name.replace(/^WS /, "")}</span>
       )}
     </>
   );
@@ -1135,10 +989,10 @@ export function PageName({ name, redirectedFrom }: { name: string; redirectedFro
   return (
     <>
       <MethodBadge method={badge} />
-      <span className="dt-request-path">
+      <span className="tp-request-path">
         {label}
-        {page ? <span className="dt-request-trigger"> · {page}</span> : null}
-        {redirectedFrom ? <span className="dt-request-trigger"> · {redirectNote(redirectedFrom)}</span> : null}
+        {page ? <span className="tp-request-trigger"> · {page}</span> : null}
+        {redirectedFrom ? <span className="tp-request-trigger"> · {redirectNote(redirectedFrom)}</span> : null}
       </span>
     </>
   );
@@ -1152,15 +1006,31 @@ export function PageName({ name, redirectedFrom }: { name: string; redirectedFro
  * The narrow list's findings: a mark and how many, in the first kind's colour, their names in its title. A label per
  * finding ("Before commit +3") took the row's room from its path.
  */
-function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
+/** Its errors, the chain's too: a mark and how many, in red; nothing for none. */
+function Errors({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <Badge
+      variant="error"
+      size="compact"
+      className="gap-[0.1875rem] px-[0.375rem] tabular-nums"
+      title={plural(count, "error", "errors")}
+    >
+      <CircleXIcon aria-hidden="true" />
+      {count}
+    </Badge>
+  );
+}
+
+export function CompactChips({ kinds, issues }: { kinds: IssueKind[] | undefined; issues: number }) {
   const shown = (kinds ?? []).filter((kind) => kind !== "error");
   // Its findings, as its Issues tab counts them (three N+1s are three), not their kinds; before its trace loads (a
   // row from the widget's summary) the number is all there is.
   const count = issues || shown.length;
-  if (count === 0) return <span className="dt-request-chips" />;
+  if (count === 0) return <span className="tp-request-chips" />;
   const names = shown.map((kind) => ISSUE_LABELS[kind]).join(", ");
   return (
-    <span className="dt-request-chips">
+    <span className="tp-request-chips">
       <Badge
         variant="warn"
         size="compact"

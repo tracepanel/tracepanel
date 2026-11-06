@@ -10,7 +10,7 @@ async function openOrder(page: Page, tab = "calls"): Promise<void> {
 }
 
 function row(page: Page, kind: string, name: string | RegExp) {
-  return page.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name });
+  return page.locator(`.tp-map-row[data-kind="${kind}"]`).filter({ hasText: name });
 }
 
 test("a send's row: its signal, its sender, its receivers and how many failed, in a colour of its own", async ({
@@ -19,15 +19,15 @@ test("a send's row: its signal, its sender, its receivers and how many failed, i
   await openOrder(page);
   const saved = row(page, "signal", "post_save");
 
-  await expect(saved.locator(".dt-map-kind")).toHaveText("signal");
-  await expect(saved.locator(".dt-map-text")).toHaveText("post_save");
-  await expect(saved.locator(".dt-map-sub")).toHaveText(["shop.Order", "2 receivers"]);
+  await expect(saved.locator(".tp-map-kind")).toHaveText("signal");
+  await expect(saved.locator(".tp-map-text")).toHaveText("post_save");
+  await expect(saved.locator(".tp-map-sub")).toHaveText(["shop.Order", "2 receivers"]);
   await expect(saved.locator("[data-failed]")).toHaveText("1 failed");
   // The trace itself is fine: send_robust() caught the error.
   await expect(page.getByText("1 failed")).toHaveCount(1);
 
   const colour = (locator: typeof saved) =>
-    locator.evaluate((element) => getComputedStyle(element).getPropertyValue("--dt-k").trim());
+    locator.evaluate((element) => getComputedStyle(element).getPropertyValue("--tp-k").trim());
   const signal = await colour(saved);
   const view = await colour(row(page, "view", "shop.views.place_order"));
 
@@ -41,11 +41,11 @@ test("a receiver's row: its dotted path and its file and line, or what it raised
   const stock = row(page, "function", "shop.receivers.update_stock");
   const warehouse = row(page, "function", "shop.receivers.notify_warehouse");
 
-  await expect(stock.locator(".dt-map-kind")).toHaveText("receiver");
-  await expect(stock.locator(".dt-map-sub")).toHaveText("shop/receivers.py:14");
-  await expect(warehouse.locator(".dt-map-kind")).toHaveText("receiver");
-  await expect(warehouse.locator(".dt-map-sub[data-error]")).toHaveText("ConnectionError: warehouse offline");
-  await expect(warehouse.locator(".dt-map-sub[data-error]")).toHaveAttribute("title", /shop\/receivers\.py:21/);
+  await expect(stock.locator(".tp-map-kind")).toHaveText("receiver");
+  await expect(stock.locator(".tp-map-sub")).toHaveText("shop/receivers.py:14");
+  await expect(warehouse.locator(".tp-map-kind")).toHaveText("receiver");
+  await expect(warehouse.locator(".tp-map-sub[data-error]")).toHaveText("ConnectionError: warehouse offline");
+  await expect(warehouse.locator(".tp-map-sub[data-error]")).toHaveAttribute("title", /shop\/receivers\.py:21/);
   // A receiver's own query nests under it.
   await expect(row(page, "sql", "UPDATE shop_stock")).toBeVisible();
 });
@@ -58,7 +58,7 @@ test("a send's details: the signal, its sender, robust, its receivers one a line
 
   await row(page, "signal", "post_save").click();
 
-  await expect(details.locator(".dt-map-details-title")).toContainText("signal · started at");
+  await expect(details.locator(".tp-map-details-title")).toContainText("signal · started at");
   const value = (label: string) => details.locator("dt", { hasText: new RegExp(`^${label}$`) }).locator("+ dd");
 
   await expect(value("Signal")).toHaveText("django.db.models.signals.post_save");
@@ -86,16 +86,16 @@ test("a receiver's details: the function, where it is defined, and what it raise
 
   await row(page, "function", "shop.receivers.notify_warehouse").click();
 
-  await expect(details.locator(".dt-map-details-title")).toContainText("receiver · started at");
+  await expect(details.locator(".tp-map-details-title")).toContainText("receiver · started at");
   await expect(value("Function")).toHaveText("shop.receivers.notify_warehouse");
   await expect(value("Defined at")).toHaveText("shop/receivers.py:21");
-  await expect(details.locator(".dt-error-message")).toHaveText("ConnectionError: warehouse offline");
-  await expect(details.locator(".dt-error-message .text-error")).toHaveText("ConnectionError");
+  await expect(details.locator(".tp-error-message")).toHaveText("ConnectionError: warehouse offline");
+  await expect(details.locator(".tp-error-message .text-error")).toHaveText("ConnectionError");
 
   await row(page, "function", "shop.receivers.update_stock").click();
 
   await expect(value("Defined at")).toHaveText("shop/receivers.py:14");
-  await expect(details.locator(".dt-error-message")).toHaveCount(0);
+  await expect(details.locator(".tp-error-message")).toHaveCount(0);
 });
 
 test("Signals is a share of the time; its chip shows the sends with what their receivers did", async ({ page }) => {
@@ -104,7 +104,7 @@ test("Signals is a share of the time; its chip shows the sends with what their r
   const chip = legend.locator('[data-category="signal"]').getByRole("button");
 
   await expect(chip).toContainText(/Signals.*\d+%/);
-  await expect(legend.locator('[data-category="signal"] .dt-swatch')).toBeVisible();
+  await expect(legend.locator('[data-category="signal"] .tp-swatch')).toBeVisible();
 
   await chip.click();
 
@@ -123,7 +123,7 @@ test("a send repeated in a loop folds into one row, ×3; opened, each send is a 
   const group = row(page, "signal", /shop\.signals\.order_placed shop\.Order\s*×3/);
 
   await expect(group).toHaveCount(1);
-  await expect(page.locator(".dt-map-row", { hasText: "shop.receivers.email_customer" })).toHaveCount(0);
+  await expect(page.locator(".tp-map-row", { hasText: "shop.receivers.email_customer" })).toHaveCount(0);
 
   await group.click();
 

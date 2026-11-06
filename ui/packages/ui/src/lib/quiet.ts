@@ -9,9 +9,12 @@ export interface Quiet {
   total: number;
 }
 
-/** Said for a span whose own code ran at least this long, and this share of it, with no recorded calls. */
-const QUIET_MIN_US = 5_000;
-const QUIET_MIN_SHARE = 0.2;
+/**
+ * Said for a span whose own code ran at least this long, and this share of it, with no recorded calls: from 2%, the
+ * time its calls leave out shows in its numbers (4.0 s over calls of 3.8 s), so it has a row.
+ */
+const QUIET_MIN_US = 10_000;
+const QUIET_MIN_SHARE = 0.02;
 
 /** Where a span ran with none of its calls running: from its start to its end, between and around them. */
 function gapsIn(span: Span, calls: readonly Span[]): [number, number][] {

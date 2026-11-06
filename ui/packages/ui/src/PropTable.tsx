@@ -28,7 +28,7 @@ export function PropTable({ rows, dense = false }: { rows: readonly PropRow[]; d
   const size = SIZES[dense ? "dense" : "normal"];
   return (
     <dl
-      className={`m-0 grid ${dense ? "grid-cols-[minmax(var(--dt-fact-label),max-content)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(110px,max-content)_minmax(0,1fr)_auto]"} ${size.table}`}
+      className={`m-0 grid ${dense ? "grid-cols-[minmax(var(--tp-fact-label),max-content)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(110px,max-content)_minmax(0,1fr)_auto]"} ${size.table}`}
     >
       {rows.map((row) =>
         row.heading ? (

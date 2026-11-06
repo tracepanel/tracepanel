@@ -59,7 +59,7 @@ test("each app shows its framework's mark, else its language's, named for screen
   await expect(mark("ledger")).toHaveAccessibleName("Kotlin");
   await expect(mark("ledger")).toHaveAttribute("data-mark", "logo");
   // Its own colours, drawn whole: the path filled with its gradient.
-  await expect(mark("ledger").locator("path")).toHaveAttribute("fill", /^url\(#dt-logo-/);
+  await expect(mark("ledger").locator("path")).toHaveAttribute("fill", /^url\(#tp-logo-/);
 
   await expect(mark("shop-web")).toHaveAccessibleName("Browser");
   await expect(mark("shop-web")).toHaveClass(/lucide-globe/);

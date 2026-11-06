@@ -1,4 +1,4 @@
-// The widget's palette, from the design tokens: the --dt-* tokens its styles name, copied at build time from
+// The widget's palette, from the design tokens: the --tp-* tokens its styles name, copied at build time from
 // @tracepanel/ui's styles.css (dark on :root, light on :root[data-theme="light"]) onto its Shadow DOM's :host. A
 // token changed there changes the console, the panel and the widget alike; the widget keeps no colour of its own.
 import { readdirSync, readFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import type { Plugin } from "vite";
 
 const MODULE = "virtual:tracepanel-tokens";
 const RESOLVED = `\0${MODULE}`;
-const TOKEN = /--dt-[a-z0-9-]+/g;
+const TOKEN = /--tp-[a-z0-9-]+/g;
 /** styles.css' theme blocks, and where each goes in the widget's shadow root. */
 const BLOCKS = new Map([
   [":root", ":host"],
@@ -15,9 +15,9 @@ const BLOCKS = new Map([
 ]);
 
 /** A token's declaration in a theme block: its name and its value, which may run over several lines. */
-const DECLARATION = /(--dt-[a-z0-9-]+)\s*:\s*([^;]+);/g;
+const DECLARATION = /(--tp-[a-z0-9-]+)\s*:\s*([^;]+);/g;
 
-/** A theme block's --dt-* declarations, by name, from styles.css without its comments. */
+/** A theme block's --tp-* declarations, by name, from styles.css without its comments. */
 function declarations(css: string, selector: string): Map<string, string> {
   const head = `\n${selector} {`;
   const start = css.indexOf(head);
@@ -58,7 +58,7 @@ function tokenSheet(css: string, names: Iterable<string>): string {
     .join("\n");
 }
 
-/** The --dt-* tokens the widget's sources name. */
+/** The --tp-* tokens the widget's sources name. */
 function named(dir: string): Set<string> {
   const sources = readdirSync(dir)
     .filter((file) => file.endsWith(".ts"))

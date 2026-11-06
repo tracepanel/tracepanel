@@ -2,7 +2,7 @@ import { isTyping } from "@tracepanel/ui";
 import { useEffect } from "react";
 
 // The rows a list opens: table rows that are links, and the issue lists' anchors.
-const ROWS = '[data-scroll] tr[role="link"], [data-scroll] a.dt-request-row';
+const ROWS = '[data-scroll] tr[role="link"], [data-scroll] a.tp-request-row';
 
 /** j and k move along the list's rows, as in mail and code review tools; Enter opens the one focused. */
 export function useRowKeys(): void {

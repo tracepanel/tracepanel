@@ -129,7 +129,7 @@ function headersPart(attrs: Attrs): Part[] {
     : [];
 }
 
-/** The request's parts, then the given ones (a GraphQL query), then every other attribute. */
+/** The request's parts, then the given ones (a GraphQL query), then every other attribute, where there are any. */
 export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[] = []): Part[] {
   return [
     ...headersPart(attrs),
@@ -140,12 +140,17 @@ export function requestParts(attrs: Attrs, others: Attrs, extra: readonly Part[]
     ...pairsPart("response", "Response headers", under(attrs, PREFIXES.response, dashed)),
     ...bodyPart("response-body", "Response body", bodyOf(attrs, "response")),
     ...extra,
-    {
-      id: "attributes",
-      label: "Attributes",
-      count: Object.keys(others).length,
-      content: <AttributeGroups attrs={others} />,
-    },
+    // None at all: no switch to a page that says so.
+    ...(Object.keys(others).length > 0
+      ? [
+          {
+            id: "attributes",
+            label: "Attributes",
+            count: Object.keys(others).length,
+            content: <AttributeGroups attrs={others} />,
+          },
+        ]
+      : []),
   ];
 }
 
@@ -162,18 +167,26 @@ export function RequestParts({ parts, look = "card" }: { parts: readonly Part[];
   const [picked, setPicked] = useState<string | null>(null);
   const open = parts.find((part) => part.id === picked) ?? parts[0];
   if (!open) return null;
-  // One look for every trace: the switch shows even with one part (a task run's Attributes), as a request's does.
+  // A switch only where there is something to switch to: a lone part (attributes alone) is just its rows.
   return (
     <section className="grid gap-2" aria-label="Request details">
-      <Segmented
-        label="Request details"
-        segments={parts.map(({ id, label, count }) => ({ id, label, count }))}
-        value={open.id}
-        onChange={setPicked}
-      />
-      <div className={PART_PANELS[look]} role="tabpanel" aria-label={open.label}>
-        <RowsLookContext value={look}>{open.content}</RowsLookContext>
-      </div>
+      {parts.length > 1 ? (
+        <Segmented
+          label="Request details"
+          segments={parts.map(({ id, label, count }) => ({ id, label, count }))}
+          value={open.id}
+          onChange={setPicked}
+        />
+      ) : null}
+      {parts.length > 1 ? (
+        <div className={PART_PANELS[look]} role="tabpanel" aria-label={open.label}>
+          <RowsLookContext value={look}>{open.content}</RowsLookContext>
+        </div>
+      ) : (
+        <section className={PART_PANELS[look]} aria-label={open.label}>
+          <RowsLookContext value={look}>{open.content}</RowsLookContext>
+        </section>
+      )}
     </section>
   );
 }
@@ -244,7 +257,7 @@ function BodyText({ body, text, name }: { body: BodyOf; text: string; name: stri
       // On the page a body is the one boxed thing: code, as code is shown everywhere.
       className={cn(!card && "overflow-hidden rounded-lg border bg-card")}
     >
-      <pre className="dt-syntax m-0 max-h-96 overflow-auto p-3 pr-11 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <pre className="tp-syntax m-0 max-h-96 overflow-auto p-3 pr-11 font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
         <Readable body={body} text={text} />
       </pre>
     </CopyBlock>

@@ -15,12 +15,12 @@ test("the header says the memory's peak and the collector's pauses, only where t
 }) => {
   await page.goto(`/#/t/${await traceId(SALES)}`);
 
-  await expect(page.locator(".dt-trace-facts")).toHaveText("· ↑ 42 MB peak · GC 3× 12 ms");
+  await expect(page.locator(".tp-trace-facts")).toHaveText("· ↑ 42 MB peak · GC 3× 12 ms");
 
   await page.goto(`/#/t/${await traceId(DIGEST)}`);
 
-  await expect(page.locator(".dt-trace-title")).not.toContainText("peak");
-  await expect(page.locator(".dt-trace-title")).not.toContainText("GC");
+  await expect(page.locator(".tp-trace-title")).not.toContainText("peak");
+  await expect(page.locator(".tp-trace-title")).not.toContainText("GC");
 });
 
 test("the Memory view: its peak, what it kept, where the memory was, and what it can't tell apart", async ({
@@ -280,20 +280,20 @@ test("Your code's sites are its flame's: a library's bytes its caller's, none of
 test("the strip has the collector's pauses as their own share, and a click on one picks nothing", async ({ page }) => {
   await page.goto(`/#/t/${await traceId(SALES)}?tab=tree`);
   const legend = page.getByRole("list", { name: /^Where the time went/ });
-  const pauses = page.locator('.dt-time-track .dt-stretch[data-category="gc"]');
+  const pauses = page.locator('.tp-time-track .tp-stretch[data-category="gc"]');
 
   await expect(pauses).toHaveCount(3);
   await expect(legend.locator('li[data-category="gc"]')).toHaveText(/^GC\s*12 ms\s*29%$/);
   await expect(legend.getByRole("button", { name: /^Your code/ })).toHaveText(/^Your code\s*30 ms\s*71%$/);
 
-  await legend.locator('li[data-category="gc"] .dt-share').hover();
+  await legend.locator('li[data-category="gc"] .tp-share').hover();
 
   await expect(page.getByRole("tooltip", { name: /^GC/ })).toContainText("12 ms · 29% · 3 collections");
 
-  const rows = await page.locator(".dt-map-row").count();
+  const rows = await page.locator(".tp-map-row").count();
   await pauses.last().click();
 
-  await expect(page.locator(".dt-map-row")).toHaveCount(rows);
+  await expect(page.locator(".tp-map-row")).toHaveCount(rows);
   await expect(legend.getByRole("button", { name: /^Your code/ })).toHaveAttribute("aria-pressed", "false");
 });
 

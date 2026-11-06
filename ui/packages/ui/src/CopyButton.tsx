@@ -36,7 +36,7 @@ export function CopyBlock({
 
 /**
  * Code in colour, a statement or a document (SQL, GraphQL), in the box every such block has and with its copy button:
- * each token in its class (`dt-sql-keyword`), plain text as it is.
+ * each token in its class (`tp-sql-keyword`), plain text as it is.
  */
 export function TokenBlock({
   text,
@@ -47,7 +47,7 @@ export function TokenBlock({
 }: {
   text: string;
   tokens: readonly { type: string; text: string }[];
-  /** The tokens' classes: `dt-sql-`, `dt-gql-`. */
+  /** The tokens' classes: `tp-sql-`, `tp-gql-`. */
   prefix: string;
   label: string;
   className?: string | undefined;

@@ -4,7 +4,7 @@
 /**
  * Each runtime a label can name: its name, and the letters of its monogram, the badge we draw for it. A monogram is
  * ours: two letters in the console's own type on a faint square, in the theme's icon colour, no brand's shape or
- * colour (drawn by the .dt-monogram style, the console's and the widget's).
+ * colour (drawn by the .tp-monogram style, the console's and the widget's).
  */
 const RUNTIMES = {
   django: { name: "Django", letters: "Dj" },

@@ -153,9 +153,9 @@ test("an exception opens as its frames: the error first, the app's frames, the l
   await page.locator("tr[data-record]").first().click();
   const exception = page.getByRole("region", { name: "Exception" });
 
-  await expect(exception.locator(".dt-error-type")).toHaveText("KeyError");
-  await expect(exception.locator(".dt-error-message")).toHaveText("'EUR'");
-  const frame = (name: string) => exception.locator(".dt-frame-fn").getByText(name, { exact: true });
+  await expect(exception.locator(".tp-error-type")).toHaveText("KeyError");
+  await expect(exception.locator(".tp-error-message")).toHaveText("'EUR'");
+  const frame = (name: string) => exception.locator(".tp-frame-fn").getByText(name, { exact: true });
   await expect(frame("checkout")).toBeVisible();
   await expect(frame("price")).toBeVisible();
   // The deepest of the app's frames is where it went wrong: open, its line shown.

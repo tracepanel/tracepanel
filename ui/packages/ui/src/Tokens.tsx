@@ -3,7 +3,7 @@ import { type Language, type SourceToken, tokenizeLines } from "./highlight";
 import { keyed } from "./keys";
 import { STRUCTURE_LIMIT } from "./lib/values";
 
-/** A line's tokens, each in its class (styles.css colours them under .dt-source and .dt-syntax); a blank line holds its height. */
+/** A line's tokens, each in its class (styles.css colours them under .tp-source and .tp-syntax); a blank line holds its height. */
 export function TokenLine({ tokens }: { tokens: readonly SourceToken[] }) {
   if (tokens.length === 0) return " ";
   return keyed(tokens, (token) => token.text).map(({ key, item: token }) =>

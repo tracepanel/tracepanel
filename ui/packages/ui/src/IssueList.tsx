@@ -57,22 +57,22 @@ function ShowSpans({
 
 export function IssueList({ issues, onShowSpans, spansNoun = queries, links, reach, showLabel }: IssueListProps) {
   return (
-    <div className="dt-issue-cards">
+    <div className="tp-issue-cards">
       {issues.map((issue) => (
-        <article key={issue.fingerprint} className="dt-issue-card" data-kind={issue.kind}>
-          <div className="dt-issue-icon">
+        <article key={issue.fingerprint} className="tp-issue-card" data-kind={issue.kind}>
+          <div className="tp-issue-icon">
             <IssueIcon kind={issue.kind} />
           </div>
-          <div className="dt-issue-body">
+          <div className="tp-issue-body">
             {/* The kind in its chip, then the title without it: as the Issues list and the issue's page say it. */}
-            <h3 className="dt-issue-title">
+            <h3 className="tp-issue-title">
               <IssueChip kind={issue.kind} />
               <span>{issueTitle(issue.title)}</span>
             </h3>
             {reach?.(issue)}
-            {issue.culprit ? <code className="dt-issue-where">{issue.culprit}</code> : null}
+            {issue.culprit ? <code className="tp-issue-where">{issue.culprit}</code> : null}
             {issue.hint ? (
-              <p className="dt-issue-hint">
+              <p className="tp-issue-hint">
                 <RichText text={issue.hint} />
               </p>
             ) : null}

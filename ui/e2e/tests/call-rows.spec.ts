@@ -1,10 +1,10 @@
-// A view's calls in the panel's list, from the moment they leave until their traces are stored: each row stays its
-// own call (calls alike in name, the browser queueing some, never trade their times), the page's count says how many
-// it made whoever answered them, the page's own document is no call of its view's, a group of calls no trace
-// answered has nothing left to wait for, and a call's time is the time the page waited for it, which never goes down.
+// A view's calls under its open record in the panel, from the moment they leave until their traces are stored: each
+// row stays its own call (calls alike in name, the browser queueing some, never trade their times), the page's count
+// says how many it made whoever answered them, the page's own document is no call of its view's, calls no trace
+// answered have nothing left to wait for, and a call's time is the time the page waited for it, which never goes down.
 import type { Locator, Page, Route } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
-import { panel, pill } from "../app.ts";
+import { panel, panelList, pill } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { issue } from "../gateway.ts";
 
@@ -135,10 +135,14 @@ async function opened(
     route.fulfill({ contentType: "text/html", body: pageHtml(options.document) }),
   );
   await page.goto("/rows/");
-  const list = panel(page).getByRole("region", {
-    name: dock === "right" ? "Requests made by this page" : "Pages and requests in this browser tab",
-  });
-  return { release, list, calls: list.locator('.dt-request-row[data-depth="2"]') };
+  const list = panelList(page);
+  // The open view's first row, then its calls': records while it waits for its trace, its call tree's rows after.
+  return {
+    release,
+    list,
+    view: viewRow(list),
+    calls: list.locator(".tp-map-row").filter({ hasText: "GraphQL query" }),
+  };
 }
 
 async function open(page: Page, viewId: string, ops: readonly string[], quietMs = 200): Promise<void> {
@@ -306,19 +310,6 @@ const bffHeaders = (tag: number) => (n: number) => ({
   "Server-Timing": 'db;dur=0;desc="0 queries", total;dur=30, tracepanel-issues;desc="pending"',
 });
 
-/** The loads of a view's chain held back from now on: the call returned lets them through, each answering as things are then. */
-async function holdChain(page: Page, viewId: string): Promise<() => Promise<void>> {
-  const held: Route[] = [];
-  const url = `**/api/traces/${viewId}/chain`;
-  await page.route(url, (route) => {
-    held.push(route);
-  });
-  return async () => {
-    await page.unroute(url);
-    for (const route of held) await route.continue();
-  };
-}
-
 /** A time as the list writes it, in µs: "850 ms", "1.2 s". */
 function micros(text: string): number {
   const match = /([\d.]+)\s*(µs|ms|s)\b/.exec(text);
@@ -327,102 +318,93 @@ function micros(text: string): number {
   return match[2] === "s" ? value * 1_000_000 : match[2] === "ms" ? value * 1_000 : value;
 }
 
-/** Each call's row: its time, and whether it is the element it was (`data-probe`). */
-function rowsOf(calls: Locator) {
-  return calls.evaluateAll((rows) =>
-    rows.map((row) => ({
-      time: row.querySelector(".dt-request-meta")?.textContent?.match(/[\d.]+\s*(?:µs|ms|s)\b/)?.[0] ?? "",
-      probe: (row as HTMLElement).dataset["probe"] ?? "new",
-    })),
-  );
+/** The open view's own row, its record's first. */
+function viewRow(list: Locator) {
+  return list.locator('.tp-map-row[data-kind="page"]').first();
 }
 
-test("a group of calls no trace answered says so with nothing on its way, and the page's document stays out of it", async ({
+/** Each call's time, as its row says it. */
+function timesOf(calls: Locator) {
+  return calls.evaluateAll((rows) => rows.map((row) => row.querySelector(".tp-map-time")?.textContent ?? ""));
+}
+
+/** A row's time, in µs. */
+async function timeOf(row: Locator): Promise<number> {
+  return micros(await row.locator(".tp-map-time").innerText());
+}
+
+test("calls no trace answered say so with nothing on their way, and the page's document is none of them", async ({
   page,
 }) => {
   const tag = 3;
   // The page's own load, which its server traced: the same host as the view's calls.
-  // Docked at the bottom: the tab's list, the view and the load under it.
-  const { release, list } = await opened(page, { document: { trace: id(tag, 50) }, dock: "bottom" });
+  const { release, list, calls } = await opened(page, { document: { trace: id(tag, 50) }, dock: "bottom" });
   await open(page, id(tag, 1), ["Spec", "Spec"]);
   release(0);
   release(1);
   await viewEnded(page);
-  const group = list.locator('.dt-request-row[data-call="group"]');
   // Only the view's two calls: the document is the load, a row of its own under the view.
-  await expect(group.locator(".dt-map-times")).toHaveText("×2");
-  const load = list.locator('.dt-request-row[data-depth="1"]').filter({ hasText: "/rows/" });
-  await expect(load).toHaveCount(1);
+  await expect(calls).toHaveCount(2);
+  await expect(list.locator(".tp-map-row").filter({ hasText: "/rows/" })).toHaveCount(1);
 
-  // Stored long enough ago that no trace will come for them: not traced, and nothing left to count.
+  // Stored long enough ago that no trace will come for them: not traced, nothing left to wait for.
   await storeView(page, tag, { shift: -14_000_000 });
-  const untraced = list.locator('.dt-request-row[data-call="untraced"]');
+  const untraced = calls.locator('[data-state="untraced"]');
   await expect(untraced).toHaveCount(2);
-  await expect(untraced.first().locator('[data-state="untraced"]')).toHaveText("not traced");
-  await expect(group.locator(".dt-pending")).toHaveCount(0);
-  await expect(list.locator('.dt-request-row[data-kind="page"] .dt-pending')).toHaveCount(0);
+  await expect(untraced.first()).toHaveText("not traced");
+  await expect(list.locator(".tp-pending")).toHaveCount(0);
 });
 
-test("the page's count says every call its view made, through a gateway too, in flight, answered and stored", async ({
+test("every call its view made is a row of it, through a gateway too, in flight, answered and stored", async ({
   page,
 }) => {
   const tag = 2;
-  const { release, list } = await opened(page);
-  const head = list.locator(".page-requests-count");
-  const chip = panel(page).locator(".switcher-count");
+  const { release, calls } = await opened(page);
   await open(page, id(tag, 1), ["Features", "TenantRoles", "Campaigns"]);
 
-  await expect(head).toHaveText("· 3 requests");
-  await expect(chip).toHaveText("3");
+  await expect(calls).toHaveCount(3);
 
   for (const n of [0, 1, 2]) release(n);
   await viewEnded(page);
-  await expect(list.locator('.dt-request-row[data-depth="2"] .dt-running')).toHaveCount(0);
-  await expect(head).toHaveText("· 3 requests");
-  await expect(chip).toHaveText("3");
+  await expect(calls.and(panel(page).locator("[data-live]"))).toHaveCount(0);
+  await expect(calls).toHaveCount(3);
 
-  // Its trace stored: its calls are the chain's rows now, the count the same.
+  // Its trace stored: its calls are its call tree's rows now, as many.
   await storeView(page, tag);
-  await expect(list.locator('.dt-request-row[data-call="waiting"]')).toHaveCount(3);
-  await expect(head).toHaveText("· 3 requests");
-  await expect(chip).toHaveText("3");
+  await expect(calls.and(panel(page).locator('[data-kind="http.client"]'))).toHaveCount(3);
 });
 
-test("calls alike in name and start keep their own times and rows from in flight to their view's trace", async ({
-  page,
-}) => {
+test("calls alike in name and start keep their own times from in flight to their view's trace", async ({ page }) => {
   const tag = 1;
   const { release, calls } = await opened(page);
   // Four of one operation at once: the browser answers two at once, the other two a while later (it queued them).
   await open(page, id(tag, 1), ["Book", "Book", "Book", "Book"]);
   await expect(calls).toHaveCount(4);
-  await calls.evaluateAll((rows) => {
-    for (const [n, row] of rows.entries()) (row as HTMLElement).dataset["probe"] = String(n);
-  });
   release(0);
   release(2);
   await page.waitForTimeout(1_200);
   release(1);
   release(3);
   await viewEnded(page);
-  await expect(calls.locator(".dt-running")).toHaveCount(0);
-  const answered = await rowsOf(calls);
-  expect(answered.map((row) => row.probe)).toEqual(["0", "1", "2", "3"]);
-  const [quick, late] = [micros(answered[0]?.time ?? ""), micros(answered[1]?.time ?? "")];
-  expect(late - quick).toBeGreaterThan(900_000);
+  await expect(calls.and(panel(page).locator("[data-live]"))).toHaveCount(0);
+  const answered = (await timesOf(calls)).map(micros);
+  expect(Math.max(...answered) - Math.min(...answered)).toBeGreaterThan(900_000);
 
-  // The view's trace stored, its spans listing the late calls first and all of them from one start: each row still
-  // its own call, its own time.
+  // The view's trace stored, its spans listing the late calls first and all of them from one start: each call
+  // still its own time, none of them traded.
   await storeView(page, tag, {
     order: (made) => [...made].sort((a, b) => b.end - a.end),
     start: (await page.evaluate(() => (window as unknown as { view: { start: number } }).view.start)) + 5 * ms,
   });
-  await expect(panel(page).locator('.dt-request-row[data-call="waiting"]')).toHaveCount(4);
-  const stored = await rowsOf(calls);
-  expect(stored.map((row) => row.probe)).toEqual(["0", "1", "2", "3"]);
-  for (const [n, row] of stored.entries()) {
-    expect(Math.abs(micros(row.time) - micros(answered[n]?.time ?? "")), `row ${n}: ${row.time}`).toBeLessThan(150_000);
-  }
+  // One group in the call tree, alike as they are: opened, each its own row.
+  const group = calls.filter({ hasText: "×4" });
+  await group.locator("[data-toggle]").click();
+  const each = calls.filter({ hasNotText: "×4" });
+  await expect(each).toHaveCount(4);
+  const stored = (await timesOf(each)).map(micros);
+  const sorted = (each: number[]) => [...each].sort((a, b) => a - b);
+  for (const [n, time] of sorted(stored).entries())
+    expect(Math.abs(time - (sorted(answered)[n] ?? 0)), `call ${n}: ${stored.join(", ")}`).toBeLessThan(150_000);
 });
 
 test("a call's time is the time the page waited for it, while it runs, once answered and once stored", async ({
@@ -431,7 +413,7 @@ test("a call's time is the time the page waited for it, while it runs, once answ
   const tag = 4;
   const callTrace = id(tag, 20);
   // An app with an SDK answers, its own time 200 ms, the browser having queued it for more than a second.
-  const { release, list } = await opened(page, {
+  const { release, list, view } = await opened(page, {
     headers: () => ({
       "Tracepanel-Id": callTrace,
       "Tracepanel-Name": "GraphQL%20query%20Slow",
@@ -440,15 +422,11 @@ test("a call's time is the time the page waited for it, while it runs, once answ
   });
   await open(page, id(tag, 1), ["Slow"], 1_500);
   // Its one call: a row of its own under the view.
-  const row = list.locator('.dt-request-row[data-depth="1"]').filter({ hasText: "Slow" });
-  const view = list.locator('.dt-request-row[data-kind="page"]');
+  const row = list.locator(".tp-map-row").filter({ hasText: "Slow" });
   const times: { call: number; view: number }[] = [];
   const sample = async () => {
-    const [call, viewTime] = await Promise.all([
-      row.locator(".dt-request-meta").innerText(),
-      view.locator(".dt-request-meta").innerText(),
-    ]);
-    times.push({ call: micros(call), view: micros(viewTime) });
+    const [call, viewTime] = await Promise.all([timeOf(row), timeOf(view)]);
+    times.push({ call, view: viewTime });
   };
   await expect(row).toBeVisible();
   setTimeout(() => release(0), 1_300);
@@ -475,7 +453,7 @@ test("a call's time is the time the page waited for it, while it runs, once answ
   }
   await viewEnded(page);
   await storeView(page, tag);
-  await expect(row.locator(".dt-pending")).toHaveCount(0);
+  await expect(row.and(panel(page).locator('[data-kind="http.client"]'))).toHaveCount(1);
   await sample();
 
   for (const key of ["call", "view"] as const) {
@@ -496,7 +474,7 @@ test("a view's time stops at its last call's answer, also once that call's longe
   const callTrace = id(tag, 20);
   // An app with an SDK answers at once (its 503 after its own wait), its trace ending a second after the answer went
   // out: the view waits on for its end meanwhile.
-  const { release, list } = await opened(page, {
+  const { release, view } = await opened(page, {
     headers: () => ({
       "Tracepanel-Id": callTrace,
       "Tracepanel-Name": "GraphQL%20query%20Authors",
@@ -504,7 +482,6 @@ test("a view's time stops at its last call's answer, also once that call's longe
     }),
   });
   await open(page, id(tag, 1), ["Authors"], 2_500);
-  const view = list.locator('.dt-request-row[data-kind="page"]');
   await expect(view).toBeVisible();
   await page.waitForTimeout(300);
   release(0);
@@ -523,14 +500,14 @@ test("a view's time stops at its last call's answer, also once that call's longe
   ]);
   const times: number[] = [];
   for (let at = 0; at < 30; at += 1) {
-    times.push(micros(await view.locator(".dt-request-meta").innerText()));
+    times.push(await timeOf(view));
     await page.waitForTimeout(100);
   }
   await viewEnded(page);
   await storeView(page, tag);
-  // Its call's trace links to no call of it: waited for, then its numbers are known.
-  await expect(view.locator(".dt-pending")).toHaveCount(0, { timeout: 15_000 });
-  times.push(micros(await view.locator(".dt-request-meta").innerText()));
+  // Its call tree's root now: the time as the page waited, not up to the call's longer trace.
+  await expect(view).not.toHaveClass(/tp-record/);
+  times.push(await timeOf(view));
 
   const shown = times.filter((each) => !Number.isNaN(each));
   expect(shown.length).toBeGreaterThan(20);
@@ -540,59 +517,25 @@ test("a view's time stops at its last call's answer, also once that call's longe
   expect(Math.max(...shown)).toBeLessThan(1_000_000);
 });
 
-test("the row over a view's calls to one host never says a shorter time as their traces come", async ({ page }) => {
-  const tag = 17;
-  const { release, list } = await opened(page);
-  await open(page, id(tag, 1), ["Book", "Book"]);
-  const group = list.locator('.dt-request-row[data-call="group"]');
-  await expect(group).toBeVisible();
-  release(0);
-  await page.waitForTimeout(600);
-  release(1);
-  await viewEnded(page);
-  const times: number[] = [];
-  const sample = async () => times.push(micros(await group.locator(".dt-request-meta").innerText()));
-  await sample();
-  // The view's trace times its calls a hair apart from the page (here from 0.3 s later): the group's time as the
-  // page waited stays, while its calls wait for their traces and once those come.
-  const viewStart = await page.evaluate(() => (window as unknown as { view: { start: number } }).view.start);
-  // Served by an app at a host of its own: the console's host stays served by no app (the other tests group by it).
-  await storeView(page, tag, { start: viewStart + 300 * ms, origin: "http://bff.test:4000/" });
-  await expect(list.locator('.dt-request-row[data-call="waiting"]')).toHaveCount(2);
-  for (let at = 0; at < 5; at += 1) {
-    await sample();
-    await page.waitForTimeout(100);
-  }
-  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
-  await ingest(made.flatMap((call) => served(tag, call)));
-  await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(2, { timeout: 8_000 });
-  await sample();
-
-  const shown = times.filter((each) => !Number.isNaN(each));
-  expect(shown.length).toBe(7);
-  for (const [n, each] of shown.entries())
-    expect(each, `sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
-});
-
 test("a call that got no answer stays its row, failed as the call tree says it, in flight, answered and stored", async ({
   page,
 }) => {
   const tag = 6;
   // Two calls to the gateway: the first answered (its trace comes over OTLP), the second gets no answer at all.
-  const { release, list, calls } = await opened(page, { fails: [1] });
+  const { release, calls } = await opened(page, { fails: [1] });
   await open(page, id(tag, 1), ["Books", "Authors"]);
   const failed = calls.filter({ hasText: "Authors" });
   await expect(calls).toHaveCount(2);
-  await expect(failed.locator(".dt-running")).toHaveCount(1);
+  await expect(failed).toHaveAttribute("data-live", "");
 
   release(0);
   release(1);
   await viewEnded(page);
-  await expect(calls.locator(".dt-running")).toHaveCount(0);
+  await expect(calls.and(panel(page).locator("[data-live]"))).toHaveCount(0);
   await expect(calls).toHaveCount(2);
-  await expect(failed.locator(".dt-status")).toHaveText("failed");
-  await expect(failed.locator(".dt-status")).toHaveAttribute("title", "No answer");
-  await expect(failed).toHaveAttribute("data-tone", "error");
+  await expect(failed.locator(".tp-status")).toHaveText("failed");
+  await expect(failed.locator(".tp-status")).toHaveAttribute("title", "No answer");
+  await expect(failed.locator(".tp-status")).toHaveAttribute("data-tone", "error");
 
   // The view's trace stored, long enough ago that no trace is waited for any more, and the gateway's trace of the
   // first call: the host is known to answer with traces, and the failed call still stays, "failed", nothing pending.
@@ -618,85 +561,39 @@ test("a call that got no answer stays its row, failed as the call tree says it, 
   ]);
   // Calls to a host of their own: the app it is served by stays this test's (the Services map links them).
   await storeView(page, tag, { shift, origin: "http://gateway.test:4000/" });
-  // Both its calls, under the gateway's row: the one its trace answered, the one that failed.
-  await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(1);
-  await expect(list.locator('.dt-request-row[data-call="group"] .dt-map-times')).toHaveText("×2");
-  await expect(calls).toHaveCount(2);
-  await expect(failed).toHaveAttribute("data-call", "failed");
-  await expect(failed.locator(".dt-status")).toHaveText("failed");
-  await expect(failed.locator(".dt-status")).toHaveAttribute("title", "TypeError");
-  await expect(failed).toHaveAttribute("data-tone", "error");
-  await expect(failed.locator(".dt-pending")).toHaveCount(0);
-  // Its view's call tree says the same of it.
-  await failed.click();
-  const row = panel(page).locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "Authors" });
-  await expect(row.locator(".dt-status")).toHaveText("failed");
-  await expect(row).toHaveAttribute("data-status", "error");
-  const books = panel(page).locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "Books" });
-  // And of the one its trace answered, stored before the view's: answered, by the gateway, as the list has it.
-  await expect(books.locator(".dt-status")).toHaveText("200");
-  await expect(books.locator(".dt-app-chip")).toHaveText("gateway");
+  // Its call tree's rows: the one its trace answered, the one that failed, as the browser recorded it.
+  await expect(failed).toHaveAttribute("data-kind", "http.client");
+  await expect(failed.locator(".tp-status")).toHaveText("failed");
+  await expect(failed.locator(".tp-status")).toHaveAttribute("title", "TypeError");
+  await expect(failed).toHaveAttribute("data-status", "error");
+  const books = calls.filter({ hasText: "Books" });
+  // And of the one its trace answered, stored before the view's: answered, by the gateway.
+  await expect(books.locator(".tp-status")).toHaveText("200");
+  await expect(books.locator(".tp-app-chip")).toHaveText("gateway");
   await expect(books.locator('[data-state="untraced"]')).toHaveCount(0);
 });
 
-test("the pill counts a page's calls no trace answered, as its list does: its own load and its view's calls", async ({
+test("the pill counts a page's calls no trace answered, as its panel does: its own load and its view's calls", async ({
   page,
 }) => {
   const tag = 7;
-  const { release, list } = await opened(page, { document: { trace: id(tag, 50) } });
-  const count = panel(page).locator(".switcher-count");
+  const { release, list, calls } = await opened(page, { document: { trace: id(tag, 50) } });
+  const count = pill(page).locator(".seg.page b");
   await open(page, id(tag, 1), ["Spec", "Spec"]);
   release(0);
   release(1);
   await viewEnded(page);
 
   // The page's load and the two calls Swagger UI made to its own host, which sends no trace for them: this page's.
-  await expect(list.locator('.dt-request-row[data-call="group"] .dt-map-times')).toHaveText("×2");
-  await expect(list.locator('.dt-request-row[data-depth="1"]').filter({ hasText: "/rows/" })).toHaveCount(1);
+  await expect(calls).toHaveCount(2);
+  await expect(list.locator(".tp-map-row").filter({ hasText: "/rows/" })).toHaveCount(1);
   await expect(count).toHaveText("3");
   await expect(pill(page)).toHaveAccessibleName(/\. 3 requests on this page\b/);
-  await expect(pill(page).locator(".seg.page b")).toHaveText("3");
 
-  // Its view's trace stored: the calls are its chain's rows, the counts the same.
+  // Its view's trace stored: the calls are its call tree's rows, the count the same.
   await storeView(page, tag, { shift: -14_000_000 });
-  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
+  await expect(calls.locator('[data-state="untraced"]')).toHaveCount(2);
   await expect(count).toHaveText("3");
-  await expect(pill(page).locator(".seg.page b")).toHaveText("3");
-});
-
-test("a view's calls to the host that served the page are named by the page's app, not the host", async ({ page }) => {
-  const tag = 8;
-  // The page's own load, which its server (a Next app) traced: the host the view's calls go to.
-  const now = Date.now() * ms;
-  await ingest([
-    trace(
-      id(tag, 50),
-      "http",
-      "GET /rows/",
-      now - 40 * ms,
-      30 * ms,
-      {
-        "service.name": "next-app",
-        "http.method": "GET",
-        "http.route": "/rows/",
-        "http.status_code": 200,
-      },
-      [],
-    ),
-  ]);
-  const { release, list } = await opened(page, { document: { trace: id(tag, 50) }, dock: "bottom" });
-  await open(page, id(tag, 1), ["Spec", "Spec"]);
-  release(0);
-  release(1);
-  await viewEnded(page);
-
-  const group = list.locator('.dt-request-row[data-call="group"]');
-  await expect(group.locator(".dt-map-times")).toHaveText("×2");
-  await expect(group.locator(".dt-app-chip")).toHaveText("next-app");
-  // Its calls stay what they are: no trace answered them.
-  await storeView(page, tag, { shift: -14_000_000 });
-  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
-  await expect(group.locator(".dt-app-chip")).toHaveText("next-app");
 });
 
 test("while a view's chain loads the first time, no placeholder stands between it and its calls' rows", async ({
@@ -746,22 +643,15 @@ test("while a view's chain loads the first time, no placeholder stands between i
   // Calls to a host of their own: the app it is served by stays this test's (the Services map links them).
   await storeView(page, tag, { origin: "http://bff.test:4000/" });
 
-  // The call's placeholder under the call, where what it called goes; none over it for its view.
-  const rows = list.locator(".dt-request-row");
-  const loading = list.locator('.dt-request-row[data-chain="loading"]');
-  await expect(loading).toHaveCount(1);
+  // The view's call tree at once, its call under it: no placeholder row between them while its chain loads.
+  const rows = list.locator(".tp-map-row");
   const shape = () =>
-    rows.evaluateAll((all) =>
-      all.map((row) => {
-        const { chain, kind } = (row as HTMLElement).dataset;
-        return chain === "loading" ? "loading" : kind === "page" ? "view" : "call";
-      }),
-    );
-  await expect.poll(shape).toEqual(["view", "call", "loading"]);
+    rows.evaluateAll((all) => all.map((row) => ((row as HTMLElement).dataset["kind"] === "page" ? "view" : "call")));
+  await expect(rows.first()).not.toHaveClass(/tp-record/);
+  await expect.poll(shape).toEqual(["view", "call"]);
 
   answer();
 
-  await expect(loading).toHaveCount(0);
   await expect.poll(shape).toEqual(["view", "call"]);
 });
 
@@ -798,86 +688,25 @@ test("the hover card lists the page's calls no trace answered, as the pill count
   // A click opens the call tree of the view that made them, once its trace is stored.
   await storeView(page, tag, { shift: -14_000_000 });
   await rows.nth(1).click();
-  await expect(panel(page).locator('.dt-map-row[data-kind="http.client"]')).toContainText("×3");
+  await expect(panel(page).locator('.tp-map-row[data-kind="http.client"]')).toContainText("×3");
 });
 
-test("the narrow dock's request picker says a call no trace answered and one that got none as the list does", async ({
-  page,
-}) => {
-  const tag = 11;
-  const { release } = await opened(page, { document: { trace: id(tag, 50) }, fails: [2], width: 360 });
-  await open(page, id(tag, 1), ["Spec", "Spec", "Spec"]);
-  for (const n of [0, 1, 2]) release(n);
-  await viewEnded(page);
-  await storeView(page, tag, { shift: -14_000_000 });
-  // The list under the picker has them so: two "not traced", one "failed".
-  const list = panel(page).getByRole("region", { name: "Requests made by this page" });
-  await expect(list.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
-  await expect(list.locator('.dt-request-row[data-call="failed"]')).toHaveCount(1);
-
-  await panel(page).locator(".switcher-button").click();
-  const picker = panel(page).locator(".switcher-popover");
-  const calls = picker.locator(".dt-request-row").filter({ hasText: "Spec" });
-  await expect(calls).toHaveCount(3);
-  await expect(picker.locator('.dt-request-row[data-call="untraced"]')).toHaveCount(2);
-  for (const row of await picker.locator('.dt-request-row[data-call="untraced"]').all()) {
-    await expect(row.locator(".dt-not-traced")).toHaveText("not traced");
-    await expect(row.locator(".dt-status")).toHaveText("200");
-  }
-  const failed = picker.locator('.dt-request-row[data-call="failed"]');
-  await expect(failed.locator(".dt-status")).toHaveText("failed");
-  // No numbers for calls that have no trace: no "0 queries".
-  await expect(calls.filter({ hasText: "queries" })).toHaveCount(0);
-});
-
-test("the row over a view's calls to one app adds up their rows' numbers, its chain's findings said once", async ({
-  page,
-}) => {
-  const tag = 12;
-  // An app with an SDK (a BFF) answers each call, itself running no query; the service it calls runs two.
-  const { release, list } = await opened(page, { headers: bffHeaders(tag) });
-  await open(page, id(tag, 1), ["Book", "Book"]);
-  release(0);
-  release(1);
-  await viewEnded(page);
-  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
-  await ingest(made.flatMap((call) => served(tag, call)));
-  await storeView(page, tag, { origin: "http://bff.test:4000/" });
-
-  // Each call's row counts what its trace and those under it ran: 2 queries, its finding.
-  const calls = list.locator('.dt-request-row[data-depth="2"]').filter({ hasText: "Book" });
-  await expect(calls).toHaveCount(2);
-  await expect(calls.locator(".dt-request-queries-n")).toHaveText(["2", "2"]);
-  // Their app's row: the sum of its rows, the finding they share once, as the view's chain says it.
-  const group = list.locator('.dt-request-row[data-call="group"]');
-  await expect(group.locator(".dt-map-times")).toHaveText("×2");
-  await expect(group.locator(".dt-request-queries-n")).toHaveText("4");
-  await expect(group.locator(".dt-request-chips")).toHaveText("1");
-  await expect(calls.locator(".dt-request-chips")).toHaveText(["1", "1"]);
-});
-
-test("the selected view stays in sight below the list's head as its calls fill the list docked right", async ({
-  page,
-}) => {
+test("the selected view stays in sight at the list's top as its calls fill the list docked right", async ({ page }) => {
   const tag = 13;
-  const { release, list } = await opened(page);
+  const { release, list, view, calls } = await opened(page);
   const ops = Array.from({ length: 8 }, () => "Book");
   await open(page, id(tag, 1), ops);
-  const view = list.locator('.dt-request-row[data-kind="page"]');
-  await expect(list.locator('.dt-request-row[data-depth="2"]')).toHaveCount(8);
+  await expect(calls).toHaveCount(8);
   await expect(view).toHaveAttribute("aria-current", "true");
-  // The list overflows: eight calls and their app's row under the view.
-  expect(await list.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   const inSight = () =>
     view.evaluate((row) => {
-      const section = row.closest("section") as HTMLElement;
-      const head = section.querySelector(".page-requests-head") as HTMLElement;
-      return Math.round(row.getBoundingClientRect().top - head.getBoundingClientRect().bottom);
+      const scroller = row.closest(".panel-wf-rows") as HTMLElement;
+      return Math.round(row.getBoundingClientRect().top - scroller.getBoundingClientRect().top);
     });
   await expect.poll(inSight).toBeGreaterThanOrEqual(0);
   for (const n of ops.keys()) release(n);
   await viewEnded(page);
-  await expect(list.locator(".dt-running")).toHaveCount(0);
+  await expect(list.locator("[data-live]")).toHaveCount(0);
   await expect.poll(inSight).toBeGreaterThanOrEqual(0);
 });
 
@@ -940,52 +769,19 @@ test("after a reload the rows that had their numbers keep them while their chain
   );
   await ingest([own, api]);
   await storeView(page, tag, { origin: "http://bff.test:4000/" });
-  const call = list.locator(".dt-request-row").filter({ hasText: "query Books" });
-  await expect(call.locator(".dt-pending")).toHaveCount(0);
-  await expect(call.locator(".dt-request-queries-n")).toHaveText("2");
+  // The view's record counts its whole chain: the queries two hops down.
+  const marks = viewRow(list).locator(".tp-record-queries .tp-request-queries");
+  await expect(marks).toHaveAttribute("title", "2 SQL queries");
 
   // The page loaded again on a slow network: the chains take their time to come again.
   await page.route("**/api/traces/*/chain", () => undefined);
   await page.reload();
-  const again = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  const before = again.locator(".dt-request-row").filter({ hasText: "query Books" });
-  await expect(before).toBeVisible();
-  // Its numbers at once, as before the reload, not "…".
-  await expect(before.locator(".dt-request-queries-n")).toHaveText("2");
-  await expect(before.locator(".dt-pending")).toHaveCount(0);
-  await expect(again.locator('.dt-request-row[data-kind="page"]').first().locator(".dt-pending")).toHaveCount(0);
-});
-
-test("the row over a view's calls to one app says no sum of theirs while the view's chain doesn't count them yet", async ({
-  page,
-}) => {
-  const tag = 15;
-  const viewId = id(tag, 1);
-  const { release, list, calls } = await opened(page, { headers: bffHeaders(tag) });
-  const ops = Array.from({ length: 4 }, () => "Book");
-  await open(page, viewId, ops);
-  for (const n of ops.keys()) release(n);
-  await viewEnded(page);
-  // The view's trace first: its chain loads, without its calls' traces.
-  const first = page.waitForResponse((response) => response.url().endsWith(`/api/traces/${viewId}/chain`));
-  await storeView(page, tag, { origin: "http://bff.test:4000/" });
-  await first;
-  // Its chain's next loads lag (a slow network) while the calls' traces come and their rows count them.
-  const letThrough = await holdChain(page, viewId);
-  const made = await page.evaluate(() => (window as unknown as { calls: Made[] }).calls);
-  await ingest(made.flatMap((call) => served(tag, call)));
-  await expect(calls.locator(".dt-request-queries-n")).toHaveText(["2", "2", "2", "2"]);
-  await expect(calls.locator(".dt-request-chips")).toHaveText(["1", "1", "1", "1"]);
-
-  // Their app's row: "…" until the view's chain counts them, never their own added up (no query, the finding 4 times).
-  const group = list.locator('.dt-request-row[data-call="group"]');
-  await expect(group.locator(".dt-pending")).toHaveCount(1);
-  await expect(group.locator(".dt-request-queries-n")).toHaveCount(0);
-  await expect(group.locator(".dt-request-chips")).toHaveText("");
-
-  await letThrough();
-  await expect(group.locator(".dt-request-queries-n")).toHaveText("8");
-  await expect(group.locator(".dt-request-chips")).toHaveText("1");
+  // Its numbers at once, as before the reload: the agent's count of the record, not its own trace's 0.
+  await expect(viewRow(panelList(page))).toBeVisible();
+  await expect(viewRow(panelList(page)).locator(".tp-record-queries .tp-request-queries")).toHaveAttribute(
+    "title",
+    "2 SQL queries",
+  );
 });
 
 test("a view's row says no numbers of its chain's while a call's are still on their way, only its time", async ({
@@ -993,7 +789,7 @@ test("a view's row says no numbers of its chain's while a call's are still on th
 }) => {
   const tag = 16;
   const viewId = id(tag, 1);
-  const { release, list, calls } = await opened(page, { headers: bffHeaders(tag) });
+  const { release, view } = await opened(page, { headers: bffHeaders(tag) });
   await open(page, viewId, ["Book", "Book"]);
   release(0);
   release(1);
@@ -1007,19 +803,14 @@ test("a view's row says no numbers of its chain's while a call's are still on th
   );
   await storeView(page, tag, { origin: "http://bff.test:4000/" });
   await counted;
-  await expect(calls.locator(".dt-request-queries-n")).toHaveText(["2"]);
 
-  // The view's chain counts one call's: the view's row says "…" as their group's does, its time as it is.
-  const view = list.locator('.dt-request-row[data-kind="page"]');
-  const group = list.locator('.dt-request-row[data-call="group"]');
-  await expect(group.locator(".dt-pending")).toHaveCount(1);
-  await expect(view.locator(".dt-pending")).toHaveCount(1);
-  await expect(view.locator(".dt-request-queries-n")).toHaveCount(0);
+  // The view's chain counts one call's: the view's row says no sum of half its calls, its time as it is.
+  await expect(view.locator(".tp-record-queries .tp-pending")).toHaveCount(1);
+  const queries = view.locator(".tp-record-queries .tp-request-queries");
+  await expect(queries).toHaveCount(0);
 
   await ingest(served(tag, made[1] as Made));
-  await expect(view.locator(".dt-request-queries-n")).toHaveText("4");
-  await expect(group.locator(".dt-request-queries-n")).toHaveText("4");
-  await expect(view.locator(".dt-pending")).toHaveCount(0);
+  await expect(queries).toHaveAttribute("title", "4 SQL queries");
 });
 
 test("the pill says no numbers of a view's chain while a call's trace is on its way, as the view's row in the list", async ({
@@ -1028,7 +819,7 @@ test("the pill says no numbers of a view's chain while a call's trace is on its 
   const tag = 18;
   const viewId = id(tag, 1);
   // A gateway's calls (no trace id in their answers): only the view's chain says what served them.
-  const { release, list } = await opened(page);
+  const { release, view } = await opened(page);
   await open(page, viewId, ["Book", "Book"]);
   release(0);
   release(1);
@@ -1042,9 +833,7 @@ test("the pill says no numbers of a view's chain while a call's trace is on its 
   );
   await storeView(page, tag, { origin: "http://bff.test:4000/" });
   await counted;
-  const view = list.locator('.dt-request-row[data-kind="page"]');
-  await expect(list.locator('.dt-request-row[data-call="trace"]')).toHaveCount(1);
-  await expect(view.locator(".dt-pending")).toHaveCount(1);
+  await expect(view).not.toHaveClass(/tp-record/);
 
   // The pill asks for the view's chain too: its numbers "…" as long as the list's, not the 2 queries of one call.
   const shown = pill(page);
@@ -1055,7 +844,7 @@ test("the pill says no numbers of a view's chain while a call's trace is on its 
   }
 
   await ingest(served(tag, made[1] as Made));
-  await expect(view.locator(".dt-request-queries-n")).toHaveText("4");
+  await expect(view.locator(".tp-record-queries .tp-request-queries")).toHaveAttribute("title", "4 SQL queries");
   await expect(shown).toHaveAttribute("aria-label", /4 queries/, { timeout: 5_000 });
   await expect(shown.locator(".pending")).toHaveCount(0);
 });

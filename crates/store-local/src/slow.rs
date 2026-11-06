@@ -1,22 +1,21 @@
 //! What each page of the console calls slow: the time its "Slower than" filter offers first. A system's page is slow
 //! from where the agent raises its slow-call issue, with each app's limits (a warehouse's own for SQL); the pages of
-//! requests, tasks and the rest from `SLOW_REQUEST_US`, as their charts mark them.
+//! requests from `SLOW_REQUEST_US`, a page's actions and views from theirs (`stats::slow_from`), as their charts mark
+//! them; tasks, jobs and WebSocket connections are held to no time.
 
 use super::*;
 use std::collections::BTreeMap;
 use tracepanel_analysis::calls::slow_ms;
 use tracepanel_protocol::Thresholds;
 
-/// The pages whose rows are traces (requests, tasks, jobs…): slow from `SLOW_REQUEST_US`.
-const ENTRY_PAGES: [&str; 8] = [
-    "traces",
-    "endpoints",
-    "graphql",
-    "tasks",
-    "websockets",
-    "jobs",
-    "rpc",
-    "pages",
+/// The pages whose rows are requests: slow from `SLOW_REQUEST_US`. The pages of the browser's views and actions
+/// are slow from an action's limit, their views later (`mixed`); tasks, jobs and WebSockets from none.
+const ENTRY_PAGES: [(&str, i64, bool); 5] = [
+    ("traces", SLOW_REQUEST_US, true),
+    ("endpoints", SLOW_REQUEST_US, false),
+    ("graphql", SLOW_REQUEST_US, false),
+    ("rpc", SLOW_REQUEST_US, false),
+    ("pages", SLOW_ACTION_US, true),
 ];
 
 /// One system's calls, as a page has them: its family, a SQL call's database, the app that made them.
@@ -71,10 +70,10 @@ impl Reader {
                 .push(seen);
         }
         let mut slow = serde_json::Map::new();
-        for page in ENTRY_PAGES {
+        for (page, from, mixed) in ENTRY_PAGES {
             slow.insert(
                 page.into(),
-                serde_json::json!({"ms": SLOW_REQUEST_US / 1000, "mixed": false}),
+                serde_json::json!({"ms": from / 1000, "mixed": mixed}),
             );
         }
         let defaults = Thresholds::default();
@@ -366,11 +365,12 @@ mod tests {
             ..Thresholds::default()
         };
         let limits = HashMap::from([("shop".to_owned(), shop)]);
-        let entry = serde_json::json!({"ms": 500, "mixed": false});
+        // Requests from a second; the browser's actions from a second, its views later; tasks, jobs, WebSockets none.
+        let request = serde_json::json!({"ms": 1000, "mixed": false});
         let with = |pages: Value| -> Value {
             let mut all = serde_json::json!({
-                "traces": entry, "endpoints": entry, "graphql": entry, "tasks": entry, "websockets": entry,
-                "jobs": entry, "rpc": entry, "pages": entry,
+                "traces": {"ms": 1000, "mixed": true}, "endpoints": request, "graphql": request, "rpc": request,
+                "pages": {"ms": 1000, "mixed": true},
             });
             for (page, limit) in pages.as_object().unwrap() {
                 all[page] = limit.clone();

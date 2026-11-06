@@ -25,7 +25,7 @@ test("a repeated query's details: its SQL, how many, and the line that runs it",
 
   await expect(details).toContainText("13 similar queries");
   await expect(details.getByRole("code").first()).toHaveText(
-    "SELECT author.id, author.name FROM author WHERE author.id = ?",
+    /^SELECT\s+author\.id,\s+author\.name\s+FROM\s+author\s+WHERE\s+author\.id = \d+$/,
   );
   await expect(details).toContainText("app/main.py:60 in posts");
 
@@ -52,7 +52,7 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
   const queries = panel.locator("tr[aria-expanded]");
   await expect(queries).toHaveCount(2);
   await expect(queries.first()).toContainText(/SELECT author\s*×13/);
-  await expect(queries.nth(1).locator(".dt-map-times")).toHaveCount(0);
+  await expect(queries.nth(1).locator(".tp-map-times")).toHaveCount(0);
 
   await queries.first().click();
 
@@ -87,14 +87,12 @@ test("a query a template made says so in the DB tab; in the call tree its templa
 
   await page.getByRole("tab", { name: "Call tree" }).click();
 
-  const query = page.locator(".dt-map-row").filter({ hasText: "SELECT auth_user" });
+  const query = page.locator(".tp-map-row").filter({ hasText: "SELECT auth_user" });
 
   // It hangs under the template's own row: the template isn't said again beside it.
   await expect(query).toBeVisible();
-  await expect(query.locator(".dt-from-template")).toHaveCount(0);
-  await expect(page.locator(".dt-map-row").filter({ hasText: "blog/post_list.html" }).first()).toContainText(
-    "template",
-  );
+  await expect(query.locator(".tp-from-template")).toHaveCount(0);
+  await expect(page.locator(".tp-map-row").filter({ hasText: "blog/post_list.html" }).first()).toContainText("tpl");
 });
 
 test("Explore leads to the endpoint's calls, the issue and the logs around the trace", async ({ page }) => {

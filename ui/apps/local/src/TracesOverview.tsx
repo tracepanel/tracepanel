@@ -153,7 +153,6 @@ export function TracesOverview({
       </section>
     );
   }
-  const threshold = duration(overview.slow_threshold);
   return (
     <OverviewSection
       open={open}
@@ -173,13 +172,7 @@ export function TracesOverview({
           tone={s.errors ? "error" : undefined}
           onClick={s.errors ? () => onRefine({ has: "error" }) : undefined}
         />
-        <Stat
-          label={`Slow ≥ ${threshold}`}
-          value={String(s.slow)}
-          sub={percent(s.slow, s.calls)}
-          tone={s.slow ? "warn" : undefined}
-          onClick={s.slow ? () => onRefine({ duration: `>${overview.slow_threshold / 1000}ms` }) : undefined}
-        />
+        <SlowStat overview={overview} onRefine={onRefine} />
         {latencyTiles(s)}
       </StatGrid>
       {scope.filter === "" ? <KindChips kinds={overview.kinds} failures={true} onRefine={onRefine} /> : null}
@@ -337,5 +330,26 @@ function OperationList({
         ))}
       </ul>
     </Card>
+  );
+}
+
+/**
+ * How many are slow, by the rule the agent says ("requests ≥ 1 s · views ≥ 2.5 s"); a click finds them. None where
+ * no trace is held to a time (tasks, jobs). An agent from before the rule by kind says one time for every trace.
+ */
+function SlowStat({ overview, onRefine }: { overview: Overview; onRefine: (terms: Record<string, string>) => void }) {
+  const s = overview.summary;
+  const old = overview.slow_rule === undefined;
+  const rule = old ? `≥ ${duration(overview.slow_threshold)}` : overview.slow_rule;
+  if (!s || rule === null) return null;
+  const terms = old ? { duration: `>${overview.slow_threshold / 1000}ms` } : { has: "slow" };
+  return (
+    <Stat
+      label={`Slow · ${rule}`}
+      value={String(s.slow)}
+      sub={percent(s.slow, s.calls)}
+      tone={s.slow ? "warn" : undefined}
+      onClick={s.slow ? () => onRefine(terms) : undefined}
+    />
   );
 }

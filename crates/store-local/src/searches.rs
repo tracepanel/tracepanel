@@ -15,6 +15,8 @@ pub(crate) fn has(term: &Term) -> search::Clause {
         "error" => Ok(("errors > 0 OR issue_kinds LIKE '%,error,%'".into(), vec![])),
         "logs" => Ok(("logs > 0".into(), vec![])),
         "issues" => Ok(("issues > 0".into(), vec![])),
+        // Slow for what it is: a request, a page's view, an action (stats::slow_from).
+        "slow" => Ok((format!("duration >= ({})", stats::SLOW_FROM_SQL), vec![])),
         "mail" => Ok(("mails > 0".into(), vec![])),
         "n+1" | "duplicates" | "slow-sql" | "slow-http" | "slow-call" | "long-transaction"
         | "in-transaction"
@@ -24,7 +26,7 @@ pub(crate) fn has(term: &Term) -> search::Clause {
         _ => Err(SearchError(
             "has expects one of: n+1, duplicates, slow-sql, slow-http, slow-call, long-transaction, in-transaction, \
              htmx, \
-             queue-wait, blocking-call, large-result, migration-risk, error, issues, logs, mail"
+             queue-wait, blocking-call, large-result, migration-risk, error, issues, slow, logs, mail"
                 .into(),
         )),
     }

@@ -1,12 +1,13 @@
 export { AppDetails, appSaidAnything } from "./AppDetails";
-export { CallMap } from "./CallMap";
+export { CallMap, RowFilter, RowKinds } from "./CallMap";
 export { CallsList } from "./CallsList";
 export { CallsChart, Histogram, LatencyChart, LogsChart, Stat, StatGrid } from "./Charts";
 export * from "./CopyButton";
+export { FILTERS, filterColor, kindColor } from "./callTree";
 export { type DataColumn, type DataRows, DataTable } from "./DataTable";
 export { ErrorView } from "./ErrorView";
 export * from "./ExplainView";
-export { ago, dayTime, duration, type Tone, tone } from "./format";
+export { ago, dayTime, duration, isSlow, slowFrom, slowRuleOf, type Tone, tone } from "./format";
 export { GraphqlCode } from "./GraphqlCode";
 export { Hint } from "./Hint";
 export { IssueGroupList } from "./IssueGroupList";
@@ -18,6 +19,7 @@ export * from "./Logo";
 export { LogRecord, logAttrs } from "./LogRecordDetails";
 export { type AttributeColumns, type LogColumn, LogLevel, LogTable, useAttributeColumns } from "./LogTable";
 export { ISSUE_LABELS, issueTitle } from "./labels";
+export { withChain } from "./lib/chainCounts";
 export {
   type ChainApp,
   type ChainCall,
@@ -43,10 +45,12 @@ export {
   AliasChip,
   AppChip,
   AppMark,
+  appColour,
   DetailsFooter,
   Empty,
   IssueChip,
   KindBadge,
+  KindWords,
   MethodBadge,
   NeutralTag,
   RichText,
@@ -56,6 +60,7 @@ export {
   StatusBadge,
   TaskName,
   TraceBadge,
+  WATERFALL_KINDS,
   WaitingIcon,
 } from "./primitives";
 export { RequestInfo } from "./RequestInfo";
@@ -78,6 +83,17 @@ export {
 export { formatSql, tokenizeSql, uncommented } from "./sql";
 export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
-export { type CallGroup, type ListChains, PageName, TraceList, type TraceRow, traceLabel } from "./TraceList";
+export {
+  type CallGroup,
+  isGone,
+  type ListChains,
+  OpenRecordMarks,
+  PageName,
+  RecordRow,
+  recordPending,
+  TraceList,
+  type TraceRow,
+  traceLabel,
+} from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";

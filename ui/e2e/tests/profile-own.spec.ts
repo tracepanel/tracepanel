@@ -358,7 +358,7 @@ test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's
   await expect.poll(() => boxes(page)).toEqual(["CatalogController.listProducts", "waiting", "waiting"]);
   // Its samples aren't timed: its bar is the strip's, spans' (its waits in the flame and the list).
   await expect(shares(page)).toHaveText([/^Your code\s*10 ms\s*100%$/]);
-  await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
+  await expect(boxesNamed(page, "waiting").first()).toHaveClass(/tp-hatched/);
   await expect.poll(() => functionNames(page)).toEqual(["CatalogController.listProducts", "[waiting]"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();
@@ -366,7 +366,7 @@ test("a JVM request's code is its packages': Spring's, the JDK's and Hibernate's
   // Every frame keeps the one that waited.
   await expect.poll(() => boxes(page)).toContain("Brand$HibernateProxy.getName");
   await expect.poll(() => boxes(page)).toContain("VirtualThread.park");
-  await expect(boxesNamed(page, "VirtualThread.park")).toHaveClass(/dt-hatched/);
+  await expect(boxesNamed(page, "VirtualThread.park")).toHaveClass(/tp-hatched/);
   await expect(shares(page)).toHaveText([/^Your code\s*10 ms\s*100%$/]);
 });
 
@@ -380,7 +380,7 @@ test("a Python task's waits are waiting under the function of yours that waited,
   // box, one row.
   await expect.poll(() => boxes(page)).toEqual(["refresh_tracking", "track_parcel", "waiting", "waiting"]);
   await expect(shares(page)).toHaveText([/^Your code\s*10 ms\s*100%$/]);
-  await expect(boxesNamed(page, "waiting").first()).toHaveClass(/dt-hatched/);
+  await expect(boxesNamed(page, "waiting").first()).toHaveClass(/tp-hatched/);
   await expect.poll(() => functionNames(page)).toEqual(["track_parcel", "refresh_tracking", "[waiting]"]);
 
   await page.getByRole("tab", { name: "All frames" }).click();

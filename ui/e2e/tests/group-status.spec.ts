@@ -78,7 +78,7 @@ test.beforeEach(async () => {
   await store();
 });
 
-const groupRow = (page: Page, text: string) => page.locator(".dt-map-group > .dt-map-row").filter({ hasText: text });
+const groupRow = (page: Page, text: string) => page.locator(".tp-map-group > .tp-map-row").filter({ hasText: text });
 
 test("a group row in the call tree says how many of its calls failed or got a 4xx, its edge the worst", async ({
   page,
@@ -87,19 +87,19 @@ test("a group row in the call tree says how many of its calls failed or got a 4x
 
   const users = groupRow(page, "/users/{id}");
   await expect(users).toContainText("×4");
-  await expect(users.locator(".dt-status")).toHaveText(["2 failed"]);
+  await expect(users.locator(".tp-status")).toHaveText(["2 failed"]);
   await expect(users).toHaveAttribute("data-status", "error");
 
   const books = groupRow(page, "/books/{id}");
-  await expect(books.locator(".dt-status")).toHaveText(["2 × 4xx"]);
+  await expect(books.locator(".tp-status")).toHaveText(["2 × 4xx"]);
   await expect(books).toHaveAttribute("data-status", "warn");
 
   const authors = groupRow(page, "/authors/{id}");
-  await expect(authors.locator(".dt-status")).toHaveText(["2 × 404"]);
+  await expect(authors.locator(".tp-status")).toHaveText(["2 × 404"]);
 
   // Open, each call says its own, as before.
   await users.click();
-  await expect(page.locator('.dt-map-row[data-status="error"]').filter({ hasText: "/users/2" })).toContainText("503");
+  await expect(page.locator('.tp-map-row[data-status="error"]').filter({ hasText: "/users/2" })).toContainText("503");
 });
 
 test("the HTTP calls tab's grouped rows say the same, their edge red or amber", async ({ page }) => {
@@ -107,10 +107,10 @@ test("the HTTP calls tab's grouped rows say the same, their edge red or amber", 
   const rows = page.getByRole("tabpanel").locator("tbody tr");
 
   const users = rows.filter({ hasText: "/users/{id}" });
-  await expect(users.locator(".dt-status")).toHaveText(["2 failed"]);
+  await expect(users.locator(".tp-status")).toHaveText(["2 failed"]);
   await expect(users).toHaveAttribute("data-tone", "error");
 
   const authors = rows.filter({ hasText: "/authors/{id}" });
-  await expect(authors.locator(".dt-status")).toHaveText(["2 × 404"]);
+  await expect(authors.locator(".tp-status")).toHaveText(["2 × 404"]);
   await expect(authors).toHaveAttribute("data-tone", "warn");
 });

@@ -42,8 +42,8 @@ export function Tabs<T extends string>({ tabs, active, onChange, label }: TabsPr
   const overflow = tabs.filter((_, index) => fit.hidden.has(index));
   const copies = tabs.map((tab) => <TabButton key={tab.id} tab={tab} selected={tab.id === active} />);
   return (
-    <div ref={row} className="dt-tabs">
-      <div className="dt-tabs-list" role="tablist" aria-label={label} data-compact={fit.compact || undefined}>
+    <div ref={row} className="tp-tabs">
+      <div className="tp-tabs-list" role="tablist" aria-label={label} data-compact={fit.compact || undefined}>
         {tabs.map((tab, index) =>
           fit.hidden.has(index) ? null : (
             <TabButton key={tab.id} tab={tab} selected={tab.id === active} onClick={() => onChange(tab.id)} />
@@ -53,7 +53,7 @@ export function Tabs<T extends string>({ tabs, active, onChange, label }: TabsPr
       {overflow.length > 0 ? <MoreTabs tabs={overflow} onChange={onChange} /> : null}
       {/* Every tab and the More button as they would show, with their names and without, unseen: the widths the row
           is fitted from. */}
-      <div className="dt-tabs-measure" aria-hidden="true" inert>
+      <div className="tp-tabs-measure" aria-hidden="true" inert>
         <div ref={full}>
           {copies}
           <MoreButton tabs={[]} />
@@ -81,7 +81,7 @@ function TabButton<T extends string>({
       type="button"
       role="tab"
       aria-selected={selected}
-      className="dt-tab"
+      className="tp-tab"
       // Narrow, the other tabs show their icon and count only: the name is in the tooltip.
       title={tab.label}
       tabIndex={onClick ? undefined : -1}
@@ -96,11 +96,11 @@ function TabBody<T extends string>({ tab }: { tab: Tab<T> }) {
   return (
     <>
       {tab.icon ?? null}
-      <span className="dt-tab-label">{tab.label}</span>
+      <span className="tp-tab-label">{tab.label}</span>
       <TabCount tab={tab} />
       {tab.badge ?? null}
       {tab.detail ? (
-        <span className="dt-tab-detail" title={tab.detailTitle}>
+        <span className="tp-tab-detail" title={tab.detailTitle}>
           {tab.detail}
         </span>
       ) : null}
@@ -111,7 +111,7 @@ function TabBody<T extends string>({ tab }: { tab: Tab<T> }) {
 function TabCount<T extends string>({ tab }: { tab: Tab<T> }) {
   if (tab.count === undefined) return null;
   return (
-    <span className="dt-tab-count" data-tone={tab.tone} title={tab.hint}>
+    <span className="tp-tab-count" data-tone={tab.tone} title={tab.hint}>
       {tab.count}
     </span>
   );
@@ -126,7 +126,7 @@ function MoreTabs<T extends string>({ tabs, onChange }: { tabs: readonly Tab<T>[
       <DropdownMenuTrigger asChild>
         <MoreButton tabs={tabs} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="dt-tabs-more">
+      <DropdownMenuContent align="end" className="tp-tabs-more">
         {tabs.map((tab) => (
           <DropdownMenuItem key={tab.id} onSelect={() => onChange(tab.id)}>
             <TabBody tab={tab} />
@@ -143,14 +143,14 @@ function MoreButton<T extends string>({ tabs, ...props }: { tabs: readonly Tab<T
   return (
     <button
       type="button"
-      className="dt-tab"
+      className="tp-tab"
       title="More tabs"
       aria-label={["More tabs", ...tabs.map((tab) => tab.label)].join(", ").replace(", ", ": ")}
       {...props}
     >
       <EllipsisIcon />
       <span>More</span>
-      {tone ? <span className="dt-tab-dot" data-tone={tone} /> : null}
+      {tone ? <span className="tp-tab-dot" data-tone={tone} /> : null}
     </button>
   );
 }

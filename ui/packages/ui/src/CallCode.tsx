@@ -2,6 +2,9 @@ import { FlameIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import type { CodeOwner, RowContext } from "./CallRowParts";
 import { partOfCategory } from "./callTree";
+import { Button } from "./components/ui/button";
+import { FactGrid } from "./FactGrid";
+import { duration } from "./format";
 import { Hint } from "./Hint";
 import type { Category } from "./lib/breakdown";
 import { widthOf } from "./lib/percent";
@@ -22,6 +25,7 @@ import {
 } from "./lib/waiting";
 import { windowProfile } from "./lib/windowProfile";
 import { RowFlame } from "./ProfileHint";
+import type { PropRow } from "./PropTable";
 import { KindBadge, TaskName } from "./primitives";
 import type { Span, Trace } from "./types";
 
@@ -121,13 +125,13 @@ function CodeBars({
   // A call's trace's pieces are of its own time: on this trace's from where it starts on this one's clock.
   const offset = owner.start - trace.start;
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span className="tp-map-track" aria-hidden="true">
       {part.pieces
         .filter((piece) => piece.to - piece.from >= total * 0.004)
         .map((piece) => (
           <span
             key={piece.from}
-            className="dt-map-bar"
+            className="tp-map-bar"
             data-quiet=""
             data-waiting={piece.waiting ? "" : undefined}
             data-category={category}
@@ -143,6 +147,7 @@ function CodeBars({
  * without one, untraced code, waiting where the profile can't say.
  */
 function partName(part: CodePart, code: CodeOwner, span: string): { name: string; yours: boolean } {
+  if (inBrowser(code.trace)) return { name: browserPart(part), yours: false };
   const profile = partProfile(part, code, span);
   if (part.waiting) return waited(profile);
   const name = profile ? ranMost(profile) : UNTRACED;
@@ -150,6 +155,90 @@ function partName(part: CodePart, code: CodeOwner, span: string): { name: string
 }
 
 const UNTRACED = "untraced code";
+
+/** A browser's trace: its own time is the page's, which no profile records. */
+function inBrowser(trace: Trace): boolean {
+  return trace.attrs["service.role"] === "browser";
+}
+
+const BROWSER_NOTE =
+  "The page's own time between its calls: loading its HTML and scripts, running them, rendering. The browser records no profile of it.";
+
+/** What a code or wait row is, in its details: where it shows what ran, or why nothing does. */
+function partNote(part: CodePart, code: CodeOwner): string {
+  if (inBrowser(code.trace)) return BROWSER_NOTE;
+  if (code.trace.profile) return part.waiting ? "Where it waited, in its profile." : "What ran here, in its profile.";
+  return "Your code between the spans here, with nothing recorded inside.";
+}
+
+/** What a code or wait row's details say of it. */
+export interface CodeInfo {
+  name: string;
+  /** The span whose own time it is. */
+  inside: string;
+  app: string;
+  /** Its first and last moment, µs since its trace started, and in how many stretches. */
+  from: number;
+  to: number;
+  stretches: number;
+  note: string;
+  /** Its trace has a profile: the Profile tab shows what ran. Else, its app profiles a request when asked. */
+  profiled: boolean;
+  profiles: boolean;
+}
+
+function codeInfo(part: CodePart, code: CodeOwner, span: Span, name: string): CodeInfo {
+  const service = code.trace.attrs["service.name"];
+  return {
+    name,
+    inside: span.name,
+    app: typeof service === "string" ? service : "",
+    from: part.pieces[0]?.from ?? 0,
+    to: part.pieces.at(-1)?.to ?? 0,
+    stretches: part.pieces.length,
+    note: partNote(part, code),
+    profiled: code.trace.profile !== undefined,
+    profiles: code.profiles && !inBrowser(code.trace),
+  };
+}
+
+/**
+ * A code or wait row's details beside the tree: what it is, its time, where it ran and when, and its profile: a way
+ * to it, or how to get one.
+ */
+export function CodeDetails({ info, onProfile }: { info: CodeInfo; onProfile?: (() => void) | undefined }) {
+  const when =
+    info.from < 1_000
+      ? `from its start to ${duration(info.to)}`
+      : `${duration(info.from)} – ${duration(info.to)} from its start`;
+  const rows: PropRow[] = [
+    { label: "Inside", value: info.inside, mono: true, copy: info.inside },
+    ...(info.app ? [{ label: "App", value: info.app }] : []),
+    { label: "When", value: info.stretches > 1 ? `${when}, in ${info.stretches} stretches` : when },
+  ];
+  return (
+    <div className="tp-code-details">
+      <p className="m-0 text-sm text-muted-foreground">{info.note}</p>
+      <FactGrid rows={rows} />
+      {info.profiled && onProfile ? (
+        <Button variant="outline" size="sm" onClick={onProfile}>
+          <FlameIcon aria-hidden="true" />
+          Open profile
+        </Button>
+      ) : !info.profiled && info.profiles ? (
+        <p className="m-0 text-sm text-muted-foreground">
+          To see which of your functions ran, profile the request with the{" "}
+          <FlameIcon className="inline size-3.5 align-[-2px]" aria-label="flame" /> in the panel.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A browser's own time: loading the page, before its first call; its scripts and rendering after. */
+function browserPart(part: CodePart): string {
+  return (part.pieces[0]?.from ?? 1) < 1_000 ? "page load" : "in the browser";
+}
 
 const OWNERS = new WeakMap<CodeOwner, Map<number, string>>();
 
@@ -181,7 +270,7 @@ function partProfile(part: CodePart, code: CodeOwner, span: string): Profile | u
 function WaitPlace({ part, code, span }: { part: CodePart; code: CodeOwner; span: string }) {
   const profile = partProfile(part, code, span);
   const place = part.waiting && profile ? waitPlace(profile) : null;
-  return place ? <span className="dt-map-sub">{place}</span> : null;
+  return place ? <span className="tp-map-sub">{place}</span> : null;
 }
 
 /**
@@ -210,27 +299,34 @@ function CodeRowParts({ span, ctx, depth, part }: { span: Span; ctx: RowContext;
   const { name, yours } = partName(part, ctx.code, span.id);
   return (
     <>
-      <span className="dt-map-name" style={indentOf(depth)}>
-        <span className="dt-map-caret" />
+      <span className="tp-map-name" style={indentOf(depth)}>
+        <span className="tp-map-caret" />
         <KindBadge
           kind={part.waiting ? "wait" : "code"}
           muted={true}
-          className={part.waiting ? "dt-map-kind dt-map-wait" : "dt-map-kind"}
+          className={part.waiting ? "tp-map-kind tp-map-wait" : "tp-map-kind"}
         />
         <UntracedHint name={name} code={ctx.code}>
-          <TaskName name={name} className={yours ? "dt-map-text" : "dt-map-text dt-map-lib"} />
+          <TaskName name={name} className={yours ? "tp-map-text" : "tp-map-text tp-map-lib"} />
         </UntracedHint>
         <WaitPlace part={part} code={ctx.code} span={span.id} />
         <RowFlame trace={owner} />
       </span>
       <CodeBars part={part} category={category} trace={ctx.trace} owner={owner} />
-      <span className="dt-map-time">{part.time}</span>
+      <span className="tp-map-time">{part.time}</span>
     </>
   );
 }
 
 /** On untraced code of a trace without a profile, where the app can profile, on hover: how to see what ran there. */
 function UntracedHint({ name, code, children }: { name: string; code: CodeOwner; children: ReactNode }) {
+  if (inBrowser(code.trace)) {
+    return (
+      <Hint title={name === "page load" ? "Page load" : "In the browser"} detail={BROWSER_NOTE} side="top">
+        <span className="flex min-w-0">{children}</span>
+      </Hint>
+    );
+  }
   if (name !== UNTRACED || !code.profiles || code.trace.profile) return children;
   return (
     <Hint
@@ -269,25 +365,43 @@ export function CodeRow({ span, ctx, depth }: { span: Span; ctx: RowContext; dep
 function CodePartRow({ span, ctx, depth, part }: { span: Span; ctx: RowContext; depth: number; part: CodePart }) {
   const inside = <CodeRowParts span={span} ctx={ctx} depth={depth} part={part} />;
   const open = ctx.code.onProfile;
-  // With a profile, a click opens it at that stretch; without, a plain row.
-  return open ? (
+  const row = `${span.id}:${part.waiting ? "wait" : "code"}`;
+  const pick = ctx.onCodeRow;
+  // With a profile, a click opens it at that stretch; beside the tree it is a row to pick either way: its span's
+  // details say what it is in. Elsewhere, without a profile, a plain row.
+  return open || pick ? (
     <button
       type="button"
-      className="dt-map-row"
+      className="tp-map-row"
       data-kind="code"
       data-category={codeCategory(span, ctx)}
+      aria-current={ctx.codeRow === row ? "true" : undefined}
       // Says where it leads: a code row of a call's trace opens that trace, not a tab of this one.
       title={
-        ctx.code.trace.id === ctx.trace.id
-          ? "Open the profile at this stretch"
-          : "Open the profile of the trace that served this call, at this stretch"
+        open && !pick
+          ? ctx.code.trace.id === ctx.trace.id
+            ? "Open the profile at this stretch"
+            : "Open the profile of the trace that served this call, at this stretch"
+          : undefined
       }
-      onClick={() => open(stretchesOf(part.pieces))}
+      onClick={() => {
+        // Beside the tree, its details open its profile there: the page stays as it is.
+        if (pick) {
+          const { name } = partName(part, ctx.code, span.id);
+          const windows = stretchesOf(part.pieces);
+          pick(row, span.id, codeInfo(part, ctx.code, span, name), {
+            trace: ctx.code.trace.id,
+            kind: part.waiting ? "wait" : "code",
+            windows,
+            note: partNote(part, ctx.code),
+          });
+        } else open?.(stretchesOf(part.pieces));
+      }}
     >
       {inside}
     </button>
   ) : (
-    <div className="dt-map-row" data-kind="code" data-category={codeCategory(span, ctx)}>
+    <div className="tp-map-row" data-kind="code" data-category={codeCategory(span, ctx)}>
       {inside}
     </div>
   );
@@ -306,5 +420,5 @@ function hasCodeRow(span: Span, ctx: RowContext): boolean {
 
 /** How far in a row's name starts, and how many guides of the rows it hangs under it draws (styles.css). */
 export function indentOf(depth: number): CSSProperties {
-  return { paddingLeft: `${12 + depth * 16}px`, "--dt-depth": depth } as CSSProperties;
+  return { paddingLeft: `${12 + depth * 16}px`, "--tp-depth": depth } as CSSProperties;
 }

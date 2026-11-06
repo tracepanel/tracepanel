@@ -1,3 +1,4 @@
+import { type RowCounts, withChain } from "./lib/chainCounts";
 import type { Snapshot } from "./snapshot";
 import type {
   App,
@@ -41,7 +42,8 @@ const EMPTY_OVERVIEW: TracesOverview = {
   summary: null,
   series: [],
   histogram: [],
-  slow_threshold: 500_000,
+  slow_threshold: 1_000_000,
+  slow_rule: null,
   kinds: [],
   slowest: [],
   failing: [],
@@ -52,6 +54,8 @@ const EMPTY_OVERVIEW: TracesOverview = {
 export interface TracesWithRuns {
   traces: TraceSummary[];
   runs: Record<string, TraceSummary[]>;
+  /** What each one's whole chain adds up to; none from an agent too old to say. */
+  counts?: Record<string, RowCounts> | undefined;
 }
 
 /** A search query the API rejected (unknown filter, bad value): `message` is meant for the user. */
@@ -233,13 +237,19 @@ export function httpSource(base: string | URL): DataSource {
       return (await getJson<{ traces: TraceSummary[] }>(url("traces", params)))?.traces ?? [];
     },
     async listTracesWithRuns(ids) {
-      const params = { ids: ids.join(","), limit: ids.length, runs: 1 };
+      const params = { ids: ids.join(","), limit: ids.length, runs: 1, counts: 1 };
       const body = (await getJson<Partial<TracesWithRuns>>(url("traces", params))) ?? {};
-      return { traces: body.traces ?? [], runs: body.runs ?? {} };
+      return { traces: body.traces ?? [], runs: body.runs ?? {}, counts: body.counts };
     },
     async searchTraces(q, before) {
-      const body = await getJson<{ traces: TraceSummary[]; next: number | null }>(url("traces", { q, before }));
-      return { items: body?.traces ?? [], next: body?.next ?? null };
+      // With each row's chain numbers: a view's queries and issues are those of the calls under it, as the panel says.
+      const body = await getJson<{
+        traces: TraceSummary[];
+        next: number | null;
+        counts?: Record<string, RowCounts>;
+      }>(url("traces", { q, before, counts: 1 }));
+      const items = (body?.traces ?? []).map((trace) => withChain(trace, body?.counts?.[trace.id]));
+      return { items, next: body?.next ?? null };
     },
     getTrace(id) {
       // A trace not stored yet (on its way) is no error: the browser logs none for its 204.

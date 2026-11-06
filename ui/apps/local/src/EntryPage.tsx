@@ -304,18 +304,16 @@ function EntrySearch({
 }) {
   const calls = view === "calls";
   return (
-    <>
-      <SearchBar
-        section={calls ? "traces" : section}
-        callsOf={calls ? section : undefined}
-        q={q}
-        spec={spec}
-        error={loaded.error}
-        known={known}
-        count={loaded.size}
-        onChange={onChange}
-      />
-    </>
+    <SearchBar
+      section={calls ? "traces" : section}
+      callsOf={calls ? section : undefined}
+      q={q}
+      spec={spec}
+      error={loaded.error}
+      known={known}
+      count={loaded.size}
+      onChange={onChange}
+    />
   );
 }
 

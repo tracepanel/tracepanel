@@ -2,7 +2,7 @@
 // shows and loads, the closed panel's hourglass (a trace on its way) stopped until it opens again. Motion stays for
 // what is in flight, and reduced motion (Playwright's default here) stops that too.
 import type { Page } from "@playwright/test";
-import { openApp, panel, pill, traceId } from "../app.ts";
+import { openApp, pill, records, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 test.use({ reducedMotion: "no-preference" });
@@ -86,8 +86,9 @@ test("the closed panel's hourglass stops, and turns again when the panel opens",
   await page.getByRole("button", { name: "Load soon" }).click();
   await pill(page).click();
 
-  await expect(panel(page).getByText("Trace on its way")).toBeVisible();
-  await expect.poll(() => running(page)).toContain("dt-turn-over");
+  // Its record waits for its trace, its row's mark of that turning.
+  await expect(records(page).first()).toBeVisible();
+  await expect.poll(async () => (await running(page)).length).toBeGreaterThan(0);
 
   await pill(page).click();
 
@@ -95,5 +96,5 @@ test("the closed panel's hourglass stops, and turns again when the panel opens",
 
   await pill(page).click();
 
-  await expect.poll(() => running(page)).toContain("dt-turn-over");
+  await expect.poll(async () => (await running(page)).length).toBeGreaterThan(0);
 });

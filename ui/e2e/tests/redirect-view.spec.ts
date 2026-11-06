@@ -1,12 +1,4 @@
-// An SPA's route that sends on to another as it renders (/sms to /sms/campaigns): the view it left at once, with no
-// call and no time of its own, is no row of its own. The view it sent to says where it came from, in the panel's list
-// and its head, and the agent keeps only that one (the console's lists and counts). That view's calls, several
-// GraphQL operations at once through a gateway, are each a row and a call of their own, named by their operation;
-// its counts say what is its own and what the apps it called did. A view cut with its calls unanswered keeps them
-// waiting, and their traces link to them however late they come.
-import type { Page } from "@playwright/test";
 import { CONSOLE, RUN_STARTED } from "../agent.ts";
-import { openApp, panel, pill } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 type Doc = Record<string, unknown>;
@@ -149,23 +141,6 @@ async function redirected(tag: number, path = "/sms"): Promise<{ from: string; t
   return { from: id(tag, 0), to: id(tag, 1) };
 }
 
-/** The recording's announcement of a view (a route change of the SPA) as it opens, then as it ends. */
-async function announce(
-  page: Page,
-  detail: { id: string; name: string; start: number; duration: number; status?: "ok" | "error" },
-) {
-  for (const open of [true, false]) {
-    await page.evaluate((each) => dispatchEvent(new CustomEvent("tracepanel:page", { detail: each })), {
-      ...detail,
-      duration: open ? 0 : detail.duration,
-      status: open ? "ok" : (detail.status ?? "ok"),
-      open,
-    });
-  }
-}
-
-const list = (page: Page) => panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-
 test("the view an SPA redirected from at once leaves the store; the view it sent to says where it came from", async ({
   page,
 }) => {
@@ -177,108 +152,11 @@ test("the view an SPA redirected from at once leaves the store; the view it sent
 
   await page.goto(`/#/t/${to}`);
 
-  await expect(page.locator(".dt-trace-head")).toContainText(`redirected from ${path}`);
+  await expect(page.locator(".tp-trace-head")).toContainText(`redirected from ${path}`);
 
   await page.goto("/#/pages?view=overview");
   const rows = page.getByRole("main").getByRole("table").last().getByRole("link");
 
   await expect(rows.filter({ hasText: `${path}/campaigns` })).toHaveCount(1);
   await expect(rows.filter({ hasText: new RegExp(`${path}(?![/\\d])`) })).toHaveCount(0);
-});
-
-test("in the panel the redirect is no row: its view says where it came from, each operation a row of its own", async ({
-  page,
-}) => {
-  const { to } = await redirected(2);
-  const start = startOf(2);
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  await openApp(page, {}, { recording: true });
-  await announce(page, { id: id(2, 0), name: "/sms", start, duration: 0 });
-  await announce(page, { id: to, name: "/sms/campaigns", start: start + 3 * ms, duration: 400 * ms });
-  await pill(page).click();
-  const views = list(page).locator('.dt-request-row[data-kind="page"]');
-  const traces = list(page).locator('.dt-request-row[data-call="trace"]');
-
-  // The page's load, then the view it was sent to: none of /sms alone.
-  await expect(views).toHaveCount(2);
-  await expect(views.filter({ hasText: "/sms/campaigns" })).toContainText("redirected from /sms");
-  await expect(views.filter({ hasText: "/sms/campaigns" })).toHaveAttribute(
-    "aria-label",
-    /^\/sms\/campaigns, redirected from \/sms, /,
-  );
-  // Its three operations, at once, under the gateway's row: three rows, each by its own name, as they were in flight.
-  await expect(list(page).locator('.dt-request-row[data-call="group"] .dt-map-times')).toHaveText("×3");
-  await expect(traces.locator(".dt-request-path")).toHaveText(OPERATIONS.map((name) => `query ${name}`));
-  for (const row of await traces.all()) await expect(row).toHaveAttribute("data-depth", "2");
-
-  await views.filter({ hasText: "/sms/campaigns" }).click();
-  const frame = panel(page);
-
-  // Its head says it too; its tabs count its chain, and say what of it is its own.
-  await frame.getByRole("tab", { name: /^View/ }).click();
-  await expect(frame.locator(".dt-hero")).toContainText("redirected from /sms");
-  const calls = frame.getByRole("tab", { name: /^HTTP calls/ });
-  await expect(calls.locator(".dt-tab-count")).toHaveText("6");
-  await expect(calls.locator(".dt-tab-count")).toHaveAttribute(
-    "title",
-    "6 HTTP calls down its chain of calls: 3 by this view, 3 by the apps it called",
-  );
-  await expect(pill(page).locator(".seg").filter({ hasText: "6" })).toHaveAttribute(
-    "title",
-    "6 HTTP calls down its chain of calls: 3 by this view, 3 by the apps it called",
-  );
-
-  // The call tree: each call by its operation, none folded into another.
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  const tree = frame.locator('.dt-map-row[data-kind="http.client"]');
-  for (const name of OPERATIONS) await expect(tree.filter({ hasText: `GraphQL query ${name}` })).toHaveCount(1);
-});
-
-test("a view that failed, or that the next one came long after, stays a row of its own", async ({ page }) => {
-  const start = startOf(3);
-  await openApp(page, {}, { recording: true });
-  await announce(page, { id: id(3, 0), name: "/sms", start, duration: 0, status: "error" });
-  await announce(page, { id: id(3, 1), name: "/sms/campaigns", start: start + 3 * ms, duration: 400 * ms });
-  await announce(page, { id: id(3, 2), name: "/books", start: start + 60_000 * ms, duration: 0 });
-  await announce(page, { id: id(3, 3), name: "/books/1", start: start + 62_000 * ms, duration: 400 * ms });
-  await announce(page, { id: id(3, 4), name: "/authors", start: start + 90_000 * ms, duration: 0 });
-  await announce(page, { id: id(3, 5), name: "/authors/1", start: start + 90_020 * ms, duration: 400 * ms });
-  await pill(page).click();
-
-  // /sms failed; /books lasted no time, but /books/1 came 2 s later; /authors sent on at once.
-  await expect(list(page).locator('.dt-request-row[data-kind="page"] .dt-request-path')).toHaveText([
-    "/app/",
-    "/sms",
-    "/sms/campaigns",
-    "/books",
-    "/books/1",
-    "/authors/1 · redirected from /authors",
-  ]);
-});
-
-test("a view cut with its calls unanswered keeps them waiting; their traces link to it however late they come", async ({
-  page,
-}) => {
-  const tag = 4;
-  const w3c = traceOf(tag);
-  // Cut at its longest wait (sent at 15 s with its three calls still open, each "no answer yet"), a while ago: past
-  // the time a row is asked again for being new, its calls still waited for.
-  const start = Date.now() * ms - 40_000 * ms;
-  const calls = OPERATIONS.map((_, n) => operationCall(tag, n, start + 10 * ms, 15_000 * ms, true));
-  await ingest([view(id(tag, 1), "/sms/campaigns", start, 15_270 * ms, calls, w3c)]);
-  await expect.poll(() => stored(id(tag, 1))).toBe(200);
-  await openApp(page, {}, { recording: true, view: id(tag, 1) });
-  await pill(page).click();
-  const waiting = list(page).locator('.dt-request-row[data-call="waiting"]');
-
-  await expect(waiting).toHaveCount(3);
-  for (const row of await waiting.all()) await expect(row.locator('[data-state="cut"]')).toHaveText("no answer");
-
-  // Later the gateway answers them all: its traces take the waiting rows' places.
-  await ingest(OPERATIONS.map((_, n) => gatewayTrace(tag, n, start + 19_000 * ms, w3c)));
-
-  await expect(waiting).toHaveCount(0);
-  await expect(list(page).locator('.dt-request-row[data-call="trace"] .dt-request-path')).toHaveText(
-    OPERATIONS.map((name) => `query ${name}`),
-  );
 });

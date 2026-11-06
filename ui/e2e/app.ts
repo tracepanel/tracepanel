@@ -54,7 +54,7 @@ const RECORDING = `
   const seen = new Map();
   globalThis[Symbol.for("tracepanel.pages")] = seen;
   let count = 0;
-  const id = () => "01M4E2E" + String(++count).padStart(19, "0");
+  const id = () => (globalThis.TRACEPANEL_IDS ?? "01M4E2E") + String(++count).padStart(19, "0");
   const now = () => Math.round((performance.timeOrigin + performance.now()) * 1000);
   const announce = (detail) => {
     seen.set(detail.id, detail);
@@ -89,7 +89,8 @@ export const OTHER_API = "http://api.example.test/app/";
  * `recording`, "Do <key>" does it as a click the browser recording sees. The recording starts before the widget,
  * or after it with "after widget" (an app that starts it from its own code, once the widget loaded). `server`: the
  * page's own load was traced (a server-rendered page). `charset`: the page's encoding, UTF-8 unless given. `view`:
- * the id the recording gives the page's view, a trace the test stored.
+ * the id the recording gives the page's view, a trace the test stored. `ids`: the first 7 characters of the ids the
+ * recording gives (the view's 1, the first action's 2): a test that stores them has its own.
  */
 export async function openApp(
   page: Page,
@@ -100,6 +101,7 @@ export async function openApp(
     api?: string;
     charset?: string;
     view?: string;
+    ids?: string;
   } = {},
 ): Promise<void> {
   const api = options.api ?? "/app/";
@@ -131,7 +133,10 @@ export async function openApp(
     )
     .join("");
   // The view's id: a stored trace's, when the test seeded the view the agent has (its chain, its calls).
-  const viewId = options.view ? `globalThis.TRACEPANEL_VIEW = ${JSON.stringify(options.view)};` : "";
+  const viewId = [
+    options.view ? `globalThis.TRACEPANEL_VIEW = ${JSON.stringify(options.view)};` : "",
+    options.ids ? `globalThis.TRACEPANEL_IDS = ${JSON.stringify(options.ids)};` : "",
+  ].join("");
   const recording = `<script>${viewId}${RECORDING}</script>`;
   const html = `<!doctype html><html><head>
     ${options.recording === true ? recording : ""}
@@ -149,6 +154,16 @@ export const pill = (page: Page) => page.getByRole("button", { name: /^tracepane
 
 /** The panel the pill opens, in its frame. */
 export const panel = (page: Page) => page.frameLocator("iframe");
+
+/** The panel's list: the tab's records, the newest first, the open one as its call tree. */
+export const panelList = (page: Page) =>
+  panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
+
+/** The list's records: a closed one's row, the open one's first row (its request, its view). */
+export const records = (page: Page) => panelList(page).locator(".tp-record, .tp-map-row[data-root]");
+
+/** Every row of the list: the records, and the open one's call tree. */
+export const panelRows = (page: Page) => panelList(page).locator(".tp-map-row");
 
 /** The header's auto-refresh menu: its button says the choice ("Every 15s", "Live", "Live · paused"). */
 export const autoRefresh = (page: Page) =>

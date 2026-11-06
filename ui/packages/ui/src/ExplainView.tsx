@@ -1,5 +1,6 @@
-import { CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
+import { CircleCheckIcon, GaugeIcon, InfoIcon, ListTreeIcon, TriangleAlertIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useBeside } from "./beside";
 import { CopyBlock } from "./CopyButton";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
@@ -48,6 +49,7 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
         {/* Beside the heading, not at the far end: a wide row scrolls that end out of view. */}
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="h-7 shadow-none" disabled={loading} onClick={() => run(false)}>
+            <ListTreeIcon aria-hidden="true" />
             {loading && !state.analyze ? "Explaining…" : plan ? "Explain again" : "Explain"}
           </Button>
           {canAnalyze ? (
@@ -59,6 +61,7 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
               title="Runs the query to measure real time and rows"
               onClick={() => run(true)}
             >
+              <GaugeIcon aria-hidden="true" />
               {loading && state.analyze ? "Analyzing…" : "Explain analyze"}
             </Button>
           ) : null}
@@ -78,12 +81,16 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
 /** Beside the buttons: the plan's database and connection, and whether it warns. */
 function PlanFacts({ plan }: { plan: ExplainPlan }) {
   const warnings = plan.lines.filter((line) => line.warning).length;
+  // Beside the waterfall the query's own fields, right above, say which database.
+  const beside = useBeside();
   return (
     <>
-      <span className="text-sm text-muted-foreground">
-        {plan.vendor} · {plan.alias}
-        {plan.analyzed ? " · analyzed" : ""}
-      </span>
+      {beside ? null : (
+        <span className="tp-plan-where text-sm text-muted-foreground">
+          {plan.vendor} · {plan.alias}
+          {plan.analyzed ? " · analyzed" : ""}
+        </span>
+      )}
       {warnings ? (
         <Badge variant="outline" className="border-warn/30 bg-warn-soft text-warn">
           <TriangleAlertIcon />
@@ -135,9 +142,12 @@ const ANALYZED = new Set(["postgresql", "mysql", "mariadb"]);
 /** What the buttons do, and why ANALYZE isn't one of them where the database has it. */
 function Idle({ canAnalyze, why }: { canAnalyze: boolean; why: string | null | undefined }) {
   return (
-    <p className="text-sm text-muted-foreground">
-      Run EXPLAIN on the database to see how it reads the tables{canAnalyze ? ", or ANALYZE to time it" : ""}.
-      {why ? ` ${why}` : ""}
+    <p className="m-0 flex items-start gap-1.5 text-xs text-muted-foreground">
+      <InfoIcon aria-hidden="true" className="mt-px size-3.5 shrink-0" />
+      <span>
+        Run EXPLAIN on the database to see how it reads the tables{canAnalyze ? ", or ANALYZE to time it" : ""}.
+        {why ? ` ${why}` : ""}
+      </span>
     </p>
   );
 }
@@ -165,13 +175,13 @@ export function StatementPlan({ statement, ...props }: StatementPlanProps) {
 }
 
 const PLAN_CLASSES: Record<PlanToken["type"], string | undefined> = {
-  op: "dt-plan-op",
-  label: "dt-plan-label",
-  keyword: "dt-sql-keyword",
-  name: "dt-sql-identifier",
-  key: "dt-plan-key",
-  number: "dt-sql-number",
-  string: "dt-sql-string",
+  op: "tp-plan-op",
+  label: "tp-plan-label",
+  keyword: "tp-sql-keyword",
+  name: "tp-sql-identifier",
+  key: "tp-plan-key",
+  number: "tp-sql-number",
+  string: "tp-sql-string",
   text: undefined,
 };
 
@@ -180,7 +190,7 @@ function PlanText({ text, warning }: { text: string; warning: boolean }) {
   const tokens = useMemo(() => tokenizePlan(text), [text]);
   return (
     <code
-      className="dt-plan-line font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
+      className="tp-plan-line font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]"
       data-warning={warning ? "" : undefined}
     >
       {tokens.map((token, index) => (

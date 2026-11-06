@@ -2,7 +2,7 @@
 // how much of the trace it sampled and why the rest wasn't, waiting is its own share; the time strip, its legend and
 // the call tree split the code's own time into waiting and computing, name the wait and open the profile at that
 // stretch. A profile from before (no buckets) is the whole trace's, said so.
-import type { Locator, Page } from "@playwright/test";
+import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { openApp, panel, pill, traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 import { DIGEST, HELD_REPORT } from "../seed.ts";
@@ -13,8 +13,8 @@ async function centre(locator: Locator): Promise<[number, number]> {
   return [box.x + box.width / 2, box.y + box.height / 2];
 }
 
-function codeRow(page: Page, kind: string) {
-  return page.locator('.dt-map-row[data-kind="code"]').filter({ has: page.locator(".dt-map-kind", { hasText: kind }) });
+function codeRow(page: Page | FrameLocator, kind: string) {
+  return page.locator('.tp-map-row[data-kind="code"]').filter({ has: page.locator(".tp-map-kind", { hasText: kind }) });
 }
 
 test("the Profile tab says how much it sampled, what it couldn't, and waiting as its own share", async ({ page }) => {
@@ -41,7 +41,7 @@ test("the strip and its share's numbers split the code's own time; a click on th
   page,
 }) => {
   await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
-  const waiting = page.locator(".dt-quiet-said").filter({ hasText: "waiting" });
+  const waiting = page.locator(".tp-quiet-said").filter({ hasText: "waiting" });
 
   await expect(waiting).toHaveText("waiting · 1.5 s");
 
@@ -55,7 +55,7 @@ test("the strip and its share's numbers split the code's own time; a click on th
   await page.mouse.move(...middle);
 
   // Its share's numbers only, waiting's: the wait row in the tree names what it waited on and where.
-  await expect(page.locator(".dt-lane-tip")).toContainText("Waiting");
+  await expect(page.locator(".tp-lane-tip")).toContainText("Waiting");
   await expect(page.getByRole("tooltip").filter({ hasText: /Open the profile|tasks\.py/ })).toHaveCount(0);
 
   await page.mouse.click(...middle);
@@ -71,7 +71,7 @@ test("the strip and its share's numbers split the code's own time; a click on th
   await page.getByRole("tab", { name: /^Call tree/ }).click();
 
   await expect(page.getByRole("button", { name: /^Time / })).toHaveCount(0);
-  await expect(page.locator(".dt-range")).toHaveCount(0);
+  await expect(page.locator(".tp-range")).toHaveCount(0);
 });
 
 test("the call tree has the wait and the code as rows of their own; the wait's opens the profile at it", async ({
@@ -79,18 +79,18 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
 }) => {
   await page.goto(`/#/t/${await traceId(DIGEST)}?tab=tree`);
 
-  await expect(codeRow(page, "wait").locator(".dt-map-text")).toHaveText("asyncio.sleep in send_digest");
+  await expect(codeRow(page, "wait").locator(".tp-map-text")).toHaveText("asyncio.sleep in send_digest");
   // Where it waited, quietly after its name; no popup over the row.
-  await expect(codeRow(page, "wait").locator(".dt-map-sub")).toHaveText("tasks.py:108");
-  await expect(codeRow(page, "code").locator(".dt-map-sub")).toHaveCount(0);
+  await expect(codeRow(page, "wait").locator(".tp-map-sub")).toHaveText("tasks.py:108");
+  await expect(codeRow(page, "code").locator(".tp-map-sub")).toHaveCount(0);
 
   await codeRow(page, "wait").hover();
 
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 
-  await expect(codeRow(page, "code").locator(".dt-map-text")).toHaveText("render_digest in send_digest");
-  await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText("1.5 s");
-  await expect(codeRow(page, "code").locator(".dt-map-time")).toHaveText("102 ms");
+  await expect(codeRow(page, "code").locator(".tp-map-text")).toHaveText("render_digest in send_digest");
+  await expect(codeRow(page, "wait").locator(".tp-map-time")).toHaveText("1.5 s");
+  await expect(codeRow(page, "code").locator(".tp-map-time")).toHaveText("102 ms");
 
   await codeRow(page, "wait").click();
 
@@ -100,11 +100,10 @@ test("the call tree has the wait and the code as rows of their own; the wait's o
   await page.getByRole("button", { name: "Load one" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await frame.locator('.dt-map-row[data-kind="code"]').first().click();
+  await codeRow(frame, "wait").click();
 
+  // Its stretch's profile, beside the tree: the details' title names the row, the profile's own head is not repeated.
   await expect(frame.getByRole("tab", { name: /^Profile/ })).toHaveAttribute("aria-selected", "true");
-  await expect(frame.getByText("Profile of 120 ms – 1.6 s")).toBeVisible();
 });
 
 test("a profile that doesn't say when its samples were taken is the whole trace's, said so", async ({ page }) => {
@@ -144,7 +143,7 @@ test("a wait the app awaited through sync_to_async is named as the app wrote it"
   });
   await page.goto(`/#/t/${id}?tab=tree`);
 
-  await expect(codeRow(page, "wait").locator(".dt-map-text")).toHaveText("await sync_to_async(…) in send_digest");
+  await expect(codeRow(page, "wait").locator(".tp-map-text")).toHaveText("await sync_to_async(…) in send_digest");
 });
 
 test("a few ms of code beside a long wait is part of the wait: one row, all of the time", async ({ page }) => {
@@ -156,8 +155,8 @@ test("a few ms of code beside a long wait is part of the wait: one row, all of t
   });
   await page.goto(`/#/t/${id}?tab=tree`);
 
-  await expect(page.locator('.dt-map-row[data-kind="code"]')).toHaveCount(1);
-  await expect(codeRow(page, "wait").locator(".dt-map-time")).toHaveText(/^1\.\d s$/);
+  await expect(page.locator('.tp-map-row[data-kind="code"]')).toHaveCount(1);
+  await expect(codeRow(page, "wait").locator(".tp-map-time")).toHaveText(/^1\.\d s$/);
 });
 
 test("All frames says which of its functions waited, as Your code does: their time is waiting's share", async ({

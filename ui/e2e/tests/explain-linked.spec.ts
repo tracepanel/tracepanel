@@ -39,8 +39,8 @@ async function explaining(page: Page, explains: Record<string, boolean>): Promis
 /** The view's call tree, the authors' steps open: the second one's service trace's query, its details. */
 async function linkedQuery(page: Page) {
   await page.goto(`/#/t/${await chain()}?tab=calls`);
-  const step = page.getByRole("button", { name: /^function Book\.author/i }).first();
-  await step.locator(".dt-map-caret[data-toggle]").click();
+  const step = page.getByRole("button", { name: /^fn Book\.author/i }).first();
+  await step.locator(".tp-map-caret[data-toggle]").click();
   // Each call's trace open under it: the second author's query is the second.
   const queries = page.getByRole("button", { name: /^sql SELECT author/i });
   await expect(queries).toHaveCount(3);
@@ -57,7 +57,7 @@ test("a linked trace's SELECT in the call tree is explained by its own app, as i
 
   await details.getByRole("button", { name: "Explain", exact: true }).click();
 
-  await expect(details.locator(".dt-plan-line")).toHaveCount(1);
+  await expect(details.locator(".tp-plan-line")).toHaveCount(1);
   // That trace's span, asked of the agent: it asks the app that recorded the trace.
   const url = new URL((asked.at(-1) as Request).url());
   expect(Object.fromEntries(url.searchParams)).toEqual({ trace: chainTrace("api2"), span: "q1" });

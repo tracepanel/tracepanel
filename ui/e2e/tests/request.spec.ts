@@ -8,8 +8,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("in the console, the trace's header names the request once: the tab doesn't again", async ({ page }) => {
-  await expect(page.locator(".dt-trace-head")).toContainText("POST");
-  await expect(page.locator(".dt-tabpanel header")).toHaveCount(0);
+  await expect(page.locator(".tp-trace-head")).toContainText("POST");
+  await expect(page.locator(".tp-tabpanel header")).toHaveCount(0);
 });
 
 test("its parts switch one at a time; the attributes are a part, not a list under them all", async ({ page }) => {

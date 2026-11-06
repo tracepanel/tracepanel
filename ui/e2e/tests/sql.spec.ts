@@ -32,7 +32,7 @@ test("a SQL Server statement is laid out and coloured like any other", async ({ 
       "  AND [campaign_stats_1].[day] > @P2",
     ].join("\n"),
   );
-  await expect(code.locator(".dt-sql-keyword")).toHaveText(["SELECT", "TOP", "FROM", "WHERE", "AND"]);
-  await expect(code.locator(".dt-sql-identifier").first()).toHaveText("[campaign_stats_1]");
-  await expect(code.locator(".dt-sql-param")).toHaveText(["?", "@P2"]);
+  await expect(code.locator(".tp-sql-keyword")).toHaveText(["SELECT", "TOP", "FROM", "WHERE", "AND"]);
+  await expect(code.locator(".tp-sql-identifier").first()).toHaveText("[campaign_stats_1]");
+  await expect(code.locator(".tp-sql-param")).toHaveText(["?", "@P2"]);
 });

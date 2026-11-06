@@ -1,3 +1,4 @@
+import { duration } from "./format";
 import { DatabaseIcon } from "./icons";
 import { IssueChip } from "./primitives";
 import type { TraceSummary } from "./types";
@@ -10,7 +11,7 @@ import type { TraceSummary } from "./types";
 export function RunChips({ trace }: { trace: TraceSummary }) {
   if (trace.issue_kinds.length === 0 && trace.queries === 0) return null;
   return (
-    <span className="dt-run-chips">
+    <span className="tp-run-chips">
       {trace.issue_kinds.map((kind) => (
         <IssueChip key={kind} kind={kind} />
       ))}
@@ -19,13 +20,14 @@ export function RunChips({ trace }: { trace: TraceSummary }) {
   );
 }
 
-/** Its SQL queries, as the narrow list counts them: the database icon and how many. */
-function Queries({ count }: { count: number }) {
+/** Its SQL queries, as the narrow list counts them: the database icon and how many; their time where there's room. */
+export function Queries({ count, time }: { count: number; time?: number | undefined }) {
   if (count === 0) return null;
   return (
-    <span className="dt-request-queries" title={`${count} SQL ${count === 1 ? "query" : "queries"}`}>
+    <span className="tp-request-queries" title={`${count} SQL ${count === 1 ? "query" : "queries"}`}>
       <DatabaseIcon size={12} />
       {count}
+      {time ? <span className="tp-request-queries-time">· {duration(time)}</span> : null}
     </span>
   );
 }

@@ -22,7 +22,7 @@ function Coloured({ text, language, limit }: { text: string; language: Language 
 
 /** A dump's badge: the muted kind badge, DUMP, in the dumps' colour. */
 export function DumpBadge({ className }: { className?: string | undefined }) {
-  return <KindBadge kind="dump" muted={true} className={cn("dt-dump-badge", className)} />;
+  return <KindBadge kind="dump" muted={true} className={cn("tp-dump-badge", className)} />;
 }
 
 /**
@@ -43,13 +43,13 @@ export function DumpLine({
   const first = args[0];
   const line = first ? argLine(first).slice(0, LINE_CHARS) : "";
   return (
-    <span className={cn("dt-dump-line", className)} title={args.map(argLine).join("\n").slice(0, 2000)}>
+    <span className={cn("tp-dump-line", className)} title={args.map(argLine).join("\n").slice(0, 2000)}>
       {badge ? <DumpBadge /> : null}
-      {site ? <span className="dt-dump-site">{site}</span> : null}
-      <span className="dt-dump-value dt-syntax">
+      {site ? <span className="tp-dump-site">{site}</span> : null}
+      <span className="tp-dump-value tp-syntax">
         <Coloured text={line} language={dumpLanguage(log)} limit={LINE_CHARS} />
       </span>
-      {args.length > 1 ? <span className="dt-dump-more">+{args.length - 1}</span> : null}
+      {args.length > 1 ? <span className="tp-dump-more">+{args.length - 1}</span> : null}
     </span>
   );
 }
@@ -68,10 +68,10 @@ function DumpArgBlock({ arg, index, language }: { arg: DumpArg; index: number; l
     >
       <div className="flex items-center gap-2 border-b bg-muted/40 py-1 pr-1.5 pl-3">
         <code className="min-w-0 truncate font-mono text-sm font-medium">{arg.expr ?? `argument ${index + 1}`}</code>
-        <span className="dt-dump-type shrink-0 font-mono text-xs text-muted-foreground">{typeOf(arg)}</span>
+        <span className="tp-dump-type shrink-0 font-mono text-xs text-muted-foreground">{typeOf(arg)}</span>
         <CopyButton text={arg.repr} label="Copy the value" className="ml-auto" />
       </div>
-      <pre className="dt-syntax m-0 max-h-96 overflow-auto px-3 py-2 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+      <pre className="tp-syntax m-0 max-h-96 overflow-auto px-3 py-2 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
         <Coloured text={arg.repr} language={language} limit={COLOURED} />
       </pre>
     </section>

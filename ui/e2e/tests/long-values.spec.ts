@@ -93,8 +93,7 @@ test.beforeEach(seed);
 
 test("in the docked panel a dump's long value wraps inside its box, its indentation kept", async ({ page }) => {
   const frame = await openPanel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await frame.locator('.dt-map-row[data-kind="dump"]').click();
+  await frame.locator('.tp-map-row[data-kind="dump"]').click();
   const value = frame.getByRole("region", { name: "Dump arguments" }).getByRole("region", { name: "order" });
   const pre = value.locator("pre");
 
@@ -111,23 +110,26 @@ test("in the docked panel a dump's long value wraps inside its box, its indentat
 
 test("in the docked panel a long query and a long request body wrap inside their boxes", async ({ page }) => {
   const frame = await openPanel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await frame.locator('.dt-map-row[data-kind="sql"]').first().click();
+  await frame.locator('.tp-map-row[data-kind="sql"]').first().click();
   const sql = frame.getByRole("complementary", { name: "Details" }).locator("pre").filter({ hasText: "END'" }).first();
 
   await expectWhole(sql);
 
-  await frame.getByRole("tab", { name: /^Request/ }).click();
-  await frame.getByRole("tablist", { name: "Request details" }).getByRole("tab", { name: "Request body" }).click();
-  const body = frame.getByRole("tabpanel", { name: "Request body" }).locator("pre");
+  // The request's own row: its details are the request's parts.
+  await frame.locator(".tp-map-row[data-root]").click();
+  const body = frame.getByRole("tablist", { name: "Request details" }).getByRole("tab", { name: "Request body" });
+  // Low in the short panel's details: scrolled to first (Playwright's own scroll doesn't settle in the widget's frame).
+  await body.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await body.click();
+  const text = frame.getByRole("tabpanel", { name: "Request body" }).locator("pre");
 
-  await expect(body).toContainText(TOKEN);
-  await expectWhole(body);
+  await expect(text).toContainText(TOKEN);
+  await expectWhole(text);
 });
 
 test("on the console's page too, a dump's long value wraps inside its box", async ({ page }) => {
   await page.goto(`/#/t/${TRACE}?tab=tree`);
-  await page.locator('.dt-map-row[data-kind="dump"]').click();
+  await page.locator('.tp-map-row[data-kind="dump"]').click();
   const pre = page.getByRole("region", { name: "Dump arguments" }).locator("pre");
 
   await expect(pre).toHaveText(ORDER);

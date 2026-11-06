@@ -1,5 +1,7 @@
+import { ClockIcon, CodeIcon, LayersIcon, MemoryStickIcon } from "lucide-react";
 import { type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useBeside } from "./beside";
 import { bytes, duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import {
@@ -46,7 +48,7 @@ import type { WaitFrame } from "./lib/waitCalls";
 import { timed } from "./lib/waiting";
 import { rawWindowProfile, sayProfile, windowProfile } from "./lib/windowProfile";
 import { litKey, litScope } from "./lit";
-import { AppChip } from "./primitives";
+import { AppChip, AppMark } from "./primitives";
 import { ScopeHeader } from "./ScopeBar";
 import { Segmented } from "./Segmented";
 import { largestFirst, ShareBar, ShareFace } from "./Shares";
@@ -63,28 +65,28 @@ interface Tone {
 }
 
 const PALETTE: readonly Tone[] = [
-  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500", lit: "[--dt-lit:var(--color-sky-500)]" },
+  { fill: "bg-sky-500/30 hover:bg-sky-500/50", dot: "bg-sky-500", lit: "[--tp-lit:var(--color-sky-500)]" },
   {
     fill: "bg-emerald-500/30 hover:bg-emerald-500/50",
     dot: "bg-emerald-500",
-    lit: "[--dt-lit:var(--color-emerald-500)]",
+    lit: "[--tp-lit:var(--color-emerald-500)]",
   },
-  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500", lit: "[--dt-lit:var(--color-amber-500)]" },
-  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500", lit: "[--dt-lit:var(--color-rose-500)]" },
-  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500", lit: "[--dt-lit:var(--color-cyan-500)]" },
-  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500", lit: "[--dt-lit:var(--color-orange-500)]" },
+  { fill: "bg-amber-500/30 hover:bg-amber-500/50", dot: "bg-amber-500", lit: "[--tp-lit:var(--color-amber-500)]" },
+  { fill: "bg-rose-500/30 hover:bg-rose-500/50", dot: "bg-rose-500", lit: "[--tp-lit:var(--color-rose-500)]" },
+  { fill: "bg-cyan-500/30 hover:bg-cyan-500/50", dot: "bg-cyan-500", lit: "[--tp-lit:var(--color-cyan-500)]" },
+  { fill: "bg-orange-500/30 hover:bg-orange-500/50", dot: "bg-orange-500", lit: "[--tp-lit:var(--color-orange-500)]" },
 ];
-const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand", lit: "[--dt-lit:var(--color-brand)]" };
+const YOURS: Tone = { fill: "bg-brand/40 hover:bg-brand/60", dot: "bg-brand", lit: "[--tp-lit:var(--color-brand)]" };
 // Waiting is no package's time: neutral, hatched, as the time strip draws it.
 const WAITS: Tone = {
-  fill: "dt-hatched bg-muted-foreground/15 hover:bg-muted-foreground/25",
-  dot: "dt-hatched bg-muted-foreground/50",
-  lit: "[--dt-lit:var(--color-muted-foreground)]",
+  fill: "tp-hatched bg-muted-foreground/15 hover:bg-muted-foreground/25",
+  dot: "tp-hatched bg-muted-foreground/50",
+  lit: "[--tp-lit:var(--color-muted-foreground)]",
 };
 const REST: Tone = {
   fill: "bg-muted-foreground/20 hover:bg-muted-foreground/30",
   dot: "bg-muted-foreground/50",
-  lit: "[--dt-lit:var(--color-muted-foreground)]",
+  lit: "[--tp-lit:var(--color-muted-foreground)]",
 };
 
 /**
@@ -93,74 +95,74 @@ const REST: Tone = {
  */
 const SHARE_TONES: Readonly<Record<string, Tone>> = {
   sql: {
-    fill: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-sql)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-sql)]",
+    fill: "[--tp-k:var(--tp-k-sql)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-sql)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-sql)]",
   },
   cache: {
-    fill: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-cache)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-cache)]",
+    fill: "[--tp-k:var(--tp-k-cache)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-cache)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-cache)]",
   },
   redis: {
-    fill: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-redis)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-redis)]",
+    fill: "[--tp-k:var(--tp-k-redis)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-redis)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-redis)]",
   },
   http: {
-    fill: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-http)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-http)]",
+    fill: "[--tp-k:var(--tp-k-http)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-http)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-http)]",
   },
   datastore: {
-    fill: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-datastore)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-datastore)]",
+    fill: "[--tp-k:var(--tp-k-datastore)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-datastore)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-datastore)]",
   },
   messaging: {
-    fill: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-messaging)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-messaging)]",
+    fill: "[--tp-k:var(--tp-k-messaging)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-messaging)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-messaging)]",
   },
   storage: {
-    fill: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-storage)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-storage)]",
+    fill: "[--tp-k:var(--tp-k-storage)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-storage)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-storage)]",
   },
   llm: {
-    fill: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-llm)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-llm)]",
+    fill: "[--tp-k:var(--tp-k-llm)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-llm)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-llm)]",
   },
   mail: {
-    fill: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-mail)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-mail)]",
+    fill: "[--tp-k:var(--tp-k-mail)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-mail)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-mail)]",
   },
   template: {
-    fill: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-template)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-template)]",
+    fill: "[--tp-k:var(--tp-k-template)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-template)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-template)]",
   },
   signal: {
-    fill: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-signal)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-signal)]",
+    fill: "[--tp-k:var(--tp-k-signal)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-signal)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-signal)]",
   },
   django: {
-    fill: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-django)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-django)]",
+    fill: "[--tp-k:var(--tp-k-django)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-django)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-django)]",
   },
   unprofiled: {
-    fill: "[--dt-k:var(--dt-k-unprofiled)] bg-(--dt-k) hover:bg-muted-foreground/25",
-    dot: "[--dt-k:var(--dt-k-unprofiled)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--color-muted-foreground)]",
+    fill: "[--tp-k:var(--tp-k-unprofiled)] bg-(--tp-k) hover:bg-muted-foreground/25",
+    dot: "[--tp-k:var(--tp-k-unprofiled)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--color-muted-foreground)]",
   },
   gc: {
-    fill: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)/35 hover:bg-(--dt-k)/55",
-    dot: "[--dt-k:var(--dt-k-gc)] bg-(--dt-k)",
-    lit: "[--dt-lit:var(--dt-k-gc)]",
+    fill: "[--tp-k:var(--tp-k-gc)] bg-(--tp-k)/35 hover:bg-(--tp-k)/55",
+    dot: "[--tp-k:var(--tp-k-gc)] bg-(--tp-k)",
+    lit: "[--tp-lit:var(--tp-k-gc)]",
   },
 };
 
@@ -224,7 +226,7 @@ const ROW = 20;
 
 /** The head of a list under the flame graph: one box with its header in it, as every table's. */
 const LIST_HEAD = cn(
-  "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 bg-(--dt-table-head) px-3 shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] light:h-[2.125rem]",
+  "grid h-10 grid-cols-[minmax(0,1fr)_5rem_4.5rem] items-center gap-3 bg-(--tp-table-head) px-3 shadow-[inset_0_-1px_0_var(--tp-table-head-rule)] light:h-[2.125rem]",
   HEAD_TEXT,
 );
 /** A box narrower than this keeps its color but drops its name. */
@@ -233,9 +235,28 @@ const LABELLED = 0.035;
 /** How much a box, a share or a row stands for, said: a time ("60 ms"), or bytes ("30 MB"). */
 type Measure = (amount: number) => string;
 
+// Each switch's pills with a small mark of what they show, as the trace's tabs have.
+const MARK = "size-3.5 shrink-0";
+
 const FRAMES = [
-  { id: "own", label: "Your code" },
-  { id: "all", label: "All frames" },
+  {
+    id: "own",
+    label: (
+      <>
+        <CodeIcon aria-hidden="true" className={MARK} />
+        Your code
+      </>
+    ),
+  },
+  {
+    id: "all",
+    label: (
+      <>
+        <LayersIcon aria-hidden="true" className={MARK} />
+        All frames
+      </>
+    ),
+  },
 ] as const;
 
 type Kind = "time" | "memory";
@@ -266,8 +287,24 @@ function useFrames(time: Profile): Frames {
 }
 
 const KINDS = [
-  { id: "time", label: "Time" },
-  { id: "memory", label: "Memory" },
+  {
+    id: "time",
+    label: (
+      <>
+        <ClockIcon aria-hidden="true" className={MARK} />
+        Time
+      </>
+    ),
+  },
+  {
+    id: "memory",
+    label: (
+      <>
+        <MemoryStickIcon aria-hidden="true" className={MARK} />
+        Memory
+      </>
+    ),
+  },
 ] as const;
 
 /** The Profile tab's content, when it is the tab open and the trace has a profile: its time, or its memory. */
@@ -433,20 +470,28 @@ const WHOLE_TRACE: MemoryWhat = { title: "Memory of the whole trace", traces: 1 
  */
 function MemoryHead({ memory, what = WHOLE_TRACE }: { memory: Memory; what?: MemoryWhat }) {
   const several = what.traces > 1;
+  // An app's memory beside the waterfall: its switch names the app, the details' title the row; the peak smaller.
+  const beside = useBeside() && what.app !== undefined;
   return (
-    <div className="grid gap-0.5">
-      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-        {what.app}
-        {what.title}
-      </span>
-      <span className="text-2xl font-semibold tracking-tight tabular-nums">
+    <div className="grid gap-0.5" data-memory-head="">
+      {beside ? null : (
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          {what.app}
+          {what.title}
+        </span>
+      )}
+      <span
+        className={
+          beside ? "text-base font-semibold tabular-nums" : "text-2xl font-semibold tracking-tight tabular-nums"
+        }
+      >
         {bytes(memory.peak)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           {several ? "peak of one of them, above where it started" : "peak, above where it started"}
         </span>
       </span>
       <span className="text-xs text-muted-foreground tabular-nums">{keptLine(memory)}</span>
-      <NoteLine text={sitesLine(memory, what)} />
+      {beside ? null : <NoteLine text={sitesLine(memory, what)} />}
       <MemoryNotes memory={memory} what={what} />
     </div>
   );
@@ -558,13 +603,19 @@ function Dropped({ whole, timed: filled }: { whole: Profile; timed: boolean }) {
  * thread ran other traces too), how long and why.
  */
 function ProfileHead({ whole, trace, scope }: { whole: Profile; trace: Trace; scope: Scope }) {
+  // Beside the waterfall the details' title names it and the strip times it: only what it adds.
+  const beside = useBeside();
   return (
     <div className="grid gap-0.5" data-split-head="">
-      <span className="text-xs text-muted-foreground">{scope.title}</span>
-      <SplitCover split={scope.split} about={about(whole)} />
-      <span className="text-xs text-muted-foreground" data-sampled="">
-        {scope.note ?? scope.split.sampled}
-      </span>
+      {beside ? null : (
+        <>
+          <span className="text-xs text-muted-foreground">{scope.title}</span>
+          <SplitCover split={scope.split} about={about(whole)} />
+          <span className="text-xs text-muted-foreground" data-sampled="">
+            {scope.note ?? scope.split.sampled}
+          </span>
+        </>
+      )}
       <Reason trace={trace} />
       <Dropped whole={whole} timed={timed(whole)} />
     </div>
@@ -748,18 +799,18 @@ function Packages({
     // A segment hovered lights its legend item, and the legend item its segment.
     <section className="grid gap-3" aria-label={`${noun} by package`} {...litScope}>
       <ShareBar parts={bar} total={total} />
-      <ul className="dt-breakdown-legend">
+      <ul className="tp-breakdown-legend">
         {parts.map((part) => (
           <li key={part.key}>
             <button
               type="button"
-              className="dt-share"
+              className="tp-share"
               {...litKey(part.key, true)}
               aria-pressed={lit.has(part.key)}
               onClick={() => onLight(part.key)}
             >
               <ShareFace
-                swatch={<span className={cn("dt-dot", part.tone.dot)} />}
+                swatch={<span className={cn("tp-dot", part.tone.dot)} />}
                 name={part.name}
                 value={part.value}
                 share={part.percent}
@@ -820,7 +871,10 @@ function Flame({
               box={box}
               tone={toneOf(palette, box.node.frame ? packageOf(box.node.frame) : "")}
               faded={box.node.frame !== null && faded(lit, colored(palette, packageOf(box.node.frame)))}
-              onZoom={() => setFocus(box.node)}
+              onZoom={() => {
+                setFocus(box.node);
+                setHover(null);
+              }}
               onHover={(event) => track(event, box.node)}
               onLeave={() => setHover(null)}
             />
@@ -1079,7 +1133,7 @@ function SummaryName({
   return (
     <button
       type="button"
-      className="dt-link-button truncate text-left text-xs italic"
+      className="tp-link-button truncate text-left text-xs italic"
       title="Open its call in the call tree"
       onClick={() => onShowRow(call)}
     >
@@ -1266,7 +1320,7 @@ export function ProfileTab({
   // A code or wait row's stretches (the link's `at`) are this trace's: its own profile of them, in a chain too.
   const { stretch } = useHeldSlice();
   const own =
-    (stretch !== null && trace.profile !== undefined) ||
+    (stretch !== null && trace.profile !== undefined && !chain.scope?.at) ||
     (profiles.length === 1 && profiles[0]?.member.id === trace.id && profiles[0].windows === null);
   if (own || (profiles.length === 0 && !chain.scope))
     return <ProfilePane trace={trace} open={open} onShowRow={onShowRow} />;
@@ -1282,6 +1336,8 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
   const apps = useMemo(() => appProfiles(profiles), [profiles]);
   const memories = useMemo(() => appMemories(apps), [apps]);
   const [picked, setPicked] = useState<string | null>(null);
+  // Which app's tab is open beside the tree: the same one, in time and in memory.
+  const [tab, setTab] = useState<string | null>(null);
   const [kind, setKind] = useKind();
   const runtimes = useMemo(() => new Map(apps.map((app) => [app.app, appRuntime(app)])), [apps]);
   const counts = useMemo(() => new Map(apps.map((app) => [app.app, app.traces.length])), [apps]);
@@ -1297,8 +1353,13 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
         apps={{ apps: apps.map((app) => app.app), runtimes, counts, picked, onPick: setPicked }}
         summary={chainSummary(listed, memory ? memories : null)}
         end={measured ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={setKind} /> : null}
+        keepsEnd={true}
       />
-      {memory ? <ChainMemory apps={listed} memories={memories} /> : <ChainTime apps={listed} />}
+      {memory ? (
+        <ChainMemory apps={listed} memories={memories} tab={tab} onTab={setTab} />
+      ) : (
+        <ChainTime apps={listed} tab={tab} onTab={setTab} />
+      )}
     </>
   );
 }
@@ -1317,10 +1378,66 @@ function chainSummary(apps: readonly AppProfile[], memories: ReadonlyMap<string,
   return `${plural(traces, "trace", "traces")} with their memory`;
 }
 
+/** Beside the tree there is room for one app: the apps as tabs, no table of what the tab then says. */
+function OneApp({
+  apps,
+  app,
+  onTab,
+  children,
+}: {
+  apps: readonly AppProfile[];
+  app: AppProfile | undefined;
+  onTab: (app: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="tp-profile-one" data-one-app="">
+      {apps.length > 1 && app ? (
+        <Segmented
+          label="App"
+          segments={apps.map((each) => ({
+            id: each.app,
+            // Each app as it is everywhere: its runtime's mark, its name.
+            label: (
+              <>
+                <AppMark runtime={appRuntime(each)} />
+                {each.app}
+              </>
+            ),
+          }))}
+          value={app.app}
+          onChange={onTab}
+        />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
 /** Each app's time: what it adds up to, then its flame. */
-function ChainTime({ apps }: { apps: readonly AppProfile[] }) {
+function ChainTime({
+  apps,
+  tab,
+  onTab,
+}: {
+  apps: readonly AppProfile[];
+  tab: string | null;
+  onTab: (app: string) => void;
+}) {
   const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
-  if (apps.length === 0) return <p className="dt-note">Nothing profiled under this.</p>;
+  const beside = useBeside();
+  if (apps.length === 0) return <p className="tp-note">Nothing profiled under this.</p>;
+  if (beside) {
+    return (
+      <OneAppOf
+        apps={apps}
+        tab={tab}
+        onTab={onTab}
+        of={views}
+        section={(app, view) => <AppProfileSection key={app.app} app={app} view={view} />}
+      />
+    );
+  }
   return (
     <>
       <ProfileSums apps={apps} views={views} />
@@ -1332,9 +1449,54 @@ function ChainTime({ apps }: { apps: readonly AppProfile[] }) {
   );
 }
 
+/** Beside the waterfall: one app's section at a time, the app picked (the first at first), its switch over it. */
+function OneAppOf<T>({
+  apps,
+  tab,
+  onTab,
+  of,
+  section,
+}: {
+  apps: readonly AppProfile[];
+  tab: string | null;
+  onTab: (app: string) => void;
+  of: ReadonlyMap<string, T>;
+  section: (app: AppProfile, value: T) => ReactNode;
+}) {
+  const app = apps.find((each) => each.app === tab) ?? apps[0];
+  const value = app && of.get(app.app);
+  return (
+    <OneApp apps={apps} app={app} onTab={onTab}>
+      {app && value ? section(app, value) : null}
+    </OneApp>
+  );
+}
+
 /** Each app's memory: what it adds up to, then where it was. */
-function ChainMemory({ apps, memories }: { apps: readonly AppProfile[]; memories: ReadonlyMap<string, AppMemory> }) {
-  if (apps.length === 0) return <p className="dt-note">No memory measured under this.</p>;
+function ChainMemory({
+  apps,
+  memories,
+  tab,
+  onTab,
+}: {
+  apps: readonly AppProfile[];
+  memories: ReadonlyMap<string, AppMemory>;
+  tab: string | null;
+  onTab: (app: string) => void;
+}) {
+  const beside = useBeside();
+  if (apps.length === 0) return <p className="tp-note">No memory measured under this.</p>;
+  if (beside) {
+    return (
+      <OneAppOf
+        apps={apps}
+        tab={tab}
+        onTab={onTab}
+        of={memories}
+        section={(app, measured) => <AppMemorySection key={app.app} app={app} measured={measured} />}
+      />
+    );
+  }
   return (
     <>
       <MemorySums apps={apps} memories={memories} />
@@ -1403,8 +1565,8 @@ function appView(app: AppProfile): Scope {
 /** What each app's profiles add up to, a row an app in aligned columns: the time's, or the memory's. */
 function SumsTable({ label, columns, children }: { label: string; columns: readonly string[]; children: ReactNode }) {
   return (
-    <div className="dt-profile-sums-wrap">
-      <table className="dt-profile-sums" aria-label={label}>
+    <div className="tp-profile-sums-wrap">
+      <table className="tp-profile-sums" aria-label={label}>
         <thead>
           <tr>
             {columns.map((column) => (
@@ -1454,9 +1616,11 @@ function ProfileSumRow({ app, view }: { app: AppProfile; view: Scope | undefined
 /** One app's flame and functions, under its name: an app's own, never mixed with another's. */
 function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
   const frames = useFrames(view.profile);
+  // Beside the waterfall: one app at a time, its switch over it, the details' title naming the row.
+  const beside = useBeside();
   return (
     <section
-      className="dt-app-profile"
+      className="tp-app-profile"
       aria-label={`Profile of ${app.app}`}
       data-traces={app.traces.map((each) => each.member.trace.id).join(",")}
     >
@@ -1470,19 +1634,21 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
         kinds={null}
         split={view.split}
         head={
-          <div className="grid gap-0.5" data-split-head="">
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <AppChip name={app.app} runtime={appRuntime(app)} />
-              {view.title}
-            </span>
-            <SplitCover
-              split={view.split}
-              about={app.traces.some((each) => each.profile.estimated_from !== undefined) ? "≈ " : ""}
-            />
-            <span className="text-xs text-muted-foreground" data-sampled="">
-              {view.note ?? view.split.sampled}
-            </span>
-          </div>
+          beside ? null : (
+            <div className="grid gap-0.5" data-split-head="">
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <AppChip name={app.app} runtime={appRuntime(app)} />
+                {view.title}
+              </span>
+              <SplitCover
+                split={view.split}
+                about={app.traces.some((each) => each.profile.estimated_from !== undefined) ? "≈ " : ""}
+              />
+              <span className="text-xs text-muted-foreground" data-sampled="">
+                {view.note ?? view.split.sampled}
+              </span>
+            </div>
+          )
         }
         list={({ view: frames, palette, measure }) => (
           <Functions rows={functions(frames)} limit={15} palette={palette} time={measure} />
@@ -1523,7 +1689,7 @@ function AppMemorySection({ app, measured }: { app: AppProfile; measured: AppMem
   // The app's time profile decides the first choice, as a trace's own Profile tab has it.
   const frames = useFrames(measured.profile);
   return (
-    <section className="dt-app-profile" aria-label={`Memory of ${app.app}`}>
+    <section className="tp-app-profile" aria-label={`Memory of ${app.app}`}>
       <MemoryPane
         key={measured.title}
         profile={measured.profile}

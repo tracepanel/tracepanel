@@ -205,7 +205,7 @@ test("an app's traces with no role are its roles by their kind: one frame per ap
 
   const rows = main.locator("table tbody tr").filter({ hasText: "App" });
   for (const row of await rows.all())
-    await expect(row.locator("td").first().locator("svg, .dt-monogram").first()).toBeVisible();
+    await expect(row.locator("td").first().locator("svg, .tp-monogram").first()).toBeVisible();
 });
 
 /** A box's middle on the screen. */
@@ -445,4 +445,15 @@ test("a small map opens at actual size in the canvas's middle, and Fit brings it
 
   // Fit forgets the chosen zoom: the map opens fitted again.
   await expect(scale).toHaveText("100%");
+});
+
+test("a zoom chosen earlier at which the map no longer fits opens it fitted, not at that zoom", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 800 });
+  await page.goto("/#/services");
+  await page.evaluate(() => localStorage.setItem("tracepanel:map-zoom", "1"));
+  await page.reload();
+  // At the chosen 100% it would run past the canvas: it opens zoomed out instead.
+  await expect(
+    page.getByRole("region", { name: "Architecture" }).getByRole("button", { name: "Actual size" }),
+  ).not.toHaveText("100%");
 });

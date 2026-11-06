@@ -113,15 +113,11 @@ test("the panel, docked to the right: the call tree and the tasks the request en
   await page.getByRole("button", { name: "Load rebuild" }).click();
   await pill(page).click();
   await panel(page).getByRole("button", { name: "Dock to right" }).click();
-  await panel(page)
-    .getByRole("tab", { name: /Call tree/ })
-    .click();
 
   for (const name of HANDLERS) await shownByItsEnd(panel(page).getByRole("button", { name: /^task(?!\.)/i }), name);
 
-  await panel(page)
-    .getByRole("tab", { name: /Request/ })
-    .click();
+  // The request's own row: its details name the tasks it enqueued too.
+  await panel(page).locator(".tp-map-row[data-root]").click();
 
   for (const name of HANDLERS) await shownByItsEnd(panel(page), name);
 });
@@ -152,30 +148,4 @@ test("Now: the tasks in flight", async ({ page }) => {
   await inFlight.getByRole("button", { expanded: false }).click();
 
   for (const name of HANDLERS) await shownByItsEnd(inFlight.getByRole("table"), name);
-});
-
-test("the panel's list: a task's run as the console lists it, its time in a request's column", async ({ page }) => {
-  await openApp(page, {
-    regenerate: { status: 200, trace: await traceId(REGENERATE), queries: 0, totalMs: 42 },
-    rebuild: { status: 202, trace: await traceId("POST /api/media/rebuild"), queries: 0, totalMs: 42 },
-  });
-  await page.getByRole("button", { name: "Load regenerate" }).click();
-  await page.getByRole("button", { name: "Load rebuild" }).click();
-  await pill(page).click();
-  const list = panel(page).getByRole("region", { name: "Pages and requests in this browser tab" });
-  // The run loaded on its own: the request's runs are nested under it, task rows too.
-  const task = list
-    .getByRole("button")
-    .filter({ hasText: /^task/ })
-    // Cut to the list's width (a quarter of a narrow panel's): its handler is what shows.
-    .filter({ hasText: /generate/ });
-  const request = list.getByRole("button").filter({ hasText: "/api/media/rebuild" });
-
-  // Its kind's badge, not its name as a method.
-  await expect(task).toContainText(/^task…?thumbnails_regenerate/);
-  await shownByItsEnd(list, REGENERATE);
-
-  // No status of its own, its time and queries still under a request's.
-  const time = async (row: Locator) => (await row.getByText("42 ms", { exact: true }).boundingBox())?.x;
-  expect(await time(task)).toBeCloseTo((await time(request)) ?? Number.NaN, 0);
 });

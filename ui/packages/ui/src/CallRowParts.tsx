@@ -1,6 +1,8 @@
+import { ScrollTextIcon } from "lucide-react";
 import { type CSSProperties, createContext, type ReactNode, useContext } from "react";
-import { type Mark, type Node, type ServedRun, SKEW_NOTE_MIN, type SpanNode } from "./callTree";
-import { duration } from "./format";
+import type { CodeInfo } from "./CallCode";
+import { kindColor, type Mark, type Node, type ServedRun, SKEW_NOTE_MIN, type SpanNode } from "./callTree";
+import { duration, isSlow } from "./format";
 import { ChevronRightIcon } from "./icons";
 import { NoAnswer } from "./LiveMarks";
 import type { Category } from "./lib/breakdown";
@@ -9,19 +11,41 @@ import { callText } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
 import { cutNote, isCut } from "./lib/live";
-import { pageParts } from "./lib/page";
+import { pageName, pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
+import { WAITING } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
+import type { CodeStretch } from "./lib/scope";
 import type { Slice, Windows } from "./lib/slice";
+import { segmentsOf } from "./lib/timeShares";
 import { FailedStatus, KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 
+/** A tab a row's mark opens beside the tree. */
+export type TabOf = "issues" | "sql";
+
 export interface RowContext {
+  /** A click on a closed row opens it, on an open one only selects it: the arrow alone closes. */
+  opensOnly?: boolean | undefined;
+  /** The code row picked (its span and which of its parts), where a code row is a row to pick. */
+  codeRow?: string | null | undefined;
+  onCodeRow?: ((row: string, span: string, info: CodeInfo, at: CodeStretch) => void) | undefined;
+  /** How many findings are in these spans and what ran under them, where a row says a count, not a name. */
+  issuesIn?: ((targets: readonly string[]) => number) | undefined;
+  /** Opens the findings of the row just selected. */
+  /** Opens the Issues tab, or the tab a mark on the row names (its queries: "sql"). */
+  onIssues?: ((tab?: TabOf) => void) | undefined;
+  /** Beside the root row's name: what the whole record found, as its closed row says it. */
+  rootMark?: ReactNode;
+  /** The root row's time as the record's closed row (and the pill) say it: the time the page waited, its own. */
+  rootTime?: number | undefined;
   trace: Trace;
   issueBySpan: ReadonlyMap<string, IssueKind>;
   selected: string | null;
   onSelect: (key: string) => void;
   collapsed: ReadonlySet<string>;
+  /** The rows on the way to a kind shown that were folded by hand: open by themselves, not these. */
+  pathFolded?: ReadonlySet<string> | undefined;
   onToggle: (key: string) => void;
   /** Set while filters are on: only marked rows show. */
   marks?: ReadonlyMap<string, Mark> | undefined;
@@ -29,6 +53,8 @@ export interface RowContext {
   details: ReactNode;
   /** How many info and debug records each span has that don't show, by its id; and what shows them. */
   hiddenLogs: ReadonlyMap<string, number>;
+  /** The info and debug records shown in the tree (a row's mark pressed): its mark hides them again. */
+  logsShown?: boolean | undefined;
   onShowLogs: () => void;
   /** Whose code the code rows under are: this trace's, or a call's trace opened under its call. */
   code: CodeOwner;
@@ -114,8 +140,8 @@ export function Bar({
   const place = point ? pointPlace(trace, from) : barPlace(trace, from, long);
   const past = place.past ?? (cut ? "" : undefined);
   return (
-    <span className="dt-map-track" aria-hidden="true">
-      <span className="dt-map-bar" data-point={point ? "" : undefined} data-past={past} style={place.style} />
+    <span className="tp-map-track" aria-hidden="true">
+      <span className="tp-map-bar" data-point={point ? "" : undefined} data-past={past} style={place.style} />
     </span>
   );
 }
@@ -142,30 +168,21 @@ export function barPlace(trace: Trace, start: number, length: number): { style: 
 }
 
 /**
- * How slow a call reads beside its time, as the trace's share it took: amber from a fifth, red from a half. The
- * request's own code (its view, its framework) takes most of it by nature: only calls to a system say it.
+ * A row's time, tabular, in the text's colour: its bar says its share of the trace, and a call slow for what it is
+ * has its issue (a slow query, a slow HTTP call), not a time in red that reads as a failure.
  */
-export function slowness(time: number, trace: Trace, category: Category | undefined): "warn" | "error" | undefined {
-  if (category === undefined || OWN_TIME.has(category)) return undefined;
-  const share = time / Math.max(trace.duration, 1);
-  if (share >= 0.5) return "error";
-  return share >= 0.2 ? "warn" : undefined;
-}
-
-const OWN_TIME: ReadonlySet<Category> = new Set(["django", "code", "template", "signal"]);
-
-/** A row's time, tabular, in amber or red when the call took much of the trace. */
 export function RowTime({
   time,
-  slow,
   title,
+  slow = false,
 }: {
   time: number;
-  slow: "warn" | "error" | undefined;
   title?: string | undefined;
+  /** The record's own time, slow for what it is (isSlow): amber, as its row in a list says it. */
+  slow?: boolean | undefined;
 }) {
   return (
-    <span className="dt-map-time" data-slow={slow} title={title}>
+    <span className="tp-map-time" title={title} data-slow={slow ? "" : undefined}>
       {duration(time)}
     </span>
   );
@@ -191,18 +208,22 @@ export function SpanName({ span }: { span: Span }) {
   if (span.kind === "task.enqueue" && span.name.startsWith(ENQUEUE)) {
     // "enqueue " stays whole: only the task's name gives way.
     return (
-      <span className="dt-map-text flex">
+      <span className="tp-map-text flex">
         <span className="shrink-0 whitespace-pre">{ENQUEUE}</span>
         <TaskName name={span.name.slice(ENQUEUE.length)} />
       </span>
     );
   }
-  if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="dt-map-text" />;
+  if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="tp-map-text" />;
+  // A view or an action as the list names its record: its badge says which, its name what and where.
+  if (span.kind === "page") return <span className="tp-map-text">{pageName(span.name)}</span>;
   return <OpText text={callText(span)} kind={span.kind} />;
 }
 
 // What a call does, then what to: SELECT shop_product, GET api.example.com/users, SET session:*.
 const OP = /^([A-Z][A-Z_]+)( .*)$/;
+/** The kinds whose name starts with an HTTP method: a request served and a call made, coloured alike. */
+const HTTP_KINDS: ReadonlySet<string> = new Set(["http", "http.client"]);
 
 /**
  * A call's text, its operation set apart: a statement's verb or a command a little stronger than what it acts on,
@@ -210,11 +231,11 @@ const OP = /^([A-Z][A-Z_]+)( .*)$/;
  */
 export function OpText({ text, kind, className }: { text: string; kind: string | undefined; className?: string }) {
   const op = OP.exec(text);
-  const classes = className ? `dt-map-text ${className}` : "dt-map-text";
+  const classes = className ? `tp-map-text ${className}` : "tp-map-text";
   if (!op) return <span className={classes}>{text}</span>;
   return (
     <span className={classes}>
-      <span className="dt-map-op" data-method={kind === "http.client" ? op[1] : undefined}>
+      <span className="tp-map-op" data-method={kind && HTTP_KINDS.has(kind) ? op[1] : undefined}>
         {op[1]}
       </span>
       {op[2]}
@@ -226,22 +247,146 @@ export function OpText({ text, kind, className }: { text: string; kind: string |
 export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
   if (answers(span) && span.duration === 0 && unfinished(span)) {
     return (
-      <span className="dt-map-time" title={UNENDED_NOTE}>
+      <span className="tp-map-time" title={UNENDED_NOTE}>
         —
       </span>
     );
   }
-  // Cut short, no answer yet: its time is where it was cut, not how slow it was (lib/live): never amber or red.
-  if (isCut(span)) return <RowTime time={span.duration} slow={undefined} title={cutNote(span.duration)} />;
-  const slow = span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id));
-  return <RowTime time={span.duration} slow={slow} title={timeTitle(span, ctx.trace)} />;
+  // Cut short, no answer yet: its time is where it was cut (lib/live).
+  if (isCut(span)) return <RowTime time={span.duration} title={cutNote(span.duration)} />;
+  // The record's own time, one number wherever it shows: what the page waited, what the server took on hover.
+  const root = span.parent_id === null;
+  if (root && ctx.rootTime !== undefined && ctx.rootTime > span.duration) {
+    const title = `The page waited ${duration(ctx.rootTime)}; the server took ${duration(span.duration)}`;
+    return <RowTime time={ctx.rootTime} title={title} slow={isSlow({ ...ctx.trace, duration: ctx.rootTime })} />;
+  }
+  return <RowTime time={span.duration} title={timeTitle(span, ctx.trace)} slow={root && isSlow(ctx.trace)} />;
 }
 
 /** A span's bar; a call cut short runs to where it was cut, fading out there, never a 0-width mark. */
 export function OwnBar({ span, ctx }: { span: Span; ctx: RowContext }) {
   const cut = cutLength(span, ctx.trace);
+  const pieces = cut === null && !ctx.within ? piecesOf(span, ctx.code.trace, ctx.trace) : null;
+  if (pieces) return <PiecesBar pieces={pieces} />;
   return (
     <Bar trace={ctx.trace} start={span.start} length={cut ?? span.duration} cut={cut !== null} within={ctx.within} />
+  );
+}
+
+/** A piece of a span's bar: where in the trace (% of it), and what ran then. */
+interface Piece {
+  left: number;
+  width: number;
+  category: Category;
+  waiting: boolean;
+}
+
+/** Narrower than this (% of the trace), a piece joins the one before it: never a sliver of a colour. */
+const PIECE_MIN = 0.6;
+
+/**
+ * A span's time in what ran under it, as the strip draws the trace's (lib/timeShares): its own code, its queries,
+ * its calls, its waits, each in its share's colour. None for a span with one kind of time: its plain bar says it.
+ */
+function piecesOf(span: Span, owner: Trace, trace: Trace): Piece[] | null {
+  // Once per span and clock: the rows draw again on every hover and tick, the trace's segments don't change.
+  const known = PIECES.get(owner)?.get(trace);
+  const key = span.id;
+  if (known?.has(key)) return known.get(key) ?? null;
+  const pieces = cutPieces(span, owner, trace);
+  const byTrace = PIECES.get(owner) ?? new WeakMap<Trace, Map<string, Piece[] | null>>();
+  const bySpan = byTrace.get(trace) ?? new Map<string, Piece[] | null>();
+  bySpan.set(key, pieces);
+  byTrace.set(trace, bySpan);
+  PIECES.set(owner, byTrace);
+  return pieces;
+}
+
+const PIECES = new WeakMap<Trace, WeakMap<Trace, Map<string, Piece[] | null>>>();
+const SORTED = new WeakMap<Trace, Segments>();
+
+/** The owner's segments by their start, once: a span's are found from where it starts, not by a walk of all. */
+function sortedSegments(owner: Trace): Segments {
+  let sorted = SORTED.get(owner);
+  if (!sorted) {
+    sorted = [...segmentsOf(owner)].sort((a, b) => a.from - b.from);
+    SORTED.set(owner, sorted);
+  }
+  return sorted;
+}
+
+type Segments = ReturnType<typeof segmentsOf>;
+
+/** The first segment that may reach into a stretch from `from` on: a binary search on where they end. */
+function firstReaching(segments: Segments, from: number): number {
+  let low = 0;
+  let high = segments.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if ((segments[mid]?.to ?? 0) <= from) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+/** A segment's part of the span, on the trace's clock in % of it; none where it doesn't reach into the span. */
+function pieceIn(
+  segment: Segments[number],
+  [from, to]: readonly [number, number],
+  { offset, total }: { offset: number; total: number },
+): Piece | null {
+  const start = Math.max(segment.from, from);
+  const end = Math.min(segment.to, to);
+  if (end <= start) return null;
+  const waiting = segment.share === WAITING;
+  return {
+    left: ((start + offset) / total) * 100,
+    width: ((end - start) / total) * 100,
+    category: waiting ? ("waiting" as Category) : segment.category,
+    waiting,
+  };
+}
+
+/** A piece added on: one with the one before it where they touch and are alike, or it is too thin to show. */
+function addPiece(pieces: Piece[], piece: Piece): void {
+  const last = pieces.at(-1);
+  const touches = last !== undefined && Math.abs(last.left + last.width - piece.left) < 0.05;
+  if (last && touches && (last.category === piece.category || piece.width < PIECE_MIN)) {
+    last.width = piece.left + piece.width - last.left;
+  } else pieces.push(piece);
+}
+
+function cutPieces(span: Span, owner: Trace, trace: Trace): Piece[] | null {
+  // The span's own trace has its segments (a call's trace, under the page's): on this trace's clock from its start.
+  const clock = { offset: owner.start - trace.start, total: Math.max(trace.duration, 1) };
+  const from = span.start - owner.start;
+  const stretch = [from, from + span.duration] as const;
+  const segments = sortedSegments(owner);
+  const pieces: Piece[] = [];
+  for (let at = firstReaching(segments, from); at < segments.length; at++) {
+    const segment = segments[at];
+    if (!segment || segment.from >= stretch[1]) break;
+    const piece = pieceIn(segment, stretch, clock);
+    if (piece) addPiece(pieces, piece);
+  }
+  return pieces.length > 1 ? pieces : null;
+}
+
+function PiecesBar({ pieces }: { pieces: readonly Piece[] }) {
+  return (
+    <span className="tp-map-track" aria-hidden="true">
+      {pieces.map((piece) => (
+        <span
+          key={piece.left}
+          className="tp-map-bar"
+          data-piece=""
+          data-category={piece.category}
+          data-quiet={piece.waiting ? "" : undefined}
+          data-waiting={piece.waiting ? "" : undefined}
+          style={{ left: `${piece.left}%`, width: `${Math.max(piece.width, 0.2)}%` }}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -312,7 +457,7 @@ export function CallStatus({ node }: { node: SpanNode }) {
 export function spanButton(ctx: RowContext, node: SpanNode, mark: Mark | undefined, fold: boolean | undefined) {
   const { span } = node;
   return {
-    className: "dt-map-row",
+    className: "tp-map-row",
     ...rowState(ctx, node.key, mark),
     "data-kind": span.kind,
     "data-category": ctx.categories.get(span.id),
@@ -338,13 +483,34 @@ export function SpanFold({
   return (
     <>
       <Caret open={fold} onToggle={() => ctx.onToggle(node.key)} />
-      <KindBadge kind={rowKind(node.span, ctx.trace, parent)} muted={true} className="dt-map-kind" />
+      <KindBadge
+        kind={rowKind(node.span, ctx.trace, parent)}
+        muted={true}
+        className="tp-map-kind"
+        {...badgeColour(node)}
+      />
     </>
   );
 }
 
+/**
+ * A badge in its kind's colour, as the Show menu has it (SQL and transactions blue, calls green, GraphQL and
+ * functions code's): the row's bar keeps its share's. A failed or warned row keeps the badge in its status's.
+ */
+function badgeColour(node: SpanNode): { "data-kind-colour"?: string; style?: CSSProperties } {
+  return ["error", "warn"].includes(rowStatus(node)) ? {} : kindBadgeColour(node.span.kind);
+}
+
+/** A kind's badge in its kind's colour, where the Show menu gives it one. */
+export function kindBadgeColour(kind: string | undefined): { "data-kind-colour"?: string; style?: CSSProperties } {
+  const colour = kind ? kindColor(kind) : undefined;
+  if (!colour) return {};
+  const value = `var(--tp-k-${colour})`;
+  return { "data-kind-colour": colour, style: { "--tp-k": value, "--tp-k-ink": value } as CSSProperties };
+}
+
 /** A row's kind as its badge says it: a browser's view or action as its list names it (view, click, bg). */
-function rowKind(span: Span, trace: Trace, parent: Span | undefined): string {
+export function rowKind(span: Span, trace: Trace, parent: Span | undefined): string {
   if (span.kind === "page") return pageParts(span.name).badge.toLowerCase();
   return spanKindLabel(span.kind, trace.attrs, parent?.kind);
 }
@@ -384,12 +550,12 @@ function timeTitle(span: Span, trace: Trace): string | undefined {
  * opening its details. A row without any has the empty slot, so names line up.
  */
 export function Caret({ open, onToggle }: { open: boolean | undefined; onToggle: () => void }) {
-  if (open === undefined) return <span className="dt-map-caret" />;
+  if (open === undefined) return <span className="tp-map-caret" />;
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keyboard folds with the arrows (foldKeys).
     // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
     <span
-      className="dt-map-caret"
+      className="tp-map-caret"
       data-toggle=""
       onClick={(event) => {
         event.stopPropagation();
@@ -439,22 +605,35 @@ export function Inside() {
  * A span's info and debug records, while only warnings and worse show: how many, quietly. A click shows every
  * record (the legend's Logs chip turns on).
  */
-export function HiddenLogs({ count, onShow }: { count: number | undefined; onShow: () => void }) {
+export function HiddenLogs({
+  count,
+  shown = false,
+  onShow,
+}: {
+  count: number | undefined;
+  shown?: boolean | undefined;
+  onShow: () => void;
+}) {
   if (!count) return null;
+  const records = plural(count, "info or debug record", "info or debug records");
   return (
-    // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click here shows the records.
+    // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click shows or hides the records.
     // biome-ignore lint/a11y/useKeyWithClickEvents: the legend's Logs chip is the keyboard's way.
     <span
-      className="dt-map-sub dt-map-logs"
+      className="tp-map-sub tp-map-logs"
       role="button"
       tabIndex={-1}
-      title="Info and debug records here; a click shows every record"
+      aria-label={plural(count, "log", "logs")}
+      aria-pressed={shown}
+      data-shown={shown ? "" : undefined}
+      title={`${records} · click to ${shown ? "hide" : "show"}`}
       onClick={(event) => {
         event.stopPropagation();
         onShow();
       }}
     >
-      {plural(count, "log", "logs")}
+      <ScrollTextIcon aria-hidden="true" />
+      {count}
     </span>
   );
 }
@@ -462,7 +641,7 @@ export function HiddenLogs({ count, onShow }: { count: number | undefined; onSho
 /** First click selects the row (and opens it); a second click closes its details (and folds it). */
 function clickSpan(ctx: RowContext, key: string, fold: boolean | undefined): void {
   // Closed and not selected yet, or open and selected: the click folds it too.
-  if (fold === (ctx.selected === key)) ctx.onToggle(key);
+  if (ctx.opensOnly ? fold === false : fold === (ctx.selected === key)) ctx.onToggle(key);
   ctx.onSelect(key);
 }
 
@@ -485,6 +664,6 @@ export function clockNote(node: Extract<Node, { type: "task" }>): string | undef
 export function rowState(ctx: RowContext, key: string, mark: Mark | undefined) {
   return {
     "data-dim": mark === "path" ? "" : undefined,
-    "aria-current": ctx.selected === key ? ("true" as const) : undefined,
+    "aria-current": ctx.selected === key && !ctx.codeRow ? ("true" as const) : undefined,
   };
 }

@@ -18,7 +18,7 @@ export function useNow(active: boolean, ms: number = TICK_MS): number {
 
 /** In flight: a turning ring (still with reduced motion). */
 export function RunningMark({ title }: { title?: string | undefined }) {
-  return <span className="dt-running" role="img" aria-label="running" title={title} />;
+  return <span className="tp-running" role="img" aria-label="running" title={title} />;
 }
 
 /** A running thing's time so far, ticking, after its ring: "⟳ 3.2 s"; stopped at `until` (lib/live clockOf). */
@@ -34,7 +34,7 @@ export function Running({
   const now = clockOf(until, useNow(true));
   const label = runningLabel(start, now);
   return (
-    <span className={className ? `dt-running-time ${className}` : "dt-running-time"} data-state="running" title={label}>
+    <span className={className ? `tp-running-time ${className}` : "tp-running-time"} data-state="running" title={label}>
       <RunningMark title={label} />
       {runningTime(start, now)}
     </span>
@@ -44,9 +44,9 @@ export function Running({
 /** A call cut short, or a view that went out with one: the hourglass and "no answer yet". */
 export function NoAnswer({ at, short = false }: { at: number | null; short?: boolean | undefined }) {
   return (
-    <span className="dt-no-answer" data-state="cut" title={cutNote(at)}>
+    <span className="tp-no-answer" data-state="cut" title={cutNote(at)}>
       <WaitingIcon />
-      <span className="dt-no-answer-text">{short ? "no answer" : NO_ANSWER}</span>
+      <span className="tp-no-answer-text">{short ? "no answer" : NO_ANSWER}</span>
     </span>
   );
 }
@@ -54,7 +54,7 @@ export function NoAnswer({ at, short = false }: { at: number | null; short?: boo
 /** A number not known yet. */
 export function Pending({ what }: { what: string }) {
   return (
-    <span className="dt-pending" data-state="pending" title={`${what}: not known yet`}>
+    <span className="tp-pending" data-state="pending" title={`${what}: not known yet`}>
       {PENDING}
     </span>
   );

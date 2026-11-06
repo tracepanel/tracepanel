@@ -313,7 +313,9 @@ export function layout(focus: Node): Box[] {
       x += width;
     }
   };
-  place(focus, 0, 0);
+  // Zoomed in, the call clicked heads what is under it: one with nothing under it isn't an empty graph.
+  if (focus.frame) boxes.push({ node: focus, depth: 0, left: 0, width: 1 });
+  place(focus, focus.frame ? 1 : 0, 0);
   return boxes;
 }
 

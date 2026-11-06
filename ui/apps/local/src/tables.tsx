@@ -15,6 +15,7 @@ import {
   IssueChip,
   type IssueKind,
   type IssueRow,
+  isSlow,
   issueTitle,
   type JobRow,
   KindBadge,
@@ -54,7 +55,7 @@ import { ArrowRightIcon, ChevronRightIcon, Columns3Icon, ListFilterIcon } from "
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useServiceCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
-import { useScope } from "./scope";
+import { useRuntimeOf, useScope } from "./scope";
 import { graphqlOperation, requestPath, taskSystem } from "./sections";
 import { type Noun, overText, shareText } from "./slower";
 import { useSummaries } from "./summaries";
@@ -96,7 +97,14 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
     num: true,
     cell: (trace) => <TraceStatus trace={trace} />,
   },
-  { id: "duration", label: "Duration", width: 6.75, num: true, cell: (trace) => duration(trace.duration) },
+  {
+    id: "duration",
+    label: "Duration",
+    width: 6.75,
+    num: true,
+    // Slow for what it is, as the agent counts it (the overview's "slow"): amber, as the panel's record says it.
+    cell: (trace) => <span className={isSlow(trace) ? "text-warn" : undefined}>{duration(trace.duration)}</span>,
+  },
   { id: "queries", label: "Queries", width: 6.25, num: true, drop: 2, cell: (trace) => trace.queries },
   {
     id: "issues",
@@ -128,6 +136,56 @@ function IssueChips({ kinds }: { kinds: readonly IssueKind[] }) {
   );
 }
 
+/** The app that answered, as its chip has it everywhere: shown where the list has more than one app. */
+const APP_COLUMN: DataColumn<TraceSummary> = {
+  id: "app",
+  label: "App",
+  width: 10,
+  drop: 3,
+  cell: (trace) => (trace.service ? <TraceApp service={trace.service} /> : null),
+};
+
+function TraceApp({ service }: { service: string }) {
+  return <AppChip name={service} runtime={useRuntimeOf(service)} compact />;
+}
+
+/**
+ * The columns for these rows: the app's only where they come from more than one; each time with its bar, on the
+ * scale of the typical longest listed (the 90th percentile: one far longer doesn't flatten the rest, it reaches the
+ * end), as the panel's records have theirs.
+ */
+function traceColumns(items: readonly TraceSummary[]): DataColumn<TraceSummary>[] {
+  const times = items.map((trace) => trace.duration).sort((a, b) => a - b);
+  const longest = Math.max(1, times[Math.floor((times.length - 1) * 0.9)] ?? 1);
+  // A task's state ("● failure") is longer than a request's status ("● 200"): its column as wide as it takes.
+  const states = items.some((trace) => trace.task_state);
+  const columns = TRACE_COLUMNS.map((column) => {
+    if (column.id === "duration") {
+      return { ...column, width: 8.5, cell: (trace: TraceSummary) => <TraceTime trace={trace} longest={longest} /> };
+    }
+    return column.id === "status" && states ? { ...column, width: 8 } : column;
+  });
+  if (new Set(items.map((trace) => trace.service)).size < 2) return columns;
+  const [trace, ...rest] = columns;
+  return trace ? [trace, APP_COLUMN, ...rest] : columns;
+}
+
+/** A trace's time and its bar: slow for what it is (isSlow) in amber, as its record in the panel. */
+function TraceTime({ trace, longest }: { trace: TraceSummary; longest: number }) {
+  const slow = isSlow(trace);
+  return (
+    <span className="flex items-center justify-end gap-2">
+      <span className="tp-list-track" aria-hidden="true">
+        <span
+          style={{ width: `${Math.min(Math.max((trace.duration / longest) * 100, 2), 100)}%` }}
+          data-slow={slow ? "" : undefined}
+        />
+      </span>
+      <span className={cn("w-16 text-right", slow && "font-semibold text-warn")}>{duration(trace.duration)}</span>
+    </span>
+  );
+}
+
 const traceTone = (trace: TraceSummary) => (trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined);
 
 /**
@@ -150,7 +208,7 @@ export function TracesTable({
   newIds?: ReadonlySet<string> | undefined;
 }) {
   return (
-    <DataTable table={table} columns={TRACE_COLUMNS}>
+    <DataTable table={table} columns={traceColumns(items)}>
       {({ cells }) =>
         items.map((trace) => (
           <Tr
@@ -354,7 +412,7 @@ function callStatsColumns<T extends CallStats>(
       required: true,
       cell: (item) => (
         <span className="flex flex-col gap-0.5">
-          <Mono className="flex min-w-0 items-center gap-2 font-semibold [&_.dt-alias]:max-w-[50%] [&_.dt-alias]:truncate">
+          <Mono className="flex min-w-0 items-center gap-2 font-semibold [&_.tp-alias]:max-w-[50%] [&_.tp-alias]:truncate">
             {name(item)}
           </Mono>
           <Mono className="truncate text-base text-muted-foreground">{item.origin}</Mono>
@@ -1284,7 +1342,7 @@ function MailPreview({ mail, source }: { mail: MailRow; source: DataSource }) {
     return <p className="text-sm text-muted-foreground">The request that sent it is no longer stored.</p>;
   return (
     // On the cell's edges, as every open row's details: the trace's Emails tab pads the list, a row's cell does here.
-    <div className="grid gap-3 [&_.dt-mails]:p-0">
+    <div className="grid gap-3 [&_.tp-mails]:p-0">
       <MailList spans={[span]} />
       <DetailsFooter open={{ label: "Open request", link: { href: traceHref(mail.trace_id, "tree", mail.span_id) } }} />
     </div>
@@ -1319,7 +1377,7 @@ function SourceCell({
       className={cn(
         "flex max-w-[21.25rem] min-w-0 items-center gap-2",
         compact &&
-          "gap-1.5 [&_.dt-method]:px-1 [&_.dt-method]:text-2xs [&_[data-slot=badge]]:h-4 light:[&_.dt-method]:px-0",
+          "gap-1.5 [&_.tp-method]:px-1 [&_.tp-method]:text-2xs [&_[data-slot=badge]]:h-4 light:[&_.tp-method]:px-0",
         className,
       )}
     >

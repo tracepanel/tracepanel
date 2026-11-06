@@ -1,5 +1,7 @@
 // The flame that leads to a trace's profile from a code row.
+
 import { FlameIcon } from "lucide-react";
+import { useBeside } from "./beside";
 import type { Trace } from "./types";
 
 /** A profile there: the flame as the panel's Profile toggle draws it when on, orange. */
@@ -11,11 +13,12 @@ const PROFILED = "text-orange-500 fill-orange-500/30";
  * (`onOpen`), the row's click being the row's.
  */
 export function RowFlame({ trace, onOpen }: { trace: Trace; onOpen?: (() => void) | undefined }) {
-  if (!trace.profile) return null;
+  // Beside the waterfall a row's profile opens in its details (their Profile tab): no flame on the row.
+  if (useBeside() || !trace.profile) return null;
   const icon = <FlameIcon className={PROFILED} aria-hidden="true" />;
   if (!onOpen) {
     return (
-      <span className="dt-map-flame" data-on="">
+      <span className="tp-map-flame" data-on="">
         {icon}
       </span>
     );
@@ -24,7 +27,7 @@ export function RowFlame({ trace, onOpen }: { trace: Trace; onOpen?: (() => void
     // biome-ignore lint/a11y/useSemanticElements: inside the row's button; a click here opens the profile.
     // biome-ignore lint/a11y/useKeyWithClickEvents: the row's details have the same way there, a link.
     <span
-      className="dt-map-flame dt-map-flame-open"
+      className="tp-map-flame tp-map-flame-open"
       data-on=""
       role="button"
       tabIndex={-1}

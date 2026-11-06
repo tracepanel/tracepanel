@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { AsReceived } from "./AsReceived";
-import { Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
+import { useBeside } from "./beside";
+import { hopTimes, Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
 import { appName, type Linked, OpenRun } from "./CallRows";
 import { type Explain, QueryPlan } from "./CallTable";
 import type { Node, Remote, ServedRun } from "./callTree";
+import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { LlmConversation, withoutMessages } from "./LlmConversation";
@@ -47,7 +49,7 @@ function RunDetails({
   const words = RUN_WORDS[kind];
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">
+      <p className="tp-map-details-title">
         {words.what} · started {duration(Math.max(run.start - trace.start, 0))} after this request · took{" "}
         {duration(run.duration)}
       </p>
@@ -64,7 +66,7 @@ function WaitingDetails({ span }: { span: Span }) {
   const name = String(span.attrs["task.name"] ?? span.name);
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">task · enqueued, not run yet</p>
+      <p className="tp-map-details-title">task · enqueued, not run yet</p>
       <PropTable dense rows={[{ label: "Task", value: name, copy: name, mono: true }]} />
       <p className="text-sm text-muted-foreground">It shows up here once a worker has run it (is a worker running?).</p>
     </div>
@@ -111,21 +113,28 @@ function LogDetails({ node }: DetailsProps<"log">) {
   return <LogRecordDetails log={node.log} titled={true} />;
 }
 
-function ErrorDetails({ node }: DetailsProps<"error">) {
+/** An error's row: the error as its trace's Error tab shows it, its frames and where it was raised from. */
+function ErrorDetails({ node, links }: DetailsProps<"error">) {
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">Error</p>
-      <p className="dt-error-message">
-        <b>{node.error.type.replace(/^builtins\./, "")}</b>: {node.error.message}
-      </p>
+      <ErrorView errors={[node.error]} links={links} />
     </div>
   );
 }
 
-/** A SQL call's statement, formatted. */
+/** A SQL call's statement, formatted, with the values it ran with in place where they were recorded. */
 function Statement({ span, attrs }: { span: Span; attrs: Attrs }) {
   if (span.kind !== "sql") return null;
-  return <SqlCode sql={String(attrs["db.statement"] ?? span.name)} vendor={String(attrs["db.vendor"] ?? "")} />;
+  const values = attrs["db.params"];
+  const names = attrs["db.param_names"];
+  return (
+    <SqlCode
+      sql={String(attrs["db.statement"] ?? span.name)}
+      vendor={String(attrs["db.vendor"] ?? "")}
+      values={Array.isArray(values) ? values : undefined}
+      names={Array.isArray(names) ? names : undefined}
+    />
+  );
 }
 
 function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
@@ -135,9 +144,11 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   const [origin] = origins;
   return (
     <div className="grid gap-3 p-4">
-      <p className="dt-map-details-title">
-        {node.spans.length} similar {groupNoun(first)} · took {duration(node.end - node.start)} ·{" "}
-        {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
+      <p className="tp-map-details-title">
+        {/* In how long, from the first's start to the last's end, as its row's time and bar; then what they add up
+            to, as the Queries tab's sum. */}
+        {node.spans.length} similar {groupNoun(first)} in {duration(node.end - node.start)} ·{" "}
+        {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} added up
       </p>
       <Inside />
       {first ? (
@@ -158,8 +169,10 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
 
 function SpanTitle({ span, trace, parent }: { span: Span; trace: Trace; parent: Span | undefined }) {
   const offset = duration(Math.max(span.start - trace.start, 0));
+  // Beside the tree, the details' own head says what it is and how long it took.
+  if (useBeside()) return null;
   return (
-    <p className="dt-map-details-title">
+    <p className="tp-map-details-title">
       {spanKindLabel(span.kind, trace.attrs, parent?.kind)} · started at +{offset} · took {duration(span.duration)}
     </p>
   );
@@ -170,7 +183,7 @@ function Raised({ attrs }: { attrs: Attrs }) {
   const found = raised(attrs);
   if (!found) return null;
   return (
-    <p className="dt-error-message">
+    <p className="tp-error-message">
       <b className="text-error">{found.type}</b>
       {found.message ? `: ${found.message}` : null}
     </p>
@@ -218,6 +231,32 @@ function RootDetails({ node: { span }, trace }: DetailsProps<"span">) {
   );
 }
 
+/** Beside the tree, a span with no fields of its own says where it was: when, under what, how much of the record. */
+function SpanPlace({
+  span,
+  trace,
+  parent,
+  bare,
+}: {
+  span: Span;
+  trace: Trace;
+  parent: Span | undefined;
+  bare: boolean;
+}) {
+  const beside = useBeside();
+  if (!(bare && beside)) return null;
+  const share = (span.duration / Math.max(trace.duration, 1)) * 100;
+  return (
+    <Fields
+      rows={[
+        { name: "Started", value: `+${duration(Math.max(span.start - trace.start, 0))}` },
+        { name: "Of the trace", value: `${share < 1 ? "<1" : Math.round(share)}% of ${duration(trace.duration)}` },
+        ...(parent ? [{ name: "Under", value: parent.name }] : []),
+      ]}
+    />
+  );
+}
+
 /** A call's own fields in words first (its topic, its URL, where in the code); every attribute after them. */
 function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">) {
   const parent = trace.spans.find((each) => each.id === span.parent_id);
@@ -227,6 +266,7 @@ function CallDetails({ node: { span }, trace, onExplain }: DetailsProps<"span">)
       <SpanHead span={span} trace={trace} parent={parent} attrs={withDocument(span.attrs)} />
       <NotTracedNote spanId={span.id} />
       {summary.length ? <Fields rows={summary} /> : null}
+      <SpanPlace span={span} trace={trace} parent={parent} bare={summary.length === 0} />
       <QueryPlan span={span} onExplain={onExplain} />
       <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
       <AsReceived span={span} />
@@ -256,7 +296,7 @@ function HopDetails({
         <SpanAttributes span={span} attrs={span.attrs} titled={summary.length > 0} />
         <AsReceived span={span} />
       </section>
-      <ServedBy served={served} trace={trace} links={links} onTraceProfile={onTraceProfile} />
+      <ServedBy span={span} served={served} trace={trace} links={links} onTraceProfile={onTraceProfile} />
     </div>
   );
 }
@@ -275,20 +315,35 @@ function withDocument(attrs: Attrs, served?: Attrs | undefined): Attrs {
 
 /** What served a merged call: its app, its trace's name and findings, the ways to it and to its profile. */
 function ServedBy({
+  span,
   served,
   trace,
   links,
   onTraceProfile,
 }: {
+  span: Span;
   served: ServedRun;
   trace: Trace;
   links: TraceLinks | undefined;
   onTraceProfile: TraceProfileOpener | undefined;
 }) {
+  const waterfall = useBeside();
+  if (waterfall) {
+    const [split, note] = hopTimes(span, served).split("\n");
+    return (
+      <section className="grid gap-3" aria-label={`Served by ${appName(served) ?? "another app"}`}>
+        <ServedHeading served={served} />
+        <p className="tp-map-details-title" title={note}>
+          {split}
+        </p>
+        <ProfileLink open={servedProfile(served, onTraceProfile)} />
+      </section>
+    );
+  }
   return (
     <section className="grid gap-3" aria-label={`Served by ${appName(served) ?? "another app"}`}>
       <ServedHeading served={served} />
-      <p className="dt-map-details-title">
+      <p className="tp-map-details-title">
         started {duration(Math.max(served.run.start - trace.start, 0))} after this request · took{" "}
         {duration(served.run.duration)}
       </p>
@@ -318,7 +373,7 @@ function servedProfile(served: ServedRun, open: TraceProfileOpener | undefined):
 
 function ProfileLink({ open }: { open: (() => void) | undefined }) {
   return open ? (
-    <button type="button" className="dt-map-open" onClick={open}>
+    <button type="button" className="tp-map-open" onClick={open}>
       Open its profile →
     </button>
   ) : null;
@@ -348,6 +403,10 @@ function Fields({ rows }: { rows: readonly NameValue[] }) {
 function SpanAttributes({ span, attrs, titled }: { span: Span; attrs: Attrs; titled: boolean }) {
   const template = span.kind === "template";
   const llm = span.kind === "llm";
+  const waterfall = useBeside();
+  const rest = withoutMessages(withoutContext(attrs));
+  // Beside the tree, as the record's own row has them: the same switch, the same groups.
+  if (waterfall && !template && !llm) return <RootAttributes attrs={rest} />;
   return (
     <>
       {template ? <TemplateContext attrs={attrs} /> : null}

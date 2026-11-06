@@ -9,6 +9,12 @@ export function pageParts(name: string): { badge: string; label: string; page: s
   return { badge: verb.toUpperCase(), label: rest.join(" ") || verb, page };
 }
 
+/** A view's or an action's name as every list says it: what was done, then on which page ("Borrow" /books/1). */
+export function pageName(name: string): string {
+  const { label, page } = pageParts(name);
+  return [label, page].filter(Boolean).join(" ");
+}
+
 /**
  * How soon after a view started the next one may start for it to be a redirect (ms): an SPA's route that sends on to
  * another as it renders (`/sms-campaigns` to `/sms-campaigns/campaigns`) does it in a few milliseconds. The agent

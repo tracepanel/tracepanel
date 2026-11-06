@@ -66,8 +66,8 @@ test("a call's trace stored a moment later shows in the call tree at once, the n
   await pollExpect.poll(async () => (await fetch(`${CONSOLE}api/traces/${request}`)).status).toBe(200);
 
   await page.goto(`/#/t/${request}?tab=tree`);
-  const note = page.locator(".dt-on-its-way");
-  const servedRow = page.locator(".dt-map-row").filter({ hasText: "books" });
+  const note = page.locator(".tp-on-its-way");
+  const servedRow = page.locator(".tp-map-row").filter({ hasText: "books" });
 
   await expect(note).toBeVisible();
   await expect(servedRow).toHaveCount(0);
@@ -77,9 +77,9 @@ test("a call's trace stored a moment later shows in the call tree at once, the n
     const seen: { note: boolean; served: boolean }[] = [];
     (window as unknown as { seen: typeof seen }).seen = seen;
     window.setInterval(() => {
-      const rows = [...document.querySelectorAll(".dt-map-row")];
+      const rows = [...document.querySelectorAll(".tp-map-row")];
       seen.push({
-        note: document.querySelector(".dt-on-its-way") !== null,
+        note: document.querySelector(".tp-on-its-way") !== null,
         served: rows.some((row) => row.textContent?.includes("books")),
       });
     }, 50);
@@ -135,10 +135,10 @@ test("while an opened call trace's links load, the note says nothing of traces t
   });
 
   await page.goto(`/#/t/${request}?tab=tree`);
-  const note = page.locator(".dt-on-its-way");
-  const bffRow = page.locator(".dt-map-row").filter({ hasText: "bff" });
-  const booksRow = page.locator(".dt-map-row").filter({ hasText: "books" });
-  const toBooksRow = page.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "4072" });
+  const note = page.locator(".tp-on-its-way");
+  const bffRow = page.locator(".tp-map-row").filter({ hasText: "bff" });
+  const booksRow = page.locator(".tp-map-row").filter({ hasText: "books" });
+  const toBooksRow = page.locator('.tp-map-row[data-kind="http.client"]').filter({ hasText: "4072" });
 
   await expect(bffRow.first()).toBeVisible();
 
@@ -147,7 +147,7 @@ test("while an opened call trace's links load, the note says nothing of traces t
   // traced".
   await expect(note).toHaveCount(0, { timeout: 2_000 });
   await expect(booksRow).toHaveCount(0);
-  await expect(toBooksRow.locator(".dt-status")).toHaveText("200");
+  await expect(toBooksRow.locator(".tp-status")).toHaveText("200");
   await expect(toBooksRow.locator('[data-state="untraced"]')).toHaveCount(0);
 
   await expect(booksRow).toHaveCount(1, { timeout: 5_000 });

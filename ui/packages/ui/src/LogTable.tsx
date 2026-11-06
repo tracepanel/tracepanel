@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useBeside } from "./beside";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
@@ -27,6 +28,7 @@ import {
   DropdownMenuSubTrigger,
 } from "./components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableRow } from "./components/ui/table";
+import { HiddenColumns } from "./DataTable";
 import { DumpLine } from "./Dump";
 import { ago, duration, since, stamp } from "./format";
 import { type ColumnSpec, type Columns, useColumns } from "./hooks/useColumns";
@@ -42,6 +44,8 @@ type LogLike = Pick<Log, "time" | "level" | "logger" | "message" | "exception" |
 /** A column of the table: its spec, and what its cell shows for a record (`open`: its details are shown). */
 export interface LogColumn<R> extends ColumnSpec {
   cell: (log: R, open: boolean) => ReactNode;
+  /** Its cell's own classes beyond the row's: a dot's column centres it, with no room around. */
+  cellClass?: string | undefined;
 }
 
 const LEVEL_TEXT: Record<string, string> = {
@@ -66,6 +70,19 @@ function rowLevel(log: LogLike): string {
 }
 
 /** A log level as a colored dot and its name: the same in every list of records and in the Level filter. */
+/** A record's level as its dot alone, the word on hover: a compact table's. */
+function LevelDot({ level }: { level: string }) {
+  return (
+    <span
+      role="img"
+      data-level-dot=""
+      title={level}
+      aria-label={level}
+      className={cn("inline-block size-2 rounded-full", LEVEL_DOT[level] ?? LEVEL_DOT["debug"])}
+    />
+  );
+}
+
 export function LogLevel({ level }: { level: string }) {
   return (
     <span
@@ -163,17 +180,27 @@ function leading<R extends LogLike>(
   mode: TimeMode,
   start: number | undefined,
   terms: readonly string[],
+  compact = false,
 ): LogColumn<R>[] {
   return [
     {
       id: "time",
       label: "Time",
-      // The whole stamp, to the millisecond, at the larger dark text: Oct 23 07:44:12.345.
-      width: 13.5,
+      // The whole stamp, to the millisecond, at the larger dark text: Oct 23 07:44:12.345. Compact, "+12 ms".
+      width: compact ? 6.5 : 13.5,
       fixed: true,
       cell: (log) => <LogTime time={log.time} mode={mode} start={start} />,
     },
-    { id: "level", label: "Level", width: 7, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
+    compact
+      ? {
+          id: "level",
+          label: "",
+          width: 2.75,
+          fixed: true,
+          cellClass: "px-0 first:pl-0 text-center text-clip",
+          cell: (log) => <LevelDot level={log.level} />,
+        }
+      : { id: "level", label: "Level", width: 7, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
     { id: "message", label: "Message", required: true, cell: (log) => <Message log={log} terms={terms} /> },
     {
       id: "logger",
@@ -440,6 +467,7 @@ function LogRecordRow<R extends LogLike>({
   context: RowContext<R>;
   placed: Placed;
 }) {
+  const beside = useBeside();
   const { shown, open, onOpen, action } = context;
   const opened = open === rowKey;
   const onToggle = () => onOpen(opened ? null : rowKey);
@@ -456,7 +484,7 @@ function LogRecordRow<R extends LogLike>({
       onKeyDown={(event) => onRowKey(event, opened, onToggle)}
     >
       {shown.map((column) => (
-        <TableCell key={column.id} className={cn(bodyCell("compact"), "truncate")}>
+        <TableCell key={column.id} className={cn(bodyCell(beside ? "dense" : "compact"), "truncate", column.cellClass)}>
           {column.cell(log, opened)}
         </TableCell>
       ))}
@@ -640,6 +668,53 @@ function useLogLines<R extends LogLike>(
   return { offered, lines, body, view };
 }
 
+/** A table's columns: the time as picked (beside the tree, since the trace began), the attributes pinned. */
+function useLogColumns<R extends LogLike>(
+  table: string,
+  extra: readonly LogColumn<R>[],
+  start: number | undefined,
+  highlight: readonly string[],
+) {
+  const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
+  const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
+  // Beside the tree: compact, the time since the trace began and the level as its dot.
+  const hidden = useContext(HiddenColumns);
+  const beside = hidden !== null;
+  const all = [
+    ...leading<R>(beside ? "relative" : mode, start, highlight, beside),
+    ...extra,
+    ...attributeColumns<R>(picked),
+    ...trailing<R>(),
+  ].filter((column) => !hidden?.has(column.id));
+  return { all, mode, setMode, picked, setPicked };
+}
+
+/** The lines in view, with the room of those above and below them. */
+function LogLines<R extends LogLike>({
+  lines,
+  view,
+  context,
+  span,
+}: {
+  lines: ReturnType<typeof useLogLines<R>>["lines"];
+  view: ReturnType<typeof useLogLines<R>>["view"];
+  context: RowContext<R>;
+  span: number;
+}) {
+  return (
+    <>
+      <Spacer height={view.before} span={span} />
+      {view.indexes.map((index) => {
+        const line = lines[index];
+        return line ? (
+          <LineRow key={line.key} line={line} context={context} placed={{ index, measure: view.measure }} />
+        ) : null;
+      })}
+      <Spacer height={view.after} span={span} />
+    </>
+  );
+}
+
 /**
  * Records, newest or oldest first as given, one line each. `table` names where the reader's column choices are kept;
  * `columns` adds the place's own columns after Logger; `start` (a trace's) makes relative times "+12 ms" instead of
@@ -675,9 +750,7 @@ export function LogTable<R extends LogLike>({
   /** Draws only the rows in view of the page's scrolling section (`[data-scroll]`): for lists that grow long. */
   windowed?: boolean;
 }) {
-  const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
-  const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
-  const all = [...leading<R>(mode, start, highlight), ...extra, ...attributeColumns<R>(picked), ...trailing<R>()];
+  const { all, mode, setMode, picked, setPicked } = useLogColumns(table, extra, start, highlight);
   // The columns menu has a column of its own.
   const { ref, columns, widths } = useColumnWidths(useColumns(table, all), MENU_REM);
   const shown = columns.shown;
@@ -709,14 +782,7 @@ export function LogTable<R extends LogLike>({
           onRemoveAttribute={(key) => setPicked(picked.filter((each) => each !== key))}
         />
         <TableBody ref={body}>
-          <Spacer height={view.before} span={span} />
-          {view.indexes.map((index) => {
-            const line = lines[index];
-            return line ? (
-              <LineRow key={line.key} line={line} context={context} placed={{ index, measure: view.measure }} />
-            ) : null;
-          })}
-          <Spacer height={view.after} span={span} />
+          <LogLines lines={lines} view={view} context={context} span={span} />
         </TableBody>
       </Table>
     </AttributeColumnsContext.Provider>

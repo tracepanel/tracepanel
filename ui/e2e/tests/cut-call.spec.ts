@@ -69,23 +69,23 @@ test("a call cut short runs to the trace's end on the time strip and in the call
 }) => {
   await page.goto(`/#/t/${ID}?tab=tree`);
 
-  const lane = page.locator(".dt-lane").filter({ hasText: "HTTP calls" });
-  const cut = lane.locator(".dt-mark[data-cut]");
+  const lane = page.locator(".tp-lane").filter({ hasText: "HTTP calls" });
+  const cut = lane.locator(".tp-mark[data-cut]");
   await expect(cut).toHaveCount(1);
   await expect(cut).toHaveAttribute("title", /GET api\.example\.com\/slow · hadn't ended when the trace went out/);
-  const [from, to] = await span01(cut, lane.locator(".dt-lane-track"));
+  const [from, to] = await span01(cut, lane.locator(".tp-lane-track"));
   expect(from).toBeCloseTo(1 / 3, 1);
   expect(to).toBeCloseTo(1, 2);
 
   // The 404 is amber on the lane, as its row is in the tree.
-  await expect(lane.locator('.dt-mark[data-tone="warn"]')).toHaveAttribute("title", /missing/);
+  await expect(lane.locator('.tp-mark[data-tone="warn"]')).toHaveAttribute("title", /missing/);
 
-  const row = page.locator('.dt-map-row[data-kind="http.client"]').filter({ hasText: "/slow" });
-  const bar = row.locator(".dt-map-bar");
+  const row = page.locator('.tp-map-row[data-kind="http.client"]').filter({ hasText: "/slow" });
+  const bar = row.locator(".tp-map-bar");
   await expect(bar).toHaveAttribute("data-past", "");
-  const [start, end] = await span01(bar, row.locator(".dt-map-track"));
+  const [start, end] = await span01(bar, row.locator(".tp-map-track"));
   expect(start).toBeCloseTo(1 / 3, 1);
   expect(end).toBeCloseTo(1, 2);
   // Its time isn't known: no 0 µs.
-  await expect(row.locator(".dt-map-time")).toHaveText("—");
+  await expect(row.locator(".tp-map-time")).toHaveText("—");
 });

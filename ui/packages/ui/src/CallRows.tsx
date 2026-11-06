@@ -14,6 +14,7 @@ import {
   HiddenLogs,
   hopText,
   hopTimes,
+  kindBadgeColour,
   narrowed,
   OpText,
   OwnBar,
@@ -25,11 +26,11 @@ import {
   SpanFold,
   SpanName,
   sameRoute,
-  slowness,
   spanButton,
   TaskState,
   type Within,
 } from "./CallRowParts";
+import { issueOfRepeats } from "./CallTable";
 import {
   CHAIN_LEVELS,
   childrenOf,
@@ -67,6 +68,7 @@ import {
 } from "./primitives";
 import { RunChips } from "./RunChips";
 import { SignalNotes } from "./SignalNotes";
+import { CompactChips } from "./TraceList";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
 import { GroupNotTraced, NotTraced, useUntraced } from "./Untraced";
 
@@ -81,7 +83,7 @@ function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
   }, [shown]);
   if (!shown || !ctx.details) return null;
   return (
-    <div className="dt-map-inline" ref={box}>
+    <div className="tp-map-inline" ref={box}>
       {ctx.details}
     </div>
   );
@@ -108,9 +110,9 @@ function runView(node: Extract<Node, { type: "task" }>, trace: Trace, within: Wi
     text: (
       <>
         {node.kind === "task" ? (
-          <TaskName name={node.run.name} className="dt-map-text" />
+          <TaskName name={node.run.name} className="tp-map-text" />
         ) : (
-          <span className="dt-map-text">{node.run.name}</span>
+          <span className="tp-map-text">{node.run.name}</span>
         )}
         <TaskState state={node.run.task_state} />
         {node.kind === "call" ? <CallApp node={node} /> : null}
@@ -142,8 +144,8 @@ function waitingView(node: Extract<Node, { type: "waiting" }>, trace: Trace): Li
   return {
     status: undefined,
     kind: "task",
-    text: <span className="dt-map-text dt-map-waiting">waiting for a worker…</span>,
-    track: <span className="dt-map-track" aria-hidden="true" />,
+    text: <span className="tp-map-text tp-map-waiting">waiting for a worker…</span>,
+    track: <span className="tp-map-track" aria-hidden="true" />,
     time: `+${duration(Math.max(node.span.start - trace.start, 0))}`,
   };
 }
@@ -238,7 +240,7 @@ function LinkedButton({
   return (
     <button
       type="button"
-      className="dt-map-row"
+      className="tp-map-row"
       data-dim={dim ? "" : undefined}
       data-kind="task"
       data-status={view.status}
@@ -250,14 +252,14 @@ function LinkedButton({
       }}
       onKeyDown={foldKeys(open, () => ctx.onToggle(node.key))}
     >
-      <span className="dt-map-name" style={indent}>
+      <span className="tp-map-name" style={indent}>
         <Caret open={open} onToggle={() => ctx.onToggle(node.key)} />
-        <KindBadge kind={view.kind} muted={true} className="dt-map-kind" />
+        <KindBadge kind={view.kind} muted={true} className="tp-map-kind" />
         {view.text}
         <LinkedFlame node={node} ctx={ctx} />
       </span>
       {view.track}
-      <span className="dt-map-time" title={view.timeTitle}>
+      <span className="tp-map-time" title={view.timeTitle}>
         {view.time}
       </span>
     </button>
@@ -345,14 +347,14 @@ function leafView(node: Extract<Node, { type: "log" | "error" }>) {
 
 /** A leaf's badge: its level, muted, or a dump's own. */
 function LeafBadge({ kind, level }: { kind: string; level: string }) {
-  if (kind === "dump") return <DumpBadge className="dt-map-kind" />;
-  return <KindBadge kind={level} muted={true} className="dt-map-kind" />;
+  if (kind === "dump") return <DumpBadge className="tp-map-kind" />;
+  return <KindBadge kind={level} muted={true} className="tp-map-kind" />;
 }
 
 /** A leaf's text: a dump's call site and first value, coloured; any other's message or error. */
 function LeafText({ node, text }: { node: Extract<Node, { type: "log" | "error" }>; text: string }) {
-  if (node.type === "log" && isDump(node.log)) return <DumpLine log={node.log} className="dt-map-text" />;
-  return <span className="dt-map-text">{text}</span>;
+  if (node.type === "log" && isDump(node.log)) return <DumpLine log={node.log} className="tp-map-text" />;
+  return <span className="tp-map-text">{text}</span>;
 }
 
 /** A log record or an error: a point on the timeline, at its time since the request started. */
@@ -368,19 +370,19 @@ function LeafRow({
     <>
       <button
         type="button"
-        className="dt-map-row"
+        className="tp-map-row"
         {...rowState(ctx, node.key, mark)}
         data-kind={view.kind}
         data-level={view.level}
         onClick={() => ctx.onSelect(node.key)}
       >
-        <span className="dt-map-name" style={indent}>
-          <span className="dt-map-caret" />
+        <span className="tp-map-name" style={indent}>
+          <span className="tp-map-caret" />
           <LeafBadge kind={view.kind} level={view.level} />
           <LeafText node={node} text={view.text} />
         </span>
         <Bar trace={ctx.trace} start={view.time} length={0} point={true} within={ctx.within} />
-        <span className="dt-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
+        <span className="tp-map-time" title={`Logged ${since(view.time, ctx.trace.start)}`}>
           +{duration(Math.max(view.time - ctx.trace.start, 0))}
         </span>
       </button>
@@ -419,14 +421,29 @@ function GroupName({
   const first = node.spans[0];
   return (
     <>
-      <KindBadge kind={spanKindLabel(first?.kind, ctx.trace.attrs)} muted={true} className="dt-map-kind" />
+      {/* HTTP calls' kind goes, as a call's does: their method says it (GET in its colour). */}
+      {first?.kind === "http.client" ? null : (
+        <KindBadge
+          kind={spanKindLabel(first?.kind, ctx.trace.attrs)}
+          muted={true}
+          className="tp-map-kind"
+          {...kindBadgeColour(first?.kind)}
+        />
+      )}
       <OpText text={callTemplate(first)} kind={first?.kind} />
+      {/* How many, right after what: never pushed away from its name. */}
+      <Times count={node.spans.length} />
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
-      <Times count={node.spans.length} />
       <GroupStatus answer={answer} />
       <GroupNotTraced spans={node.spans} />
-      <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
+      <RowChips>
+        {ctx.issuesIn ? (
+          <IssuesMark ctx={ctx} rowKey={node.key} targets={node.spans.map((span) => span.id)} kind={issue} />
+        ) : issue ? (
+          <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} />
+        ) : null}
+      </RowChips>
     </>
   );
 }
@@ -437,9 +454,7 @@ function groupSpans(node: Extract<Node, { type: "group" }>): Span[] {
 }
 
 function groupIssue(node: Extract<Node, { type: "group" }>, issueBySpan: ReadonlyMap<string, IssueKind>) {
-  return groupSpans(node)
-    .map((span) => issueBySpan.get(span.id))
-    .find(Boolean);
+  return issueOfRepeats(groupSpans(node), issueBySpan);
 }
 
 /**
@@ -458,10 +473,49 @@ function withoutGroupIssue(
 
 /**
  * A row's chips after its name: its issue, then what a call's trace found. Short of room they go whole, the last
- * first, onto a line that doesn't show (.dt-map-chips): never a chip cut down to an empty pill.
+ * first, onto a line that doesn't show (.tp-map-chips): never a chip cut down to an empty pill.
  */
+/** A row's findings as a count, its kind on hover: a click opens them. Beside the tree, in place of their names. */
+function IssuesMark({
+  ctx,
+  rowKey,
+  targets,
+  kind,
+}: {
+  ctx: RowContext;
+  rowKey: string;
+  targets: readonly string[];
+  kind: IssueKind | undefined;
+}) {
+  const count = ctx.issuesIn?.(targets) ?? 0;
+  if (count === 0) return null;
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keys are the row's.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
+    <span
+      data-issue-kind={kind}
+      onClick={(event) => {
+        event.stopPropagation();
+        ctx.onSelect(rowKey);
+        ctx.onIssues?.();
+      }}
+    >
+      <CompactChips kinds={kind ? [kind] : undefined} issues={count} />
+    </span>
+  );
+}
+
+/** A mark's place in its row, there empty too: beside the bars every row's status and logs line up (the panel). */
+function Slot({ of, children }: { of: "status" | "logs"; children: ReactNode }) {
+  return (
+    <span className="tp-map-slot" data-slot={of}>
+      {children}
+    </span>
+  );
+}
+
 function RowChips({ children }: { children: ReactNode }) {
-  return <span className="dt-map-chips">{children}</span>;
+  return <span className="tp-map-chips">{children}</span>;
 }
 
 /** Repeats of one call folded into one row (×N), its calls as ticks on the timeline; open, each call a row. */
@@ -471,10 +525,10 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
   const issueBySpan = useMemo(() => withoutGroupIssue(node, ctx.issueBySpan), [node, ctx.issueBySpan]);
   const answer = useMemo(() => groupAnswerOf(node), [node]);
   return (
-    <div className="dt-map-group">
+    <div className="tp-map-group">
       <button
         type="button"
-        className="dt-map-row"
+        className="tp-map-row"
         {...rowState(ctx, node.key, mark)}
         data-kind={node.spans[0]?.kind}
         data-category={ctx.categories.get(node.spans[0]?.id ?? "")}
@@ -482,20 +536,16 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
         aria-expanded={open}
         onClick={() => {
           ctx.onSelect(node.key);
-          ctx.onToggle(`open:${node.key}`);
+          if (!(ctx.opensOnly && open)) ctx.onToggle(`open:${node.key}`);
         }}
         onKeyDown={foldKeys(open, () => ctx.onToggle(`open:${node.key}`))}
       >
-        <span className="dt-map-name" style={indent}>
+        <span className="tp-map-name" style={indent}>
           <Caret open={open} onToggle={() => ctx.onToggle(`open:${node.key}`)} />
           <GroupName node={node} ctx={ctx} parent={parent} answer={answer} />
         </span>
         <GroupTicks spans={node.spans} trace={ctx.trace} within={ctx.within} />
-        <RowTime
-          time={wall}
-          slow={slowness(wall, ctx.trace, ctx.categories.get(node.spans[0]?.id ?? ""))}
-          title={groupTimes(node)}
-        />
+        <RowTime time={wall} title={groupTimes(node)} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
       {open ? (
@@ -523,11 +573,11 @@ function groupTimes(node: Extract<Node, { type: "group" }>): string {
 /** Where each call of a group started, on the request's timeline. */
 function GroupTicks({ spans, trace, within }: { spans: readonly Span[]; trace: Trace; within: Within | undefined }) {
   return (
-    <span className="dt-map-track" aria-hidden="true">
+    <span className="tp-map-track" aria-hidden="true">
       {spans.map((span) => {
         const [at] = clipped(span.start, 0, within);
         const left = Math.min(Math.max(((at - trace.start) / Math.max(trace.duration, 1)) * 100, 0), 100);
-        return <span key={span.id} className="dt-map-bar" data-tick="" style={{ left: `${left}%` }} />;
+        return <span key={span.id} className="tp-map-bar" data-tick="" style={{ left: `${left}%` }} />;
       })}
     </span>
   );
@@ -538,10 +588,15 @@ function childSpans(node: Extract<Node, { type: "span" }>): Span[] {
   return ownChildren(node).flatMap((child) => (child.type === "span" ? [child.span] : []));
 }
 
-/** A span's fold: none without rows under it; open unless folded, always on the way to a filtered row. */
+/** On the way to a row shown: open by itself, unless folded by hand since. Undefined off the way. */
+function onPath(mark: Mark | undefined, key: string, ctx: RowContext): boolean | undefined {
+  return mark === "path" ? !ctx.pathFolded?.has(key) : undefined;
+}
+
+/** A span's fold: none without rows under it; open unless folded, on the way to a filtered row unless folded there. */
 function spanFold(node: Extract<Node, { type: "span" }>, mark: Mark | undefined, ctx: RowContext): boolean | undefined {
   const hasChildren = node.children.length > 0;
-  return foldOf(hasChildren, hasChildren && (mark === "path" || !ctx.collapsed.has(node.key)));
+  return foldOf(hasChildren, hasChildren && (onPath(mark, node.key, ctx) ?? !ctx.collapsed.has(node.key)));
 }
 
 /** A span: its kind, its name and what goes with it, its bar and its time; its rows under it, open or folded. */
@@ -556,19 +611,48 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
   return (
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-root={span.parent_id === null ? "" : undefined}>
-        <span className="dt-map-name" style={indent}>
+        <span className="tp-map-name" style={indent}>
           <CallLead call={answers(span)} span={span}>
             <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
             <SpanName span={span} />
           </CallLead>
-          <CallStatus node={node} />
+          <Slot of="status">
+            <CallStatus node={node} />
+          </Slot>
           <NotTraced spanId={span.id} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
           <MigrationNotes span={span} />
-          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
-          <RowChips>{issue ? <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} /> : null}</RowChips>
+          <Slot of="logs">
+            <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
+          </Slot>
+          <RowChips>
+            {/* Beside the tree, a folded row says what is under it too: its findings don't hide in the fold. */}
+            {ctx.issuesIn && (issue || fold === false) ? (
+              span.parent_id === null ? null : (
+                <IssuesMark ctx={ctx} rowKey={node.key} targets={[span.id]} kind={issue} />
+              )
+            ) : issue ? (
+              <IssueChip kind={issue} className={ISSUE_CHIP_SHRINKS} />
+            ) : null}
+            {span.parent_id === null && ctx.rootMark ? (
+              // biome-ignore lint/a11y/noStaticElementInteractions: inside the row's button; the keys are the row's.
+              // biome-ignore lint/a11y/useKeyWithClickEvents: the row's button takes the keys.
+              <span
+                className="inline-flex flex-none items-center gap-1"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  ctx.onSelect(node.key);
+                  // Its queries open the Queries tab, its findings the Issues tab.
+                  const opens = (event.target as HTMLElement).closest("[data-opens]") ? "sql" : "issues";
+                  ctx.onIssues?.(opens);
+                }}
+              >
+                {ctx.rootMark}
+              </span>
+            ) : null}
+          </RowChips>
         </span>
         <OwnBar span={span} ctx={ctx} />
         <OwnTime span={span} ctx={ctx} />
@@ -597,7 +681,7 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
 function ServedName({ text, name }: { text: string; name: string }) {
   const shown = sameRoute(text, name) ? "" : name;
   return (
-    <span className="dt-map-text dt-map-hop-name" title={shown || undefined}>
+    <span className="tp-map-text tp-map-hop-name" title={shown || undefined}>
       {shown}
     </span>
   );
@@ -620,9 +704,9 @@ function HopBar({
   const [at, length] = clipped(run.start, run.duration, narrowed(within, span));
   const server = barPlace(trace, at, length);
   return (
-    <span className="dt-map-track" aria-hidden="true">
-      <span className="dt-map-bar" data-call="" data-past={call.past} style={call.style} />
-      <span className="dt-map-bar" data-server="" style={server.style} />
+    <span className="tp-map-track" aria-hidden="true">
+      <span className="tp-map-bar" data-call="" data-past={call.past} style={call.style} />
+      <span className="tp-map-bar" data-server="" style={server.style} />
     </span>
   );
 }
@@ -635,7 +719,7 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
   const { ctx, indent, depth, mark, parent } = place;
   const { span } = node;
   const has = node.children.length > 0;
-  const fold = foldOf(has, has && (mark === "path" || served.opened !== ctx.collapsed.has(node.key)));
+  const fold = foldOf(has, has && (onPath(mark, node.key, ctx) ?? served.opened !== ctx.collapsed.has(node.key)));
   useChainLoad(served, fold, ctx.onChain);
   const inner = useLinkedContext(served, ctx);
   const root = served.whole?.spans.find((each) => each.parent_id === null);
@@ -644,11 +728,11 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
   return (
     <div>
       <button type="button" {...spanButton(ctx, node, mark, fold)} data-hop="">
-        <span className="dt-map-name" style={indent}>
+        <span className="tp-map-name" style={indent}>
           <CallLead span={span}>
             <SpanFold ctx={ctx} node={node} parent={parent} fold={fold} />
-            <OpText text={text} kind={span.kind} className="dt-map-hop-path" />
-            <span className="dt-map-hop" aria-hidden="true">
+            <OpText text={text} kind={span.kind} className="tp-map-hop-path" />
+            <span className="tp-map-hop" aria-hidden="true">
               →
             </span>
             <span className="sr-only">served by</span>
@@ -656,19 +740,28 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
             <ServedName text={text} name={served.run.name} />
           </CallLead>
           {/* After what served it: the answer is the served trace's when the call says none. */}
-          <CallStatus node={node} />
+          <Slot of="status">
+            <CallStatus node={node} />
+          </Slot>
           <FromTemplate span={span} parent={parent} />
-          <HiddenLogs count={ctx.hiddenLogs.get(span.id)} onShow={ctx.onShowLogs} />
+          <Slot of="logs">
+            <HiddenLogs count={ctx.hiddenLogs.get(span.id)} shown={ctx.logsShown} onShow={ctx.onShowLogs} />
+          </Slot>
           <RowChips>
-            <HopIssue span={span} served={served} ctx={ctx} />
-            <RunChips trace={served.run} />
+            {ctx.issuesIn ? (
+              <IssuesMark ctx={ctx} rowKey={node.key} targets={[span.id]} kind={ctx.issueBySpan.get(span.id)} />
+            ) : (
+              <>
+                <HopIssue span={span} served={served} ctx={ctx} />
+                <RunChips trace={served.run} />
+              </>
+            )}
           </RowChips>
           <LinkedFlame node={served} ctx={ctx} />
         </span>
         <HopBar trace={ctx.trace} span={span} run={served.run} within={ctx.within} />
         <RowTime
           time={span.duration}
-          slow={slowness(span.duration, ctx.trace, ctx.categories.get(span.id))}
           title={node.cut ? `${CUT_NOTE}\n${hopTimes(span, served)}` : hopTimes(span, served)}
         />
       </button>
@@ -703,7 +796,7 @@ function CallLead({ call = true, span, children }: { call?: boolean; span: Span;
   if (!call) return children;
   return (
     <span
-      className="dt-map-lead"
+      className="tp-map-lead"
       data-http={span.kind === "http.client" ? "" : undefined}
       data-untraced={untraced ? "" : undefined}
     >
@@ -730,7 +823,7 @@ export function OpenRun({
 }) {
   if (remote) {
     return (
-      <a className="dt-map-open" href={`${remote.console}#/t/${run.id}`} target="_blank" rel="noopener">
+      <a className="tp-map-open" href={`${remote.console}#/t/${run.id}`} target="_blank" rel="noopener">
         Open in {remote.project}'s console
       </a>
     );
@@ -738,7 +831,7 @@ export function OpenRun({
   // A row of the call tree leads to the run's own call tree, on the row that stands for all of it.
   const open = traceLinkProps(links, run.id, { tab: "tree", span: whole ? rootOf(whole) || undefined : undefined });
   return open ? (
-    <a className="dt-map-open" {...open}>
+    <a className="tp-map-open" {...open}>
       {words.open}
     </a>
   ) : null;

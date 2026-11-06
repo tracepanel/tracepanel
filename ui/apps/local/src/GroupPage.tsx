@@ -15,6 +15,7 @@ import {
   RoutePath,
   Stat,
   StatGrid,
+  slowRuleOf,
   TaskName,
   TraceBadge,
   type TraceGroup,
@@ -297,6 +298,8 @@ export function GroupPage({
   const errors = group.issues.filter((issue) => issue.kind === "error");
   const findings = group.issues.filter((issue) => issue.kind !== "error");
   const graphql = "resolvers" in group ? group : null;
+  // Its traces' rule, as the Overview says it: a page's group is named after its view or action.
+  const rule = slowRuleOf(ENTRY[section].scope.match(/kind:(\w+)/)?.[1] ?? "http", groupKey);
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-9 px-10 pt-7 pb-16 *:min-w-0">
       {/* One column no wider than the page: a long error message or SQL wraps instead of widening it. */}
@@ -311,12 +314,14 @@ export function GroupPage({
           sub={`${s.errors} of ${s.calls}`}
           tone={s.errors > 0 ? "error" : undefined}
         />
-        <Stat
-          label="Slow ≥ 500 ms"
-          value={String(s.slow)}
-          sub={percent(s.slow, s.calls)}
-          tone={s.slow ? "warn" : undefined}
-        />
+        {rule === undefined ? null : (
+          <Stat
+            label={`Slow · ${rule}`}
+            value={String(s.slow)}
+            sub={percent(s.slow, s.calls)}
+            tone={s.slow ? "warn" : undefined}
+          />
+        )}
         {latencyTiles(s)}
       </StatGrid>
 

@@ -77,7 +77,11 @@ function crumbName(trace: TraceSummary | undefined): string {
  * crumb goes back to the trace it was opened from, as it was); opened directly (a link, the panel's Console), its
  * list, once its kind is known.
  */
-function useBackCrumbs(from: string | undefined, source: DataSource): [Crumb[], (trace: Trace | null) => void] {
+function useBackCrumbs(
+  from: string | undefined,
+  source: DataSource,
+  inSnapshot: boolean,
+): [Crumb[], (trace: Trace | null) => void] {
   const [entry, setEntry] = useState<EntrySection | null>(null);
   const onLoaded = (trace: Trace | null) => setEntry(trace ? entryOf(trace) : null);
   const steps = trail(from);
@@ -85,6 +89,14 @@ function useBackCrumbs(from: string | undefined, source: DataSource): [Crumb[], 
     steps.flatMap((step) => (step.route.name === "trace" ? [step.route.id] : [])),
     source,
   );
+  // A snapshot has no lists to go back to: only the way back to its other traces, none at the one it opened on.
+  if (inSnapshot)
+    return [
+      steps.flatMap(({ route, hash }) =>
+        route.name === "trace" ? [{ label: crumbName(names.get(route.id)), href: hash }] : [],
+      ),
+      onLoaded,
+    ];
   if (steps.length === 0) {
     return [entry ? [{ label: ENTRY[entry].label, href: href({ name: entry, q: "" }) }] : [], onLoaded];
   }
@@ -92,6 +104,24 @@ function useBackCrumbs(from: string | undefined, source: DataSource): [Crumb[], 
     route.name === "trace" ? [{ label: crumbName(names.get(route.id)), href: hash }] : crumbsFor(route, hash),
   );
   return [crumbs, onLoaded];
+}
+
+/** The way back, then the trace; none in a snapshot where there is no way back (the trace it opened on). */
+function PageCrumbs({ back, snapshot }: { back: Crumb[]; snapshot: boolean }) {
+  if (snapshot && back.length === 0) return null;
+  return (
+    <div className="px-4">
+      <CrumbBar
+        items={[
+          ...back,
+          {
+            // The request is the page's headline; its id is on the Request tab.
+            label: "Trace",
+          },
+        ]}
+      />
+    </div>
+  );
 }
 
 /** What the view remembers that its history entry holds (the rows folded), for the trace on screen. */
@@ -155,7 +185,7 @@ export function TracePage({
   variant?: "full" | "compact" | undefined;
 }) {
   const leads = leadsTo(inSnapshot === true);
-  const [back, onLoaded] = useBackCrumbs(from, source);
+  const [back, onLoaded] = useBackCrumbs(from, source, inSnapshot === true);
   useEscapeTo(from, goBack);
   const initialTab = tabOf(tab);
   // Read once, as the trace's view opens: Back to this entry brings its rows folded, the address the rest.
@@ -163,19 +193,9 @@ export function TracePage({
   return (
     <main className="min-h-0 min-w-0 overflow-y-auto bg-background" data-scroll="">
       {/* The trace's own header is inset 16px: the page pads 16px less so the crumbs line up with it. */}
-      <div className={`dt-trace-page w-full ${PADDING[variant]}`}>
+      <div className={`tp-trace-page w-full ${PADDING[variant]}`}>
         {/* A stored trace never changes: no refresh control here. */}
-        <div className="px-4">
-          <CrumbBar
-            items={[
-              ...back,
-              {
-                // The request is the page's headline; its id is on the Request tab.
-                label: "Trace",
-              },
-            ]}
-          />
-        </div>
+        <PageCrumbs back={back} snapshot={inSnapshot === true} />
         <TraceScreen
           id={id}
           source={source}

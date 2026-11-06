@@ -24,5 +24,5 @@ export function GraphqlCode({ document }: { document: string }) {
       cancelled = true;
     };
   }, [document]);
-  return <TokenBlock text={shown.text} tokens={shown.tokens} prefix="dt-gql-" label="Copy query" />;
+  return <TokenBlock text={shown.text} tokens={shown.tokens} prefix="tp-gql-" label="Copy query" />;
 }

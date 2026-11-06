@@ -1,19 +1,24 @@
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
 import {
   CallLine,
   CallLines,
   CallTable,
+  calledFrom,
   DetailsTitle,
   groupTitle,
+  issueOfRepeats,
   type ListTime,
   listTime,
   type RowTime,
   rowTime,
+  sameOrigin,
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
+import { HiddenColumns } from "./DataTable";
 import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
 import { callTemplate, groupNoun } from "./lib/calls";
+import { cn } from "./lib/utils";
 import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
 import { GroupNotTraced, NotTraced } from "./Untraced";
@@ -48,6 +53,18 @@ const HTTP_METHOD = /^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|TRACE|CONNECT) (.+
 /** What a group repeats: an HTTP call's method in its badge, as every list shows a request's, then the rest. */
 function Template({ template }: { template: string }) {
   const http = HTTP_METHOD.exec(template);
+  const beside = useContext(HiddenColumns) !== null;
+  // Beside the tree every call has a word in the method's place, so the names line up.
+  if (beside && template.startsWith("GraphQL ")) {
+    return (
+      <span className="flex min-w-0 shrink-[1000] items-center gap-2.5">
+        <span className="tp-method" data-method="GQL">
+          GQL
+        </span>{" "}
+        <span className="truncate font-mono">{template.slice("GraphQL ".length)}</span>
+      </span>
+    );
+  }
   if (!http) return <span className="shrink-[1000] truncate font-mono">{template}</span>;
   return (
     <span className="flex min-w-0 shrink-[1000] items-center gap-2.5">
@@ -56,10 +73,9 @@ function Template({ template }: { template: string }) {
   );
 }
 
-/** A group with one more of its calls and its issue. */
-function withCall(group: Group, span: Span, issue: IssueKind | undefined): Group {
+/** A group with one more of its calls. */
+function withCall(group: Group, span: Span): Group {
   group.spans.push(span);
-  group.issue ??= issue;
   return group;
 }
 
@@ -75,11 +91,12 @@ function groupCalls(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
       issue: undefined,
       answer: NO_ANSWER,
     };
-    groups.set(template, withCall(group, span, issueBySpan.get(span.id)));
+    groups.set(template, withCall(group, span));
   }
   // Each row's time on the clock, as the table shows it and sorts by, and how its calls went.
   for (const group of groups.values()) {
     group.time = rowTime(group.spans);
+    group.issue = issueOfRepeats(group.spans, issueBySpan);
     group.answer = groupAnswer(group.spans.map((span) => ({ span })));
   }
   return [...groups.values()].sort((a, b) => b.time.clock - a.time.clock);
@@ -96,20 +113,39 @@ function Status({ span }: { span: Span }) {
 const TEXT_ATTRS = ["url.full", "db.statement"];
 
 /** What a call's row shows, as text: its URL or command, where it was made, why it failed. */
-function textsOf(span: Span): { url: string; origin: string; failure: string } {
+function textsOf(span: Span): { url: string; origin: string | null; failure: string } {
   const attrs = span.attrs;
   return {
     url: String(TEXT_ATTRS.map((key) => attrs[key]).find((value) => value !== undefined) ?? span.name),
-    origin: String(attrs["code.origin"] ?? "—"),
+    origin: attrs["code.origin"] === undefined ? null : String(attrs["code.origin"]),
     failure: String(attrs["error.type"] ?? ""),
   };
 }
 
-function Call({ span, index, focused }: { span: Span; index: number; focused: boolean }) {
+function Call({
+  span,
+  index,
+  focused,
+  bare,
+  saidOrigin = false,
+}: {
+  span: Span;
+  index: number;
+  focused: boolean;
+  bare: boolean;
+  /** Its list's heading says where its calls were made. */
+  saidOrigin?: boolean | undefined;
+}) {
   const { url, origin, failure } = textsOf(span);
+  const beside = useContext(HiddenColumns) !== null;
   return (
-    <CallLine index={index} focused={focused} time={span.duration}>
-      <span className="grid min-w-0 grid-cols-[3rem_minmax(0,1fr)] items-center gap-3">
+    <CallLine index={index} focused={focused} time={span.duration} bare={bare}>
+      <span
+        className={cn(
+          "grid min-w-0 items-center gap-3",
+          beside ? "grid-cols-[auto_minmax(0,1fr)]" : "grid-cols-[3rem_minmax(0,1fr)]",
+        )}
+      >
         <span className="font-mono tabular-nums" title={failure}>
           <Status span={span} />
         </span>
@@ -118,7 +154,8 @@ function Call({ span, index, focused }: { span: Span; index: number; focused: bo
             <code className="truncate font-mono">{url}</code>
             <NotTraced spanId={span.id} />
           </span>
-          <code className="truncate font-mono text-muted-foreground">{origin}</code>
+          {/* Where it was made, where that is known: no line of a dash. */}
+          {saidOrigin || !origin ? null : <code className="truncate font-mono text-muted-foreground">{origin}</code>}
         </span>
       </span>
     </CallLine>
@@ -127,13 +164,15 @@ function Call({ span, index, focused }: { span: Span; index: number; focused: bo
 
 /** A group's name in its row: what its calls repeat, how many, how they went, its issue. */
 function GroupName({ group }: { group: Group }) {
+  // How many right after what, as the tree says it: ×36.
+  const issue = group.issue;
   return (
     <span className="flex min-w-0 items-center gap-2">
       <Template template={group.template} />
       <Times count={group.spans.length} />
       {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
       <GroupNotTraced spans={group.spans} />
-      {group.issue ? <IssueChip kind={group.issue} /> : null}
+      {issue ? <IssueChip kind={issue} /> : null}
     </span>
   );
 }
@@ -155,12 +194,23 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
   const [first] = group.spans;
   const count = group.spans.length;
   const title = groupTitle(group.time, nounOf(first), groupNoun(first));
+  // Beside the tree the open row has just said how many and how long.
+  const beside = useContext(HiddenColumns) !== null;
+  const bare = beside && count === 1;
+  const oneOrigin = beside ? sameOrigin(group.spans) : null;
   return (
     <>
-      <DetailsTitle>{title}</DetailsTitle>
-      <CallLines heading={<SectionHeading>{count === 1 ? "Call" : `${count} calls`}</SectionHeading>}>
+      {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
+      <CallLines heading={bare ? null : <SectionHeading>{calledFrom(count, oneOrigin)}</SectionHeading>}>
         {group.spans.map((span, index) => (
-          <Call key={span.id} span={span} index={index} focused={focus?.has(span.id) ?? false} />
+          <Call
+            key={span.id}
+            span={span}
+            index={index}
+            focused={focus?.has(span.id) ?? false}
+            bare={bare}
+            saidOrigin={oneOrigin !== null && !bare}
+          />
         ))}
       </CallLines>
     </>
@@ -171,7 +221,7 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
 export function CallsList({ spans, issueBySpan, focus, table = "trace-calls", clock }: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
-  if (spans.length === 0) return <p className="dt-note">No calls of this kind in this request.</p>;
+  if (spans.length === 0) return <p className="tp-note">No calls of this kind in this request.</p>;
   return (
     <CallTable
       table={table}

@@ -64,15 +64,11 @@ test("a long repr opens a group a line, an item a line; a short group stays on i
   ).toBe("  'a long item',");
 });
 
-test("a request with only its attributes has the same switch as any other, its one part Attributes", async ({
-  page,
-}) => {
+test("a request with only its attributes has no switch, just its Attributes", async ({ page }) => {
   await openOrder(page, "request");
-  const attributes = page.getByRole("tabpanel", { name: "Attributes" });
+  const attributes = page.getByRole("region", { name: "Attributes" });
 
-  await expect(page.getByRole("tablist", { name: "Request details" }).getByRole("tab")).toHaveText([
-    /^Attributes\s*8$/,
-  ]);
+  await expect(page.getByRole("tablist", { name: "Request details" })).toHaveCount(0);
   await expect(attributes.getByRole("heading", { level: 4 })).toHaveText([
     /^code\s*1$/,
     /^http\s*4$/,
@@ -87,7 +83,7 @@ test("a list attribute reads one item a line, in the Request tab and on the call
 }) => {
   const items = ["pre_save shop.Order: 3", "pre_delete auth.Group: 1"];
   await openOrder(page, "request");
-  const request = page.getByRole("tabpanel", { name: "Attributes" });
+  const request = page.getByRole("region", { name: "Attributes" });
 
   await expect(
     value(request.getByRole("region", { name: "signal", exact: true }), "unreceived").getByRole("listitem"),
@@ -95,9 +91,9 @@ test("a list attribute reads one item a line, in the Request tab and on the call
   const shown = await request.innerText();
 
   await page.getByRole("tab", { name: /^Call tree/ }).click();
-  await page.locator(".dt-map-row").first().click();
-  // The request row shows the Request tab's parts, behind the same switch.
-  const tree = page.getByRole("complementary", { name: "Details" }).getByRole("tabpanel", { name: "Attributes" });
+  await page.locator(".tp-map-row").first().click();
+  // The request row shows the Request tab's parts the same way.
+  const tree = page.getByRole("complementary", { name: "Details" }).getByRole("region", { name: "Attributes" });
 
   await expect(
     value(tree.getByRole("region", { name: "signal", exact: true }), "unreceived").getByRole("listitem"),
@@ -118,7 +114,7 @@ test("a log record's JSON (its message, a field) is laid out and coloured; a lis
   const fields = page.getByRole("region", { name: "Fields" });
   const filters = value(fields, "extra.filters");
 
-  await expect(filters.locator("code.dt-syntax")).toHaveText(/^\{\s*"genre": "fiction",\s*"page": 2,/);
+  await expect(filters.locator("code.tp-syntax")).toHaveText(/^\{\s*"genre": "fiction",\s*"page": 2,/);
   await expect(filters.locator(".token.string").first()).toHaveText('"genre"');
   await expect(filters.locator(".token.boolean")).toHaveText("true");
   await expect(value(fields, "extra.ids").getByRole("listitem")).toHaveText(["3", "5", "8"]);
@@ -136,19 +132,19 @@ test("a Python repr is laid out and coloured: an app's settings, a template's co
 
   await expect(value(settings, "ALLOWED_HOSTS").locator(".token.string")).toHaveText(["'localhost'", "'127.0.0.1'"]);
   await expect(value(settings, "DEBUG").locator(".token.boolean")).toHaveText("True");
-  await expect(databases.locator("code.dt-syntax > span").first()).toHaveText("{");
+  await expect(databases.locator("code.tp-syntax > span").first()).toHaveText("{");
   await expect(databases.locator(".token.string").first()).toHaveText("'default'");
 
   await page.goto(`/#/t/${await traceId("GET /books/")}?tab=tree`);
   await page.getByText("books/list.html").first().click();
   const genres = value(page.getByRole("region", { name: "Template context" }), "genres");
 
-  await expect(genres.locator("code.dt-syntax > span")).toHaveCount(6);
+  await expect(genres.locator("code.tp-syntax > span")).toHaveCount(6);
   await expect(genres.locator(".token.string").first()).toHaveText("'genre 0'");
 
   await genres.getByRole("button", { name: "Show all 42 lines" }).click();
 
-  await expect(genres.locator("code.dt-syntax > span")).toHaveCount(42);
+  await expect(genres.locator("code.tp-syntax > span")).toHaveCount(42);
 });
 
 test("an error's locals are a list of names and values: each one copies", async ({ page }) => {

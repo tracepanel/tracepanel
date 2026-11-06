@@ -115,12 +115,14 @@ test("a column moves with the arrow keys on Database, and by a drag on All reque
   await expect(headers(page).last()).not.toHaveAccessibleName("When");
 
   await header(page, "When").getByText("When").dragTo(header(page, "Status"));
+  // Dropped on Status, it goes before it (wherever the App column puts Status).
+  const beforeStatus = () => header(page, "Status").locator("xpath=preceding-sibling::*[1]");
 
-  await expect(headers(page).nth(1)).toHaveAccessibleName("When");
+  await expect(beforeStatus()).toHaveAccessibleName("When");
 
   await page.reload();
 
-  await expect(headers(page).nth(1)).toHaveAccessibleName("When");
+  await expect(beforeStatus()).toHaveAccessibleName("When");
 });
 
 test("a reset in the menu brings a list's columns back as they were", async ({ page }) => {
@@ -341,7 +343,7 @@ test("at 1024 px the sidebar is a rail and the HTTP list cuts no header, badge o
   await expect(page.getByRole("button", { name: "Expand the sidebar" })).toBeVisible();
 
   expect(await cut("th span.truncate")).toEqual([]);
-  expect(await cut(".dt-method, .dt-kind, .dt-status, [data-slot=badge]")).toEqual([]);
+  expect(await cut(".tp-method, .tp-kind, .tp-status, [data-slot=badge]")).toEqual([]);
   expect(await cut("td.text-right")).toEqual([]);
 });
 
@@ -386,12 +388,12 @@ for (const scheme of ["dark", "light"] as const) {
     await chooseTheme(page, scheme);
     await open(page, "/#/endpoints");
     const starts = await main(page)
-      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .locator("tbody td:first-child > span > :is(.tp-method, .tp-kind):first-child")
       .evaluateAll((badges) =>
         badges.map((badge) => Math.round(badge.nextElementSibling?.getBoundingClientRect().left ?? 0)),
       );
     const words = await main(page)
-      .locator("tbody td:first-child > span > :is(.dt-method, .dt-kind):first-child")
+      .locator("tbody td:first-child > span > :is(.tp-method, .tp-kind):first-child")
       .allTextContents();
 
     expect(new Set(words).size).toBeGreaterThan(2);

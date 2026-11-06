@@ -1177,6 +1177,8 @@ export interface components {
             series: components["schemas"]["SeriesBucket"][];
             histogram: components["schemas"]["HistogramBucket"][];
             slow_threshold: components["schemas"]["Duration"];
+            /** @description What these traces are slow from, by kind ("requests ≥ 1 s · views ≥ 2.5 s"); null where none is held to a time (tasks, jobs). */
+            slow_rule: string | null;
             kinds: components["schemas"]["KindStats"][];
             /** @description Highest p95 first. */
             slowest: components["schemas"]["OperationStats"][];

@@ -97,7 +97,7 @@ pub(crate) fn group_stats(rows: &[Row]) -> serde_json::Map<String, Value> {
         "calls": rows.len(),
         "errors": rows.iter().filter(|row| is_error(row)).count(),
         "p95": pct(&durations, 0.95),
-        "slow": durations.iter().filter(|value| **value >= SLOW_REQUEST_US).count(),
+        "slow": rows.iter().filter(|row| is_slow(row)).count(),
     }) else {
         unreachable!()
     };
@@ -857,7 +857,12 @@ impl Reader {
         else {
             unreachable!()
         };
-        overview.insert("slow_threshold".into(), Value::from(SLOW_REQUEST_US));
+        let (rule, lowest) = slow_rule(&rows);
+        overview.insert(
+            "slow_threshold".into(),
+            Value::from(lowest.unwrap_or(SLOW_REQUEST_US)),
+        );
+        overview.insert("slow_rule".into(), rule.map_or(Value::Null, Value::from));
         overview.insert(
             "kinds".into(),
             Value::Array(

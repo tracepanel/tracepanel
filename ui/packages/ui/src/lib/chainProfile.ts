@@ -24,6 +24,13 @@ export interface AppProfile {
 
 /** The profiled traces a scope takes, each with the stretches of it under the rows asked for. */
 export function scopedProfiles(members: readonly Member[], scope: SpanScope | null): ScopedProfile[] {
+  // A code or wait row's: its own trace's profile, of its stretches alone.
+  const at = scope?.at;
+  if (at) {
+    const member = members.find((each) => each.id === at.trace);
+    const profile = member?.trace.profile;
+    return member && profile ? [{ member, profile, windows: apart(at.windows) }] : [];
+  }
   return scopedParts(members, scope).flatMap(({ member, windows }) => {
     const profile = member.trace.profile;
     if (!profile) return [];

@@ -379,6 +379,40 @@ export type FilterId = (typeof FILTERS)[number]["id"];
 
 const FILTER_OF = new Map<string, FilterId>(FILTERS.flatMap((filter) => filter.kinds.map((kind) => [kind, filter.id])));
 
+/** Each kind's colour that has one of its own (`--tp-k-*`): the others are code's, as the time strip says it. */
+const FILTER_COLOURS: Readonly<Record<string, string>> = {
+  sql: "sql",
+  redis: "redis",
+  cache: "cache",
+  datastore: "datastore",
+  messaging: "messaging",
+  http: "http",
+  rpc: "http",
+  storage: "storage",
+  llm: "llm",
+  migration: "migration",
+  signal: "signal",
+  template: "template",
+  graphql: "graphql",
+  mail: "mail",
+  task: "messaging",
+  channels: "messaging",
+  transaction: "sql",
+  error: "log",
+  log: "log",
+};
+
+/** A kind's colour, the bars' own: the closest share where a kind has none of its own (functions: code). */
+export function filterColor(id: string): string {
+  return FILTER_COLOURS[id] ?? "view";
+}
+
+/** A span kind's colour as the Show menu has it: none for a kind no filter names (a request, a view). */
+export function kindColor(kind: string): string | undefined {
+  const filter = FILTER_OF.get(kind);
+  return filter ? filterColor(filter) : undefined;
+}
+
 function kindOf(node: Node): string {
   if (node.type === "span") return node.span.kind;
   if (node.type === "group") return node.spans[0]?.kind ?? "";
@@ -466,6 +500,8 @@ function spansOf(node: Node): readonly Span[] {
 function partOf(node: Node, picked: Picked): boolean {
   if (picked.parts.size === 0) return true;
   if (picked.parts.has(FILTER_OF.get(kindOf(node)) ?? "")) return true;
+  // A row's own kind picked as it is (the panel's Show menu: "log", a record's warnings and errors).
+  if (picked.parts.has(kindOf(node))) return true;
   return spansOf(node).some((span) => picked.parts.has(picked.categories.get(span.id) ?? ""));
 }
 
@@ -529,6 +565,21 @@ export function findNode(nodes: Node[], key: string, trace: Trace): Found | unde
 type Found = { node: Node; trace: Trace };
 
 /** The rows on the way to a row, outermost first, the row last; undefined when the tree hasn't got it. */
+/**
+ * The deepest row with every one of these spans under it (or it): where a finding on many spans shows, an N+1's group
+ * rather than one of its calls. Undefined while one of them isn't in the tree yet.
+ */
+export function coverOf(nodes: readonly Node[], keys: readonly string[]): string | undefined {
+  const [first, ...rest] = keys;
+  const path = first ? pathTo(nodes, first) : undefined;
+  if (!path) return undefined;
+  for (let at = path.length - 1; at >= 0; at--) {
+    const node = path[at];
+    if (node && rest.every((key) => pathFrom(node, key))) return node.key;
+  }
+  return undefined;
+}
+
 export function pathTo(nodes: readonly Node[], key: string): Node[] | undefined {
   for (const node of nodes) {
     const path = pathFrom(node, key);
@@ -612,4 +663,44 @@ export function rootOf(trace: Trace): string {
 /** The rows under a row: a span's, or those of a call's trace that came whole. */
 export function childrenOf(node: Node): Node[] {
   return node.type === "span" || node.type === "task" ? node.children : [];
+}
+
+function rowText(node: Node): string {
+  switch (node.type) {
+    case "span":
+    case "waiting":
+      return spanText(node.span);
+    case "group":
+      return node.spans.map(spanText).join(" ");
+    case "log":
+      return JSON.stringify(node.log);
+    case "error":
+      return JSON.stringify(node.error);
+    case "task":
+      return node.run.name;
+  }
+}
+
+function spanText(span: Span): string {
+  const { "db.statement": statement, "db.query.text": query, "url.full": url, "http.url": old } = span.attrs;
+  return [span.name, statement, query, url, old].filter((part) => typeof part === "string").join(" ");
+}
+
+function keptBy(node: Node, query: string): Node | null {
+  // A match keeps what is under it; else only the way down to a match.
+  if (rowText(node).toLowerCase().includes(query)) return node;
+  if (node.type === "group") return node.members.some((member) => keptBy(member, query)) ? node : null;
+  if (node.type !== "span" && node.type !== "task") return null;
+  const children = node.children.flatMap((child) => keptBy(child, query) ?? []);
+  return children.length > 0 ? { ...node, children } : null;
+}
+
+/** The tree cut down to the rows a query finds and the way to them. Its root stays: it is the record's own row. */
+export function filteredTree(tree: readonly Node[], query: string): Node[] {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return [...tree];
+  return tree.map((root) => {
+    if (root.type !== "span" && root.type !== "task") return root;
+    return { ...root, children: root.children.flatMap((child) => keptBy(child, wanted) ?? []) };
+  });
 }

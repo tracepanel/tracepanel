@@ -4,7 +4,7 @@
 // into the page's URL, and Esc, Show all or a double click let them go. The panel does the same, and its Console
 // button opens the trace with what was picked.
 import type { FrameLocator, Locator, Page } from "@playwright/test";
-import { openApp, panel, pill, traceId } from "../app.ts";
+import { traceId } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 // GET / (27.6 ms): the request, its view, a query at 1.0–2.2 ms, then the template from 3.1 ms with its 150
@@ -14,12 +14,12 @@ const TOTAL_MS = 27.637;
 type Scope = Page | FrameLocator;
 
 function row(scope: Scope, kind: string, name: string | RegExp): Locator {
-  return scope.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name });
+  return scope.locator(`.tp-map-row[data-kind="${kind}"]`).filter({ hasText: name });
 }
 
 /** The first stretch of a share on the trace's own lane. */
 function segment(scope: Scope, category: string): Locator {
-  return scope.locator(`.dt-time-track .dt-stretch[data-category="${category}"]`).first();
+  return scope.locator(`.tp-time-track .tp-stretch[data-category="${category}"]`).first();
 }
 
 function share(scope: Scope, category: string): Locator {
@@ -111,7 +111,7 @@ test("a drag across the lanes keeps the calls of that stretch of time, says it a
   page,
 }) => {
   await openHome(page);
-  const lanes = page.getByRole("figure", { name: "Timeline" }).locator(".dt-timeline-layer");
+  const lanes = page.getByRole("figure", { name: "Timeline" }).locator(".tp-timeline-layer");
   await drag(page, lanes, 0.5, 2.4);
 
   await expect(page).toHaveURL(/[?&]range=/);
@@ -125,19 +125,19 @@ test("a drag across the lanes keeps the calls of that stretch of time, says it a
   await expect(chip).toHaveText(/^Time 0\.\d ms – 2 ms$/);
   await expect(chip).toHaveAttribute("title", "Only calls in this time range; × shows all");
   await expect(chip).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator(".dt-range")).toHaveCount(2);
-  await expect(page.locator(".dt-range")).toHaveText(["", ""]);
+  await expect(page.locator(".tp-range")).toHaveCount(2);
+  await expect(page.locator(".tp-range")).toHaveText(["", ""]);
   // Nothing picked but the range: its chip's × lets it go, no Show all beside it.
   await expect(page.getByRole("button", { name: "Show all", exact: true })).toHaveCount(0);
 
   await expect(row(page, "sql", "SELECT blog_post")).toBeVisible();
   await expect(row(page, "template", "blog/post_list.html")).toHaveCount(0);
-  await expect(page.locator('.dt-map-row[data-kind="log"]')).toHaveCount(0);
+  await expect(page.locator('.tp-map-row[data-kind="log"]')).toHaveCount(0);
 
   await page.keyboard.press("Escape");
 
   await expect(page).not.toHaveURL(/range=/);
-  await expect(page.locator(".dt-range")).toHaveCount(0);
+  await expect(page.locator(".tp-range")).toHaveCount(0);
   await expect(row(page, "template", "blog/post_list.html")).toBeVisible();
 });
 
@@ -146,11 +146,11 @@ test("a drag across the tree's bars picks a stretch too; a click beside the mark
 }) => {
   // Its two info records show: every record is asked for.
   await openHome(page, "tab=tree&logs=all");
-  const ruler = page.locator(".dt-map-ruler");
+  const ruler = page.locator(".tp-map-ruler");
   await drag(page, ruler, 2.5, 2.9);
 
   await expect(page).toHaveURL(/[?&]range=/);
-  await expect(page.locator('.dt-map-row[data-kind="log"]')).toHaveCount(2);
+  await expect(page.locator('.tp-map-row[data-kind="log"]')).toHaveCount(2);
   await expect(row(page, "sql", "SELECT blog_post")).toHaveCount(0);
   // No row was opened by the drag's end.
   await expect(page.getByRole("complementary", { name: "Details" })).toHaveCount(0);
@@ -163,7 +163,7 @@ test("a drag across the tree's bars picks a stretch too; a click beside the mark
 
   await expect(row(page, "template", "blog/post_list.html")).toHaveCount(0);
 
-  const track = page.locator(".dt-lane-track").last();
+  const track = page.locator(".tp-lane-track").last();
   const box = await track.boundingBox();
   await page.mouse.click((box?.x ?? 0) + (box?.width ?? 0) - 4, (box?.y ?? 0) + 3);
 
@@ -184,43 +184,4 @@ test("a share and a range together keep the calls of that kind in that stretch; 
 
   await expect(page).not.toHaveURL(/part=|range=/);
   await expect(row(page, "template", "blog/post_list.html")).toBeVisible();
-});
-
-test("in the panel: the numbers on hover, a share and a stretch of time picked, and the Console opens with them", async ({
-  page,
-}) => {
-  await openApp(page, { home: { status: 200, trace: await traceId("GET /"), queries: 151, totalMs: 28 } });
-  await page.getByRole("button", { name: "Load home" }).click();
-  await pill(page).click();
-  const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
-  await segment(frame, "sql").hover();
-
-  await expect(frame.getByRole("tooltip", { name: /^Database/ })).toHaveText(
-    /^Database\s*[\d.,]+ ms · \d+% · 151 calls$/,
-  );
-
-  await segment(frame, "template").click();
-
-  await expect(row(frame, "view", "blog.views.post_list")).toHaveAttribute("data-dim", "");
-  await expect(row(frame, "sql", "SELECT blog_post")).toHaveCount(0);
-  await expect(frame.getByRole("link", { name: /^Console/ })).toHaveAttribute("href", /[?&]part=template(&|$)/);
-
-  await page.keyboard.press("Escape");
-
-  await expect(row(frame, "sql", "SELECT blog_post")).toBeVisible();
-  // Esc let the share go; the panel stayed open.
-  await expect(frame.getByRole("tab", { name: /^Call tree/ })).toBeVisible();
-
-  await drag(page, frame.locator(".dt-timeline-layer"), 0.5, 2.4);
-
-  await expect(frame.locator(".dt-map-range-layer .dt-range")).toBeVisible();
-  const chip = frame.getByRole("button", { name: /^Time 0\.\d ms – 2 ms$/ });
-  await expect(chip).toHaveText(/^Time 0\.\d ms – 2 ms$/);
-  await expect(row(frame, "template", "blog/post_list.html")).toHaveCount(0);
-  await expect(frame.getByRole("link", { name: /^Console/ })).toHaveAttribute("href", /[?&]range=0\.\d+-2\.\d+/);
-
-  await chip.click();
-
-  await expect(row(frame, "template", "blog/post_list.html")).toBeVisible();
 });

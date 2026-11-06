@@ -12,7 +12,7 @@ import { onTheClock } from "./lib/calls";
 import { percents } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
-import type { ExplainPlan, Span, Trace } from "./types";
+import type { ExplainPlan, IssueKind, Span, Trace } from "./types";
 
 // A failed call marks its row's edge red, one answered 4xx amber, as the console's lists mark theirs; one an issue
 // points at is highlighted.
@@ -20,7 +20,7 @@ const ROW = cn(
   "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
   "data-focused:bg-brand-soft/60",
   "data-[tone=error]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-error)]",
-  "data-[tone=warn]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--dt-warn-strong)]",
+  "data-[tone=warn]:[&>td:first-child]:shadow-[inset_3px_0_0_var(--tp-warn-strong)]",
 );
 
 /** Whether a click in a row opens it: anywhere but a link or a button in it, and not the end of selecting its text. */
@@ -179,7 +179,7 @@ export function timeColumns<T>(
       fixed: true,
       num: true,
       cell: (item) => (
-        <span className="dt-row-time" title={timeTitle(time(item), noun)}>
+        <span className="tp-row-time" title={timeTitle(time(item), noun)}>
           {clock(time(item))}
         </span>
       ),
@@ -204,9 +204,36 @@ export function groupTitle(time: RowTime, noun: readonly [string, string], simil
   return `${head} · ${duration(time.clock)} on the clock · ${duration(time.total)} total`;
 }
 
+/**
+ * What a row of repeats says of itself: an N+1 if any of its calls is in one, else a finding all of them share.
+ * One slow query among 36 is that query's, on its own line: it doesn't make the 36 "Slow query".
+ */
+export function issueOfRepeats(
+  spans: readonly { id: string }[],
+  issueBySpan: ReadonlyMap<string, IssueKind>,
+): IssueKind | undefined {
+  const kinds = spans.map((span) => issueBySpan.get(span.id));
+  if (kinds.includes("n+1")) return "n+1";
+  const [first] = kinds;
+  return first && kinds.every((kind) => kind === first) ? first : undefined;
+}
+
+/** Where calls were all made, when that is one place. */
+export function sameOrigin(spans: readonly Span[]): string | null {
+  const origins = new Set(spans.map((span) => String(span.attrs["code.origin"] ?? "")));
+  const [origin] = origins;
+  return origins.size === 1 && origin ? origin : null;
+}
+
+/** The heading over an open row's calls: how many, and where from when that is one place. */
+export function calledFrom(count: number, origin: string | null): string {
+  if (count === 1) return origin ? `Called from ${origin}` : "Call";
+  return origin ? `Called ${count} times from ${origin}` : `Called ${count} times`;
+}
+
 /** What an open row's details start with, as the call tree's do: what it is, how many, how long. */
 export function DetailsTitle({ children }: { children: ReactNode }) {
-  return <p className="dt-map-details-title">{children}</p>;
+  return <p className="tp-map-details-title">{children}</p>;
 }
 
 /** One line of an open row's list of calls (where each was made, its time): the hairline rows of a call's fields. */
@@ -214,23 +241,37 @@ export function CallLine({
   index,
   focused,
   time,
+  longest,
+  bare = false,
   children,
 }: {
   index: number;
   focused: boolean;
   time: number;
+  /** The longest of the lines: each time's bar is its share of it, so the slow ones stand out. */
+  longest?: number | undefined;
+  /** The only line of its row, whose time the row says: no number, no time. */
+  bare?: boolean | undefined;
   children: ReactNode;
 }) {
+  if (bare) return <li className="grid py-1 text-sm">{children}</li>;
   return (
     <li
       className={cn(
-        "grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b py-2 text-sm",
+        "grid grid-cols-[2rem_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border/60 py-1 text-sm",
         focused && "bg-brand-soft",
       )}
     >
       <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
       {children}
-      <span className="tabular-nums">{duration(time)}</span>
+      {longest ? (
+        <span className="tp-call-share" aria-hidden="true">
+          <span style={{ width: `${Math.max((time / longest) * 100, 2)}%` }} />
+        </span>
+      ) : (
+        <span />
+      )}
+      <span className="w-14 text-right tabular-nums">{duration(time)}</span>
     </li>
   );
 }

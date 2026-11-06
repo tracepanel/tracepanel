@@ -40,7 +40,7 @@ pub use scope::{
     CALL_TRACES, CHAIN_LEVELS, CHAIN_TRACES, Chain, Member, Remote, SCOPE_LOGS, Scope, Selection,
     Served, ServedCalls, call_summary, chain_issues, log_summary, no_remote,
 };
-pub use stats::{SLOW_REQUEST_US, stats};
+pub use stats::{SLOW_ACTION_US, SLOW_REQUEST_US, SLOW_VIEW_US, slow_from, slow_rule, stats};
 pub use tracepanel_analysis::calls::{call_key, query_fingerprint};
 pub use write::{DEFAULT_MAX_TRACES, SCHEMA, Store, path_in, version};
 

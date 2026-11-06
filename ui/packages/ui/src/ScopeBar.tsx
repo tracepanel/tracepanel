@@ -4,6 +4,7 @@
 
 import { ArrowUpRightIcon, DatabaseIcon, FlameIcon, ScrollTextIcon, TriangleAlertIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+import { useBeside } from "./beside";
 import type { UnderSubject } from "./CallMap";
 import {
   DropdownMenu,
@@ -23,9 +24,9 @@ function ScopeChip({ scope, onChange }: { scope: SpanScope | null; onChange: (sc
   if (!scope) return null;
   return (
     <li>
-      <span className="dt-map-filter dt-scope-chip" data-only={scope.only ? "" : undefined}>
+      <span className="tp-map-filter tp-scope-chip" data-only={scope.only ? "" : undefined}>
         <DropdownMenu>
-          <DropdownMenuTrigger className="dt-scope-chip-name" title="What is under this row of the call tree">
+          <DropdownMenuTrigger className="tp-scope-chip-name" title="What is under this row of the call tree">
             {scope.only ? "In" : "Under"} {scope.label}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -39,7 +40,7 @@ function ScopeChip({ scope, onChange }: { scope: SpanScope | null; onChange: (sc
         </DropdownMenu>
         <button
           type="button"
-          className="dt-map-filter-x"
+          className="tp-map-filter-x"
           aria-label="Back to the whole chain"
           title="Back to the whole chain"
           onClick={() => onChange(null)}
@@ -67,9 +68,9 @@ export function CountChip({
 }) {
   return (
     <li>
-      <button type="button" className="dt-map-filter" aria-pressed={pressed} title={title} onClick={onPress}>
+      <button type="button" className="tp-map-filter" aria-pressed={pressed} title={title} onClick={onPress}>
         {children}
-        <span className="dt-map-filter-count">{count}</span>
+        <span className="tp-map-filter-count">{count}</span>
       </button>
     </li>
   );
@@ -131,7 +132,10 @@ export function ScopeHeader({
   end,
   filters,
   filtersLabel,
+  keepsEnd = false,
 }: {
+  /** Beside the panel's waterfall its end alone stays (the Profile's Time and Memory): the details' title says the rest. */
+  keepsEnd?: boolean | undefined;
   scope: SpanScope | null;
   onScope: (scope: SpanScope | null) => void;
   apps: AppPicks;
@@ -141,12 +145,20 @@ export function ScopeHeader({
   filters?: ReactNode;
   filtersLabel?: string | undefined;
 }) {
+  const beside = useBeside();
+  if (beside) {
+    return keepsEnd && end ? (
+      <div className="tp-scope-head">
+        <SummaryLine summary={null} end={end} />
+      </div>
+    ) : null;
+  }
   return (
-    <div className="dt-scope-head">
+    <div className="tp-scope-head">
       <ScopeAndApps scope={scope} onScope={onScope} apps={apps} />
       <SummaryLine summary={summary} end={end} />
       {filters ? (
-        <ul className="dt-scope-row" aria-label={filtersLabel}>
+        <ul className="tp-scope-row" aria-label={filtersLabel}>
           {filters}
         </ul>
       ) : null}
@@ -167,7 +179,7 @@ function ScopeAndApps({
   const several = apps.apps.filter((app) => (apps.counts.get(app) ?? 0) > 0 || app === apps.picked).length > 1;
   if (!(scope || several)) return null;
   return (
-    <ul className="dt-scope-row" aria-label="Scope">
+    <ul className="tp-scope-row" aria-label="Scope">
       <ScopeChip scope={scope} onChange={onScope} />
       <AppChips {...apps} />
     </ul>
@@ -178,9 +190,9 @@ function ScopeAndApps({
 function SummaryLine({ summary, end }: { summary: ReactNode; end: ReactNode }) {
   if (!(summary || end)) return null;
   return (
-    <div className="dt-scope-summary">
-      <span className="dt-scope-summary-text">{summary}</span>
-      {end ? <div className="dt-scope-summary-end">{end}</div> : null}
+    <div className="tp-scope-summary">
+      <span className="tp-scope-summary-text">{summary}</span>
+      {end ? <div className="tp-scope-summary-end">{end}</div> : null}
     </div>
   );
 }
@@ -205,7 +217,7 @@ export function IssuePick({
   return (
     <CountChip pressed={pressed} count={count} title={title} onPress={onPress}>
       <IssueChip kind={kind} />
-      <span className="dt-issue-pick-title">{title.replace(/^[^:]*:\s*/, "")}</span>
+      <span className="tp-issue-pick-title">{title.replace(/^[^:]*:\s*/, "")}</span>
     </CountChip>
   );
 }
@@ -259,16 +271,16 @@ export function UnderThis({ counts, subject }: { counts: readonly UnderCount[]; 
   const some = counts.filter((each) => each.count > 0);
   if (some.length === 0) return null;
   return (
-    <div className="dt-under-this">
-      <span className="dt-under-this-caption">Inside {subject}</span>
-      <ul className="dt-under-this-chips" aria-label={`Inside ${subject}`}>
+    <div className="tp-under-this">
+      <span className="tp-under-this-caption">Inside {subject}</span>
+      <ul className="tp-under-this-chips" aria-label={`Inside ${subject}`}>
         {some.map((each) => {
           const { tab, icon: Icon } = UNDER_TABS[each.tab];
           return (
             <li key={each.tab}>
               <button
                 type="button"
-                className="dt-map-filter"
+                className="tp-map-filter"
                 data-tone={each.tab === "issues" ? "warn" : undefined}
                 title={`Open the ${tab} tab scoped to ${subject}`}
                 onClick={each.onOpen}

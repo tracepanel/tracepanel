@@ -470,3 +470,50 @@ async fn a_called_trace_that_cant_be_read_fails_the_answer() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[tokio::test]
+async fn a_search_answers_each_traces_chain_numbers_as_a_list_by_ids_does() {
+    let dir = std::env::temp_dir().join(format!(
+        "tracepanel-server-chain-search-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = tracepanel_store_local::path_in(&dir);
+    Store::open(&path)
+        .unwrap()
+        .write(&[
+            trace(
+                "BFF",
+                "library-bff",
+                0,
+                None,
+                json!([
+                    span("root", None, "POST /graphql", 0, 100, None),
+                    span("call1", Some("root"), "GET /authors/1", 20, 20, Some("c1")),
+                ]),
+                json!([]),
+            ),
+            trace(
+                "API1",
+                "library-api",
+                20,
+                Some("c1"),
+                json!([span("a1", None, "GET", 20, 20, None)]),
+                json!([]),
+            ),
+        ])
+        .unwrap();
+    let router = tracepanel_server::router(Reader::new(&path), Activity::default());
+    let bff = id("BFF");
+
+    let (status, searched) = get(&router, "/api/traces?counts=1").await;
+    let (_, by_ids) = get(&router, &format!("/api/traces?ids={bff}&counts=1")).await;
+    let (_, plain) = get(&router, "/api/traces").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(searched["counts"][&bff], by_ids["counts"][&bff]);
+    assert_eq!(searched["counts"][&bff]["traces"], 2);
+
+    assert_eq!(plain.get("counts"), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}

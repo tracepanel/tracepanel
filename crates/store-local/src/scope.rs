@@ -160,7 +160,120 @@ pub(crate) fn shifted(mut doc: Value, by: i64) -> Value {
     doc
 }
 
+/// What keeps the memo of a chain's finds from growing without end: past this many chains it starts again.
+const ACROSS_APPS_KEPT: usize = 2_000;
+
+/// What a chain found across apps: each finding's fingerprint and kind.
+pub(crate) type AcrossApps = Vec<(String, String)>;
+
 impl Reader {
+    /// What each trace's whole chain adds up to, as a list wants it: one query per trace, over the store's numbers.
+    /// The chain's own findings (an N+1 across apps) need its documents, read only for a chain with enough calls to
+    /// have one and once as it stands. A trace not stored has none.
+    pub fn chain_counts(&self, ids: &[String]) -> Result<Value, ReadError> {
+        const MEMBERS: &str = "WITH RECURSIVE down(id, level) AS (
+                 SELECT ?1, 0
+                 UNION
+                 SELECT l.trace_id, down.level + 1 FROM links l JOIN down ON l.linked_trace = down.id
+                 WHERE l.kind = 'called_by' AND down.level < ?2
+             ),
+             members AS (SELECT id, min(level) AS level FROM down GROUP BY id ORDER BY level LIMIT ?3)";
+        let db = self.connect()?;
+        let mut totals = db.prepare_cached(&format!(
+            "{MEMBERS} SELECT count(*), coalesce(sum(t.queries), 0), coalesce(sum(t.db_time), 0), coalesce(sum(t.errors), 0)
+             FROM members m JOIN traces t ON t.id = m.id"
+        ))?;
+        // A finding is one however many traces it is in: its fingerprint, as the Issues tab groups them.
+        let mut issues = db.prepare_cached(&format!(
+            "{MEMBERS} SELECT DISTINCT i.fingerprint, i.kind FROM members m
+             JOIN issue_traces t ON t.trace_id = m.id JOIN issues i ON i.fingerprint = t.fingerprint"
+        ))?;
+        // What ran down the chain: its spans' kinds (functions, GraphQL, transactions), its calls' systems (sql,
+        // http, redis), and "log" for a warning or worse: what a list can be narrowed to, and which rows have it.
+        let mut kinds_of = db.prepare_cached(&format!(
+            "{MEMBERS} SELECT s.kind FROM members m JOIN spans s ON s.trace_id = m.id
+             UNION SELECT c.system FROM members m JOIN calls c ON c.trace_id = m.id
+             UNION SELECT 'log' FROM members m JOIN logs l ON l.trace_id = m.id WHERE l.level_no >= 30 ORDER BY 1"
+        ))?;
+        let mut counts = serde_json::Map::new();
+        for id in ids {
+            let args = rusqlite::params![id, CHAIN_LEVELS as i64, CHAIN_TRACES as i64];
+            let (traces, queries, db_time, errors): (i64, i64, i64, i64) = totals
+                .query_row(args, |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+                })?;
+            if traces == 0 {
+                continue;
+            }
+            let mut found: HashMap<String, String> = issues
+                .query_map(args, |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()?;
+            found.extend(self.found_across_apps(id, traces as usize)?);
+            found.retain(|_, kind| kind != "error");
+            let span_kinds: Vec<String> = kinds_of
+                .query_map(args, |row| row.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            let mut kinds: Vec<&str> = found.values().map(String::as_str).collect();
+            kinds.sort_by_key(|kind| ISSUE_ORDER.iter().position(|each| each == kind));
+            kinds.dedup();
+            counts.insert(
+                id.clone(),
+                serde_json::json!({
+                    "queries": queries,
+                    "db_time": db_time,
+                    "errors": errors,
+                    "span_kinds": span_kinds,
+                    "issues": found.len(),
+                    "kinds": kinds,
+                    "traces": traces,
+                }),
+            );
+        }
+        Ok(Value::Object(counts))
+    }
+
+    /// What the chain found across apps: each finding's fingerprint and kind. Fewer calls than a repeat takes can't
+    /// have any.
+    fn found_across_apps(
+        &self,
+        id: &str,
+        traces: usize,
+    ) -> rusqlite::Result<Vec<(String, String)>> {
+        if traces <= CHAIN_REPEATS {
+            return Ok(Vec::new());
+        }
+        let key = (id.to_owned(), traces);
+        if let Some(found) = self.across_apps_memo().get(&key) {
+            return Ok(found.clone());
+        }
+        let found: Vec<(String, String)> = self
+            .chain(id, true, &no_remote)?
+            .map(|chain| {
+                chain_issues(&chain)
+                    .into_iter()
+                    .filter_map(|(_, issue)| {
+                        Some((
+                            issue["fingerprint"].as_str()?.to_owned(),
+                            issue["kind"].as_str()?.to_owned(),
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut kept = self.across_apps_memo();
+        if kept.len() >= ACROSS_APPS_KEPT {
+            kept.clear();
+        }
+        kept.insert(key, found.clone());
+        Ok(found)
+    }
+
+    fn across_apps_memo(&self) -> std::sync::MutexGuard<'_, HashMap<(String, usize), AcrossApps>> {
+        self.across_apps
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// The calls of a trace another trace here served: (that trace's id, the span of this one that called), in the
     /// order they started.
     fn served_calls(&self, id: &str) -> rusqlite::Result<Vec<(String, String)>> {
@@ -1088,6 +1201,49 @@ mod tests {
 
     fn row(time: i64, app: &str, message: &str) -> (i64, String, String) {
         (time, app.into(), message.into())
+    }
+
+    #[test]
+    fn a_chains_counts_add_up_its_traces_and_what_it_found_across_apps() {
+        let (dir, reader) = library("counts");
+        let ids = ["VIEW".to_owned(), "API1".to_owned(), "NONE".to_owned()];
+
+        let counts = reader.chain_counts(&ids).unwrap();
+        let chain = reader.chain("VIEW", true, &no_remote).unwrap().unwrap();
+        let across = chain_issues(&chain).len() as i64;
+        let queries: i64 = chain
+            .members
+            .iter()
+            .map(|member| member.spans().filter(|span| span["kind"] == "sql").count() as i64)
+            .sum();
+
+        let listed = reader
+            .list_traces(
+                &["VIEW", "BFF", "API1", "API2", "API3"].map(String::from),
+                5,
+            )
+            .unwrap();
+        let sum = |field: &str| {
+            listed
+                .iter()
+                .map(|trace| trace[field].as_i64().unwrap())
+                .sum::<i64>()
+        };
+
+        assert_eq!(counts["VIEW"]["traces"], 5);
+        assert_eq!(counts["VIEW"]["queries"], queries);
+        assert_eq!(counts["VIEW"]["issues"], across);
+        assert_eq!(counts["VIEW"]["db_time"], sum("db_time"));
+        assert_eq!(counts["VIEW"]["errors"], sum("errors"));
+        // Its calls by system, its other spans by kind (the root's own, a page or a request, isn't one).
+        assert_eq!(
+            counts["VIEW"]["span_kinds"],
+            // A warning logged down it: "log" too.
+            json!(["function", "http", "log", "sql"])
+        );
+        assert_eq!(counts["API1"]["traces"], 1);
+        assert_eq!(counts.get("NONE"), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

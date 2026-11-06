@@ -10,7 +10,7 @@ async function openGallery(page: Page, tab = "calls"): Promise<void> {
 }
 
 function row(page: Page, kind: string, name: string | RegExp) {
-  return page.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name });
+  return page.locator(`.tp-map-row[data-kind="${kind}"]`).filter({ hasText: name });
 }
 
 test("a storage call's row: its kind, the call and its file, the storage's alias, in a colour of its own", async ({
@@ -19,11 +19,11 @@ test("a storage call's row: its kind, the call and its file, the storage's alias
   await openGallery(page);
   const save = row(page, "storage", "save uploads/2026/10/visit.json");
 
-  await expect(save.locator(".dt-map-kind")).toHaveText("storage");
-  await expect(save.locator(".dt-map-text")).toHaveText("save uploads/2026/10/visit.json");
+  await expect(save.locator(".tp-map-kind")).toHaveText("storage");
+  await expect(save.locator(".tp-map-text")).toHaveText("save uploads/2026/10/visit.json");
 
   const colour = (locator: typeof save) =>
-    locator.evaluate((element) => getComputedStyle(element).getPropertyValue("--dt-k").trim());
+    locator.evaluate((element) => getComputedStyle(element).getPropertyValue("--tp-k").trim());
   const storage = await colour(save);
 
   expect(storage).not.toBe("");
@@ -36,7 +36,7 @@ test("a loop's exists() calls fold into one row with their N+1, the same url() t
   await openGallery(page);
   const loop = row(page, "storage", "exists avatars/*");
 
-  await expect(loop.locator(".dt-map-times")).toHaveText("×6");
+  await expect(loop.locator(".tp-map-times")).toHaveText("×6");
   await expect(loop.locator('[data-slot="badge"]')).toContainText("N+1");
 
   await page.getByRole("tab", { name: /^Issues/ }).click();
@@ -67,7 +67,7 @@ test("the header counts the storage calls, the time strip has their share and th
 }) => {
   await openGallery(page);
 
-  await expect(page.locator(".dt-trace-facts")).toHaveText(/^· 9 storage calls \d+ ms$/);
+  await expect(page.locator(".tp-trace-facts")).toHaveText(/^· 9 storage calls \d+ ms$/);
   const legend = page.getByRole("list", { name: /^Where the time went/ });
   await expect(legend.locator('[data-category="storage"]')).toContainText("Storage");
 

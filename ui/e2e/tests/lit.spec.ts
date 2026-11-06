@@ -33,20 +33,20 @@ async function rings(segments: Locator): Promise<{ ring: string; fill: string }[
 
 async function checkStrip(scope: Page | FrameLocator): Promise<void> {
   const strip = scope.getByRole("region", { name: "Time" });
-  const query = strip.locator('.dt-mark[data-lit-key="sql"]').first();
+  const query = strip.locator('.tp-mark[data-lit-key="sql"]').first();
   await query.hover({ force: true });
 
-  const lit = strip.locator(".dt-mark[data-lit]");
+  const lit = strip.locator(".tp-mark[data-lit]");
   await expect(lit).toHaveCount(1);
   for (const { ring, fill } of await rings(lit)) expect(ring).toBe(fill);
-  await expect(strip.locator(".dt-share[data-lit]")).toHaveText([/^Database/]);
+  await expect(strip.locator(".tp-share[data-lit]")).toHaveText([/^Database/]);
 
   await strip.getByRole("button", { name: /^Database/ }).hover();
 
-  const stretches = strip.locator('.dt-stretch[data-category="sql"]');
-  await expect(strip.locator(".dt-stretch[data-lit]")).toHaveCount(await stretches.count());
+  const stretches = strip.locator('.tp-stretch[data-category="sql"]');
+  await expect(strip.locator(".tp-stretch[data-lit]")).toHaveCount(await stretches.count());
   for (const { ring, fill } of await rings(stretches)) expect(ring).toBe(fill);
-  await expect(strip.locator('.dt-mark[data-lit-key="sql"]:not([data-lit])')).toHaveCount(0);
+  await expect(strip.locator('.tp-mark[data-lit-key="sql"]:not([data-lit])')).toHaveCount(0);
 }
 
 test("on the time strip a query's mark lights in its own colour with Database, and Database its stretches", async ({
@@ -64,9 +64,6 @@ test("in the panel, dark, the strip lights the same way", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Load home" }).click();
   await pill(page).click();
-  await panel(page)
-    .getByRole("tab", { name: /^Call tree/ })
-    .click();
 
   await checkStrip(panel(page));
 });
@@ -75,15 +72,15 @@ test("the Profile tab's bar lights a share in its own colour with its legend ite
   await page.goto(`/#/t/${await traceId("GET /reports/sales")}?tab=profile`);
   await page.getByRole("tab", { name: "All frames" }).click();
   const packages = page.getByRole("region", { name: "Time by package" });
-  const segments = packages.locator(".dt-share-bar > span");
+  const segments = packages.locator(".tp-share-bar > span");
   await segments.nth(1).hover();
 
   // The strip's shares in either view: Your code, then GC.
-  await expect(packages.locator(".dt-share[data-lit]")).toHaveText([/^GC/]);
-  for (const { ring, fill } of await rings(packages.locator(".dt-share-bar > span[data-lit]"))) expect(ring).toBe(fill);
+  await expect(packages.locator(".tp-share[data-lit]")).toHaveText([/^GC/]);
+  for (const { ring, fill } of await rings(packages.locator(".tp-share-bar > span[data-lit]"))) expect(ring).toBe(fill);
 
   await packages.getByRole("button", { name: /^Your code/ }).hover();
 
   await expect(segments.first()).toHaveAttribute("data-lit", "");
-  await expect(packages.locator(".dt-share-bar > span[data-lit]")).toHaveCount(1);
+  await expect(packages.locator(".tp-share-bar > span[data-lit]")).toHaveCount(1);
 });

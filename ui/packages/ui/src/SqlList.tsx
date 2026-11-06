@@ -1,20 +1,24 @@
 import { cn } from "@tracepanel/ui/lib/utils";
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
 import {
   CallLine,
   CallLines,
   CallTable,
+  calledFrom,
   DetailsTitle,
   type Explain,
   groupTitle,
+  issueOfRepeats,
   type ListTime,
   listTime,
   QueryPlan,
   type RowTime,
   rowTime,
+  sameOrigin,
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
+import { HiddenColumns } from "./DataTable";
 import { duration } from "./format";
 import { callFields, templatePlace } from "./lib/callFields";
 import { queryFingerprint } from "./lib/fingerprint";
@@ -23,6 +27,7 @@ import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
 import { AliasChip, IssueChip, SectionHeading, TemplateChip, Times } from "./primitives";
 import type { Segment } from "./Segmented";
 import { SqlCode } from "./SqlCode";
+import { sqlLiteral } from "./sql";
 import type { IssueKind, Span } from "./types";
 
 export interface SqlListProps {
@@ -83,11 +88,13 @@ function groupSpans(spans: readonly Span[], issueBySpan: ReadonlyMap<string, Iss
       issue: undefined,
     };
     group.spans.push(span);
-    group.issue ??= issueBySpan.get(span.id);
     groups.set(key, group);
   }
   // Each row's time on the clock, as the table shows it and sorts by.
-  for (const group of groups.values()) group.time = rowTime(group.spans);
+  for (const group of groups.values()) {
+    group.time = rowTime(group.spans);
+    group.issue = issueOfRepeats(group.spans, issueBySpan);
+  }
   return [...groups.values()].sort((a, b) => b.time.clock - a.time.clock);
 }
 
@@ -135,18 +142,80 @@ function LibraryCaller({ caller, className }: { caller: string; className?: stri
   );
 }
 
-/** Where each query of a group was made, one line each, with its time. */
+/** "pk_1 = 12": the values a query ran with, by name where the driver says them; none where they stay local. */
+function paramsOf(span: Span): string | null {
+  const values = valuesOf(span);
+  return values ? `(${values.map(sqlLiteral).join(", ")})` : null;
+}
+
+/** The values a query ran with, where they were recorded (a snapshot's are dropped). */
+function valuesOf(span: Span): unknown[] | undefined {
+  const values = span.attrs["db.params"];
+  return Array.isArray(values) && values.length > 0 ? values : undefined;
+}
+
+function namesOf(span: Span): unknown[] | undefined {
+  const names = span.attrs["db.param_names"];
+  return Array.isArray(names) ? names : undefined;
+}
+
+/**
+ * Where each query of a group was made, one line each, with its time and its bar (the slow ones stand out). From one
+ * place, a line is what it ran with (`author_id = 1`); rows said once when every run returned as many.
+ */
 function CalledFromList({ spans, focus }: { spans: readonly Span[]; focus: ReadonlySet<string> | undefined }) {
-  const heading = spans.length === 1 ? "Called from" : `Called ${spans.length} times from`;
+  const beside = useContext(HiddenColumns) !== null;
+  const oneOrigin = beside ? sameOrigin(spans) : null;
+  const rows = new Set(spans.map(returnedOf));
+  const sameRows = spans.length > 1 && rows.size === 1 ? [...rows][0] : null;
+  const heading = oneOrigin
+    ? [calledFrom(spans.length, oneOrigin), sameRows ? `${sameRows} each` : null].filter(Boolean).join(" · ")
+    : spans.length === 1
+      ? "Called from"
+      : `Called ${spans.length} times from`;
+  const bare = beside && spans.length === 1;
+  const longest = spans.length > 1 ? Math.max(...spans.map((span) => span.duration)) : undefined;
   return (
     <CallLines heading={<SectionHeading>{heading}</SectionHeading>}>
       {spans.map((span, index) => (
-        <CallLine key={span.id} index={index} focused={focus?.has(span.id) ?? false} time={span.duration}>
-          <CalledFrom span={span} className="truncate" />
+        <CallLine
+          key={span.id}
+          index={index}
+          focused={focus?.has(span.id) ?? false}
+          time={span.duration}
+          longest={longest}
+          bare={bare}
+        >
+          {oneOrigin ? (
+            <RanWith span={span} rows={sameRows ? null : returnedOf(span)} />
+          ) : (
+            <CalledFrom span={span} className="truncate" />
+          )}
         </CallLine>
       ))}
     </CallLines>
   );
+}
+
+/** What one run of a query ran with, by name where the driver says them, and what it returned. */
+function RanWith({ span, rows }: { span: Span; rows: string | null }) {
+  const values = valuesOf(span);
+  const names = namesOf(span);
+  const ran = values
+    ?.map((value, at) => (names?.[at] ? `${String(names[at])} = ${sqlLiteral(value)}` : sqlLiteral(value)))
+    .join(", ");
+  return (
+    <span className="flex min-w-0 items-baseline gap-2">
+      {ran ? <code className="truncate font-mono text-xs">{ran}</code> : null}
+      {rows ? <span className="shrink-0 text-muted-foreground">{rows}</span> : null}
+    </span>
+  );
+}
+
+/** How many rows a run returned, in words; null where the driver doesn't say. */
+function returnedOf(span: Span): string | null {
+  const rows = span.attrs["db.response.returned_rows"];
+  return rows === undefined ? null : `${rows} ${rows === 1 ? "row" : "rows"}`;
 }
 
 /** A query's fields in words, as the call tree's details list them: its database, engine, rows, server. */
@@ -179,12 +248,20 @@ function QueryDetails({
   onExplain: Explain | undefined;
   links: TraceLinks | undefined;
 }) {
+  // Beside the tree the open row has just said how many and how long.
+  const beside = useContext(HiddenColumns) !== null;
   const [first] = spans;
   if (!first) return null;
   return (
     <>
-      <DetailsTitle>{title}</DetailsTitle>
-      <SqlCode sql={String(first.attrs["db.statement"] ?? first.name)} vendor={vendorOf(first)} />
+      {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
+      <SqlCode
+        sql={String(first.attrs["db.statement"] ?? first.name)}
+        vendor={vendorOf(first)}
+        // One run: the values it ran with, in place.
+        values={spans.length === 1 ? valuesOf(first) : undefined}
+        names={spans.length === 1 ? namesOf(first) : undefined}
+      />
       <QueryFields span={first} />
       <QueryPlan span={first} onExplain={onExplain} />
       <CalledFromList spans={spans} focus={focus} />
@@ -245,6 +322,11 @@ function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Gro
   ];
 }
 
+/** A query's own finding: none for a repeat (an N+1, a duplicate), which is its group's. */
+function ownIssue(issue: IssueKind | undefined): IssueKind | undefined {
+  return issue === "n+1" || issue === "duplicates" ? undefined : issue;
+}
+
 function orderColumns(
   placed: readonly Placed[],
   start: number,
@@ -265,15 +347,23 @@ function orderColumns(
       id: "query",
       label: "Query",
       required: true,
-      cell: ({ span }) => (
-        <QueryName
-          name={span.name}
-          count={1}
-          alias={span.attrs["db.alias"]}
-          from={span.attrs}
-          issue={issueBySpan.get(span.id)}
-        />
-      ),
+      cell: ({ span }) => {
+        // What it ran with: one query run again and again tells its runs apart by their values.
+        const params = paramsOf(span);
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <QueryName
+              name={span.name}
+              count={1}
+              alias={span.attrs["db.alias"]}
+              from={span.attrs}
+              // A repeat is its group's (the Grouped view, the tree's row): each run says only its own.
+              issue={ownIssue(issueBySpan.get(span.id))}
+            />
+            {params ? <span className="tp-map-sub truncate font-mono">{params}</span> : null}
+          </span>
+        );
+      },
     },
     {
       id: "start",
@@ -282,7 +372,7 @@ function orderColumns(
       num: true,
       drop: 2,
       className: "text-muted-foreground",
-      cell: ({ span }) => `+${duration(Math.max(span.start - start, 0))}`,
+      cell: ({ span }) => (span.start - start < 1_000 ? "+0 ms" : `+${duration(span.start - start)}`),
     },
     ...timeColumns<Placed>((item) => rowTime([item.span]), placed, scope, QUERY),
   ];
@@ -300,7 +390,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   const start = Math.min(...spans.map((span) => span.start));
 
-  if (spans.length === 0) return <p className="dt-note">No database queries in this request.</p>;
+  if (spans.length === 0) return <p className="tp-note">No database queries in this request.</p>;
 
   return (
     <>

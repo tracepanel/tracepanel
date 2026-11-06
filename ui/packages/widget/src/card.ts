@@ -40,8 +40,8 @@ export const CARD_STYLE = `
   .card {
     position: fixed; right: 16px; bottom: 68px; z-index: 2147483647; box-sizing: border-box;
     width: 380px; max-width: calc(100vw - 32px); padding: 14px 16px 12px;
-    border: 1px solid var(--dt-float-border); border-radius: 14px; background: var(--dt-float); color: var(--dt-float-text);
-    box-shadow: var(--dt-float-card-shadow);
+    border: 1px solid var(--tp-float-border); border-radius: 14px; background: var(--tp-float); color: var(--tp-float-text);
+    box-shadow: var(--tp-float-card-shadow);
     font: 400 13px/1.45 "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-variant-numeric: tabular-nums; text-align: left;
     opacity: 0; visibility: hidden; transform: translateY(4px); pointer-events: none;
@@ -51,80 +51,80 @@ export const CARD_STYLE = `
   .card * { box-sizing: border-box; }
   .card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .card-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 13px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-  /* A request's method as the console's lists show it (.dt-method): its colour in a tint in dark, the colour alone in
+  /* A request's method as the console's lists show it (.tp-method): its colour in a tint in dark, the colour alone in
      light. The pill's name and the card's head share it. */
   .method {
     display: inline-block; margin-right: 2px; padding: 1px 5px; border-radius: 4px;
     font: 600 11.5px/16px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
-    letter-spacing: 0.02em; color: var(--dt-get); background: rgb(from var(--dt-get) r g b / 0.12);
+    letter-spacing: 0.02em; color: var(--tp-get); background: rgb(from var(--tp-get) r g b / 0.12);
   }
-  .method[data-method="POST"] { color: var(--dt-post); background: rgb(from var(--dt-post) r g b / 0.12); }
-  .method:is([data-method="PUT"], [data-method="PATCH"]) { color: var(--dt-put); background: rgb(from var(--dt-put) r g b / 0.14); }
-  .method[data-method="DELETE"] { color: var(--dt-delete); background: rgb(from var(--dt-delete) r g b / 0.12); }
+  .method[data-method="POST"] { color: var(--tp-post); background: rgb(from var(--tp-post) r g b / 0.12); }
+  .method:is([data-method="PUT"], [data-method="PATCH"]) { color: var(--tp-put); background: rgb(from var(--tp-put) r g b / 0.14); }
+  .method[data-method="DELETE"] { color: var(--tp-delete); background: rgb(from var(--tp-delete) r g b / 0.12); }
   :host([data-theme="light"]) .method { padding-inline: 0; background: none; }
   .card-head .status { flex: none; margin-left: auto; }
-  .card-time { flex: none; color: var(--dt-text-2); }
+  .card-time { flex: none; color: var(--tp-text-2); }
   .card-bar { display: flex; gap: 2px; height: 6px; margin: 12px 0 7px; }
   .card-bar span { min-width: 3px; border-radius: 3px; background: var(--k); }
-  .card-most { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--dt-text-3); font-size: 12px; }
+  .card-most { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--tp-text-3); font-size: 12px; }
   .card-most i { width: 7px; height: 7px; border-radius: 2px; background: var(--k); }
-  .card-most b { color: var(--dt-float-text); font-weight: 600; }
-  .card-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dt-float-rule); }
-  .card-caption { margin: 0 0 4px; color: var(--dt-text-3); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .card-most b { color: var(--tp-float-text); font-weight: 600; }
+  .card-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--tp-float-rule); }
+  .card-caption { margin: 0 0 4px; color: var(--tp-text-3); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
   .card-row {
     display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 1px 8px;
     width: calc(100% + 16px); margin: 0 -8px; padding: 6px 8px; border: 0; border-radius: 8px;
     background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
   }
-  .card-row:hover, .card-row:focus-visible { background: var(--dt-float-hover); outline: none; }
-  .card-kind { padding: 1px 7px; border-radius: 999px; background: var(--tint-warn); color: var(--dt-warn); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
-  .card-kind[data-tone="error"] { background: var(--tint-error); color: var(--dt-error); }
+  .card-row:hover, .card-row:focus-visible { background: var(--tp-float-hover); outline: none; }
+  .card-kind { padding: 1px 7px; border-radius: 999px; background: var(--tint-warn); color: var(--tp-warn); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .card-kind[data-tone="error"] { background: var(--tint-error); color: var(--tp-error); }
   .card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .card-hint { grid-column: 2 / -1; overflow: hidden; color: var(--dt-text-3); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-  .card-count { color: var(--dt-text-3); font-size: 12px; }
-  .card-code { color: var(--dt-ok); font: 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  .card-hint { grid-column: 2 / -1; overflow: hidden; color: var(--tp-text-3); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .card-count { color: var(--tp-text-3); font-size: 12px; }
+  .card-code { color: var(--tp-ok); font: 12px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
   .card-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-  .card-ms { color: var(--dt-text-2); font-size: 12px; }
+  .card-ms { color: var(--tp-text-2); font-size: 12px; }
   .card-issues { margin-left: 8px; font-family: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; font-size: 11px; }
-  .card-ms[data-speed="slow"] { color: var(--dt-warn); font-weight: 600; }
-  .card-ms[data-speed="very-slow"] { color: var(--dt-error); font-weight: 600; }
-  .card-tag { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: var(--tint-violet); color: var(--dt-accent); font: 600 11px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
+  .card-ms[data-speed="slow"] { color: var(--tp-warn); font-weight: 600; }
+  .card-ms[data-speed="very-slow"] { color: var(--tp-error); font-weight: 600; }
+  .card-tag { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: var(--tint-violet); color: var(--tp-accent); font: 600 11px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
   /* A call no trace answered, as the panel's list says it: muted, beside its name. */
-  .card-not-traced { margin-left: 8px; color: var(--dt-text-3); font: italic 11.5px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
+  .card-not-traced { margin-left: 8px; color: var(--tp-text-3); font: italic 11.5px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
   .card-more {
-    margin: 4px 0 0; padding: 2px 0; border: 0; background: none; color: var(--dt-accent);
+    margin: 4px 0 0; padding: 2px 0; border: 0; background: none; color: var(--tp-accent);
     font: 500 12px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; cursor: pointer;
   }
-  .card-more:hover, .card-more:focus-visible { color: var(--dt-float-link-hover); text-decoration: underline; outline: none; }
-  .card-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--dt-text-3); font-size: 12px; }
-  .card-facts { margin: 8px 0 0; color: var(--dt-text-3); font-size: 12px; }
-  .card-facts b { color: var(--dt-float-text); font-weight: 600; }
+  .card-more:hover, .card-more:focus-visible { color: var(--tp-float-link-hover); text-decoration: underline; outline: none; }
+  .card-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: var(--tp-text-3); font-size: 12px; }
+  .card-facts { margin: 8px 0 0; color: var(--tp-text-3); font-size: 12px; }
+  .card-facts b { color: var(--tp-float-text); font-weight: 600; }
   .card-running { display: inline-flex; align-items: center; gap: 5px; }
-  .card-skeleton { height: 10px; margin: 8px 0; border-radius: 5px; background: linear-gradient(90deg, var(--dt-float-shimmer), var(--dt-float-shimmer-peak), var(--dt-float-shimmer)); background-size: 200% 100%; animation: card-shimmer 1.2s linear infinite; }
+  .card-skeleton { height: 10px; margin: 8px 0; border-radius: 5px; background: linear-gradient(90deg, var(--tp-float-shimmer), var(--tp-float-shimmer-peak), var(--tp-float-shimmer)); background-size: 200% 100%; animation: card-shimmer 1.2s linear infinite; }
   @keyframes card-shimmer { to { background-position: -200% 0; } }
   /* Where the time went, in the console's span colours. */
   [data-category="django"] { --k: var(--k-django); }
-  [data-category="code"] { --k: var(--dt-k-view); }
-  [data-category="template"] { --k: var(--dt-k-template); }
-  [data-category="sql"] { --k: var(--dt-k-sql); }
-  [data-category="cache"] { --k: var(--dt-k-cache); }
-  [data-category="http"] { --k: var(--dt-k-http); }
-  [data-category="redis"] { --k: var(--dt-k-redis); }
-  [data-category="datastore"] { --k: var(--dt-k-datastore); }
-  [data-category="messaging"] { --k: var(--dt-k-messaging); }
-  [data-category="storage"] { --k: var(--dt-k-storage); }
-  [data-category="llm"] { --k: var(--dt-k-llm); }
-  [data-category="mail"] { --k: var(--dt-k-mail); }
-  [data-category="signal"] { --k: var(--dt-k-signal); }
-  [data-category="gc"] { --k: var(--dt-k-gc); }
-  [data-category="unprofiled"] { --k: var(--dt-k-unprofiled); }
+  [data-category="code"] { --k: var(--tp-k-view); }
+  [data-category="template"] { --k: var(--tp-k-template); }
+  [data-category="sql"] { --k: var(--tp-k-sql); }
+  [data-category="cache"] { --k: var(--tp-k-cache); }
+  [data-category="http"] { --k: var(--tp-k-http); }
+  [data-category="redis"] { --k: var(--tp-k-redis); }
+  [data-category="datastore"] { --k: var(--tp-k-datastore); }
+  [data-category="messaging"] { --k: var(--tp-k-messaging); }
+  [data-category="storage"] { --k: var(--tp-k-storage); }
+  [data-category="llm"] { --k: var(--tp-k-llm); }
+  [data-category="mail"] { --k: var(--tp-k-mail); }
+  [data-category="signal"] { --k: var(--tp-k-signal); }
+  [data-category="gc"] { --k: var(--tp-k-gc); }
+  [data-category="unprofiled"] { --k: var(--tp-k-unprofiled); }
   /* The code's waits: neutral and hatched, as the console's strip draws them. */
   [data-category="waiting"] {
-    --k: color-mix(in srgb, var(--dt-text-3) 50%, transparent);
-    background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--dt-text-3) 45%, transparent) 0 2px, transparent 2px 5px);
+    --k: color-mix(in srgb, var(--tp-text-3) 50%, transparent);
+    background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--tp-text-3) 45%, transparent) 0 2px, transparent 2px 5px);
   }
   .card-most[data-category="waiting"] { background-image: none; }
-  .card-most[data-category="waiting"] i { background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--dt-text-3) 45%, transparent) 0 2px, transparent 2px 5px); }
+  .card-most[data-category="waiting"] i { background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--tp-text-3) 45%, transparent) 0 2px, transparent 2px 5px); }
   .panel[data-open] ~ .card { display: none; }
   /* A card out of sight shimmers no more, still loading or not. */
   .card:not([data-open]) .card-skeleton { animation: none; }

@@ -8,6 +8,7 @@ import {
   type TraceSummary,
   waitingUntil,
 } from "@tracepanel/ui";
+import type { RowCounts } from "@tracepanel/ui/lib/chainCounts";
 import { readJson, writeItem } from "@tracepanel/ui/lib/storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type TabHistory, usePolling } from "./hooks";
@@ -19,13 +20,59 @@ import { type Counter, chainCounter, countsOf, cutsOf, type KnownApp, knownApps,
 interface TabTraces {
   traces: TraceSummary[];
   runs: Runs;
+  counts?: Record<string, RowCounts> | undefined;
 }
 
 const NO_TRACES: TabTraces = { traces: [], runs: NO_RUNS };
 
-/** The tab's traces as the agent has them, and the task runs each led to (none where the source can't say). */
-function loadTab(ids: readonly string[]): Promise<TabTraces> {
-  if (ids.length === 0) return Promise.resolve(NO_TRACES);
+/**
+ * How many ids one ask names: the agent answers at most 100 traces an ask, and a URL of many more ids is too long for
+ * it (431). A tab scrolled far back (its records and every call under them) asks in parts.
+ */
+const IDS_PER_ASK = 100;
+
+/** How often a part of older rows, all of them stored, is asked again: once in so many polls (its numbers may grow). */
+const SETTLED_EVERY = 10;
+
+/** Each part's last answer, by its ids, and the poll it was asked on. */
+const PARTS = new Map<string, { answer: TabTraces; poll: number }>();
+let polls = 0;
+
+/**
+ * The tab's traces as the agent has them, and the task runs each led to (none where the source can't say). The tab's
+ * history runs oldest first: its last part, the newest rows, is asked each poll; an older one again where the agent
+ * lacked a row of it, else once in a while.
+ */
+async function loadTab(ids: readonly string[]): Promise<TabTraces> {
+  if (ids.length === 0) return NO_TRACES;
+  polls += 1;
+  const parts: string[][] = [];
+  for (let at = 0; at < ids.length; at += IDS_PER_ASK) parts.push(ids.slice(at, at + IDS_PER_ASK));
+  const answers = await Promise.all(parts.map((part, at) => partAnswer(part, at === parts.length - 1)));
+  // Only the parts of this list are kept: a list that moved on leaves its old parts behind.
+  const current = new Set(parts.map((part) => part.join(",")));
+  for (const key of PARTS.keys()) if (!current.has(key)) PARTS.delete(key);
+  return {
+    traces: answers.flatMap((answer) => answer.traces),
+    runs: Object.assign({}, ...answers.map((answer) => answer.runs)),
+    counts: answers.some((answer) => answer.counts)
+      ? Object.assign({}, ...answers.map((answer) => answer.counts ?? {}))
+      : undefined,
+  };
+}
+
+/** A part's answer: asked again when it is the newest, lacked a row, or was asked long enough ago. */
+async function partAnswer(ids: readonly string[], newest: boolean): Promise<TabTraces> {
+  const key = ids.join(",");
+  const known = PARTS.get(key);
+  const whole = known && ids.every((id) => known.answer.traces.some((trace) => trace.id === id));
+  if (!newest && known && whole && polls - known.poll < SETTLED_EVERY) return known.answer;
+  const answer = await loadPart(ids);
+  PARTS.set(key, { answer, poll: polls });
+  return answer;
+}
+
+function loadPart(ids: readonly string[]): Promise<TabTraces> {
   if (source.listTracesWithRuns) return source.listTracesWithRuns(ids);
   return source.listTraces({ ids, limit: ids.length }).then((traces) => ({ traces, runs: NO_RUNS }));
 }
@@ -34,7 +81,19 @@ function loadTab(ids: readonly string[]): Promise<TabTraces> {
  * The tab's rows, which of them the agent has stored (the others are the widget's own, still on their way), and the
  * task runs each request led to, as the workers record them.
  */
-export function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stored: ReadonlySet<string>; runs: Runs } {
+export function useTabRows(
+  whole: TabHistory | null,
+  roots = Number.POSITIVE_INFINITY,
+): {
+  rows: TraceRow[];
+  stored: ReadonlySet<string>;
+  counts: ReadonlyMap<string, RowCounts> | undefined;
+  runs: Runs;
+  /** Older rows than these are in the tab's history: a scroll down shows them. */
+  more: boolean;
+} {
+  const history = useMemo(() => (whole ? latest(whole, roots) : null), [whole, roots]);
+  const more = (whole?.entries.length ?? 0) > (history?.entries.length ?? 0);
   const ids = idsOf(history);
   const key = ids.join(",");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` identifies the id list.
@@ -42,10 +101,24 @@ export function useTabRows(history: TabHistory | null): { rows: TraceRow[]; stor
   // The last answer's: whether a row that just ended is still on its way, so the list asks sooner.
   const known = useRef<ReadonlySet<string>>(new Set());
   const soon = (history?.entries ?? []).some((entry) => justEnded(entry, known.current));
-  const { traces, runs } = usePolling(load, soon ? ARRIVING_POLL_MS : TAB_POLL_MS) ?? NO_TRACES;
+  const { traces, runs, counts } = usePolling(load, soon ? ARRIVING_POLL_MS : TAB_POLL_MS) ?? NO_TRACES;
   const stored = useMemo(() => new Set(traces.map((trace) => trace.id)), [traces]);
   known.current = stored;
-  return { rows: history ? arrange(history, traces) : [], stored, runs };
+  const rowCounts = useMemo(() => (counts ? new Map<string, RowCounts>(Object.entries(counts)) : undefined), [counts]);
+  return { rows: history ? arrange(history, traces) : [], stored, runs, counts: rowCounts, more };
+}
+
+/** The tab's history with its last `roots` rows of their own and what is under them: what the list asks for. */
+function latest(history: TabHistory, roots: number): TabHistory {
+  const own = history.entries.filter((entry) => entry.parent === null);
+  if (own.length <= roots) return history;
+  const kept = new Set(own.slice(-roots).map((entry) => entry.id));
+  const entries = history.entries.filter((entry) => {
+    if (entry.parent === null ? !kept.has(entry.id) : !kept.has(entry.parent)) return false;
+    kept.add(entry.id);
+    return true;
+  });
+  return { ...history, entries };
 }
 
 /** How often the tab's rows are asked for. */

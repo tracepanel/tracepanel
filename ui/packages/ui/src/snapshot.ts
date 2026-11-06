@@ -1,6 +1,6 @@
 import type { components } from "./api.gen";
 import { shifted } from "./lib/scope";
-import { type DataSource, NO_CAPABILITIES, NO_COUNTS, NO_LIVE_TASKS } from "./source";
+import { type DataSource, NO_CAPABILITIES, NO_COUNTS, NO_KNOWN, NO_LIVE_TASKS } from "./source";
 import type { Chain, ChainTrace, ExplainPlan, Related, Trace } from "./types";
 
 /**
@@ -82,32 +82,14 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
     series: [],
     histogram: [],
     // biome-ignore lint/style/useNamingConvention: wire format.
-    slow_threshold: 500_000,
+    slow_threshold: 1_000_000,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    slow_rule: null,
     kinds: [],
     slowest: [],
     failing: [],
   }),
-  knownValues: async () => ({
-    route: [],
-    logger: [],
-    db: [],
-    targets: {},
-    ops: {},
-    task: [],
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    task_system: [],
-    queue: [],
-    job: [],
-    rpc: [],
-    page: [],
-    in: [],
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    log_route: [],
-    apps: {},
-    slow: {},
-    span: [],
-    extra: [],
-  }),
+  knownValues: async () => NO_KNOWN,
   // A snapshot is a file: nothing behind it runs EXPLAIN.
   capabilities: async () => NO_CAPABILITIES,
   counts: async () => NO_COUNTS,
@@ -256,7 +238,7 @@ style.textContent = css;
 document.head.append(style);
 await import(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));`;
 
-/** The page's ground until the loader has unpacked the stylesheet: each theme's --dt-bg (styles.css), at zero
+/** The page's ground until the loader has unpacked the stylesheet: each theme's --tp-bg (styles.css), at zero
  * specificity, so the stylesheet wins. */
 const GROUND = `:where(:root) { color-scheme: dark; background: #0a0c11; }
 :where(:root[data-theme="light"]) { color-scheme: light; background: #fff; }`;

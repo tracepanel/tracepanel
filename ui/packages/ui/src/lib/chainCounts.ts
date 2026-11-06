@@ -3,10 +3,21 @@
 // calls went to other apps, and what they did is theirs. The panel's list says the same on each row: a row with a
 // chain under it (the view's, an app's, a run's) what all of it did, a trace with nothing under it its own.
 
-import type { Chain, IssueKind, ScopeIssue } from "../types";
+import type { Chain, IssueKind, ScopeIssue, TraceSummary } from "../types";
 import { CALL_TABS, callsOfTab } from "./callTabs";
 import { plural } from "./plural";
 import { type Member, membersOf, scopedIssues, scopedSpans } from "./scope";
+
+/** What a row of a list says of its whole chain, as the agent's list answers it, or counted from the chain. */
+export type RowCounts = Pick<ChainCounts, "queries" | "issues" | "kinds" | "traces"> & {
+  /** The agent's list says these too, from its rows: the queries' time (µs) and the errors, all down the chain. */
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  db_time?: number;
+  errors?: number;
+  /** What ran down the chain: its spans' kinds and its calls' systems (function, graphql, sql, http…). */
+  // biome-ignore lint/style/useNamingConvention: wire format.
+  span_kinds?: string[];
+};
 
 export interface ChainCounts {
   queries: number;
@@ -62,4 +73,20 @@ export function chainCounts(chain: Chain): ChainCounts | null {
   const first = chain.traces[0]?.trace;
   if (!first) return null;
   return countsOf(membersOf(first, undefined, chain.traces), chain.issues);
+}
+
+/** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
+export function withChain(trace: TraceSummary, counts: RowCounts | undefined): TraceSummary {
+  if (!counts || counts.traces < 2) return trace;
+  const { db_time: dbTime = trace.db_time, errors = trace.errors } = counts;
+  return {
+    ...trace,
+    queries: counts.queries,
+    issues: counts.issues,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    issue_kinds: counts.kinds,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    db_time: dbTime,
+    errors,
+  };
 }

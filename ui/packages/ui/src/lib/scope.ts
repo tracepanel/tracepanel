@@ -2,8 +2,9 @@
 // clock, and the part of it under some of its rows. The trace's tabs list and add up what is in it; the agent's
 // `GET /traces/{id}/logs?span=&only=` takes the same scope (crates/store-local/src/scope.rs), and so do the MCP tools.
 
-import type { ChainTrace, Issue, Log, Related, ScopeIssue, Span, Trace } from "../types";
+import type { ChainTrace, Issue, Log, Related, ScopeIssue, Span, Trace, TraceError } from "../types";
 import { serviceRuntime, traceRuntime } from "./runtime";
+import type { Windows } from "./slice";
 
 /** One trace of a chain, on the chain's clock: the trace above it and its span whose call it served. */
 export interface Member {
@@ -19,10 +20,27 @@ export interface Member {
  * trace (a call's trace as a row). `only`: what is in those spans themselves, not in a span or a trace under them.
  * `label` says it on the scope's chip ("Book.author ×36").
  */
+/** A code or wait row's time: whose trace, when in it, and what it is, said in its details. */
+export interface CodeStretch {
+  trace: string;
+  /** "code" or "wait", as its row's badge says. */
+  kind: string;
+  windows: Windows;
+  note: string;
+}
+
 export interface SpanScope {
   targets: readonly string[];
   label: string;
   only: boolean;
+  /** A merged call's: the call alone and the app that served it (its row's chip), `label` the two in words. */
+  hop?: { call: string; app: string; runtime: string | undefined } | undefined;
+  /** A code or wait row's: its trace's stretches (µs since that trace started), what its profile is of. */
+  at?: CodeStretch | undefined;
+  /** Its own stretch (µs), where its trace isn't one of the chain's (a task's run): its time, not the chain's. */
+  extent?: [number, number] | undefined;
+  /** A log record's or an error's row: when it was (µs), and when its trace started, its row's "+210 ms". */
+  moment?: { time: number; start: number } | undefined;
 }
 
 /** A record of a scope, with its trace and the app that logged it. */
@@ -208,7 +226,7 @@ export function scopeWindow(members: readonly Member[], scope: SpanScope | null)
     if (!(found && member)) return [];
     return [found.span ? extent(found.span) : [member.trace.start, member.trace.start + member.trace.duration]];
   });
-  if (windows.length === 0) return whole;
+  if (windows.length === 0) return scope?.extent ?? whole;
   return [Math.min(...windows.map((w) => w[0])), Math.max(...windows.map((w) => w[1]))];
 }
 
@@ -248,6 +266,17 @@ export function scopedSpans(
         .map((span) => ({ ...span, traceId: member.id, app: member.app })),
     )
     .sort((a, b) => a.start - b.start);
+}
+
+/**
+ * The errors of a scope, down every trace of the chain: the whole chain's (a click whose call failed in the app it
+ * reached), or those raised in the spans under a row.
+ */
+export function scopedErrors(members: readonly Member[], scope: SpanScope | null): TraceError[] {
+  const parts = partsOf(members, scope);
+  return members.flatMap((member, index) =>
+    member.trace.errors.filter((error) => (error.span_id ? hasSpan(parts[index], error.span_id) : scope === null)),
+  );
 }
 
 /** An issue of a scope: one per fingerprint, with the trace and app it is first in, its apps, traces and times. */
@@ -347,4 +376,35 @@ export function scopedParts(
     if (!part) return [];
     return [{ member, windows: part === "whole" ? null : part.windows }];
   });
+}
+
+/**
+ * What a row's own time strip draws: the trace it served, whole, or its trace cut to the span and what ran under
+ * it. Nothing for a group of repeats or a span with nothing under it: its row says all there is.
+ */
+export function stripTraceOf(members: readonly Member[], scope: SpanScope): Trace | null {
+  const [target, ...others] = scope.targets;
+  if (!target || others.length > 0) return null;
+  const served = members.find((member) => member.via === target);
+  if (served) return served.trace;
+  const found = find(members, target);
+  const member = found && members[found.at];
+  if (!(found && member)) return null;
+  const root = found.span;
+  if (!root) return member.trace;
+  const under = new Set([root.id]);
+  const spans = member.trace.spans.filter((span) => {
+    if (span.id === root.id) return false;
+    if (!under.has(String(span.parent_id))) return false;
+    under.add(span.id);
+    return true;
+  });
+  if (spans.length === 0) return null;
+  return {
+    ...member.trace,
+    start: root.start,
+    duration: root.duration,
+    // biome-ignore lint/style/useNamingConvention: the span's own field.
+    spans: [{ ...root, parent_id: null }, ...spans],
+  };
 }

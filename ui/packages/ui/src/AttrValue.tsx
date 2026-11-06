@@ -83,7 +83,7 @@ function ListValue({ items, folded }: { items: readonly string[]; folded: boolea
 /** Code coloured, a line each; folded, its first lines. */
 function CodeValue({ text, language, folded }: { text: string; language: Language; folded: boolean }) {
   return (
-    <code className={cn("dt-syntax font-mono whitespace-pre-wrap", folded ? "line-clamp-6" : "block")}>
+    <code className={cn("tp-syntax font-mono whitespace-pre-wrap", folded ? "line-clamp-6" : "block")}>
       <CodeLines text={text} language={language} lines={folded ? FOLDED_LINES : undefined} />
     </code>
   );

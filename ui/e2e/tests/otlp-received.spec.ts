@@ -59,7 +59,7 @@ async function seed(): Promise<void> {
 }
 
 async function received(page: Page | FrameLocator, kind: string, name: string) {
-  await page.locator(`.dt-map-row[data-kind="${kind}"]`).filter({ hasText: name }).click();
+  await page.locator(`.tp-map-row[data-kind="${kind}"]`).filter({ hasText: name }).click();
   const block = page.getByRole("complementary", { name: "Details" }).getByRole("group", {
     name: "As received over OTLP",
   });
@@ -119,7 +119,6 @@ test("in the panel too: the same block, the same why", async ({ page }) => {
   await page.getByRole("button", { name: "Load checkout" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
   const block = await received(frame, "http.client", "billing.test/charge");
 

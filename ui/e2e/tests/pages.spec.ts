@@ -1,5 +1,6 @@
 // A page's view and what was done on it, as the browser recording sends them: one row each, the failure counted.
 import { expect, test } from "../fixtures.ts";
+import { gatewayView } from "../gateway.ts";
 
 test("a page lists its view, then its actions, a failed one counted", async ({ page }) => {
   await page.goto("/#/pages?view=overview");
@@ -20,4 +21,20 @@ test("an action's trace is headed by what was done, on which page", async ({ pag
   await page.getByRole("tab", { name: /^Call tree/ }).click();
 
   await expect(page.getByRole("button", { name: /GET 127\.0\.0\.1\/api\/books/ }).first()).toBeVisible();
+});
+
+test("a view's row counts what its calls did: their queries and issues, as the panel's record says", async ({
+  page,
+}) => {
+  // The view's own trace has no queries: its calls' traces (the gateway's, a subgraph's, a service's) have three.
+  await gatewayView(2, ["query Features"]);
+  await page.goto("/#/pages");
+  const row = page.getByRole("link", { name: /^\/app\/,/ }).first();
+  await expect(row).toBeVisible();
+  // By its column's header: an App column comes in where the list has more than one app.
+  const heads = await page.getByRole("main").locator("thead th").allTextContents();
+  const cell = (name: string) => row.getByRole("cell").nth(heads.findIndex((head) => head.startsWith(name)));
+
+  await expect(cell("Queries")).toHaveText("3");
+  await expect(cell("Issues")).toContainText("N+1");
 });

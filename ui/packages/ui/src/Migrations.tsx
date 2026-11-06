@@ -33,7 +33,7 @@ export function MigrationNotes({ span }: { span: Span }) {
   return (
     <>
       {notesOf(span).map((note) => (
-        <span key={note} className="dt-map-sub" data-count="">
+        <span key={note} className="tp-map-sub" data-count="">
           {note}
         </span>
       ))}

@@ -1,6 +1,6 @@
 // A chain of calls across three apps, stored by the agent: a browser's view calls a GraphQL BFF, whose three
 // Book.author steps each call a service, which runs one query each (an N+1 across apps) and logs in it.
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { CONSOLE, RUN_STARTED } from "./agent.ts";
 
 type Doc = Record<string, unknown>;
@@ -265,61 +265,6 @@ function linked(
   attrs["w3c.trace_id"] = w3c;
   if (path) attrs["http.path"] = path;
   return doc;
-}
-
-/** A call the BFF of `arriving()` makes: where to, and how long before now it ended (µs; a moment ago unless given). */
-export interface ArrivingCall {
-  url: string;
-  ago?: number | undefined;
-}
-
-/**
- * A BFF's request that just ended, its calls to other apps carrying the trace on (`calls`), stored before any of
- * their traces: the agent has only it, as when a service's trace comes a moment after its caller's. `serve(n)` stores
- * the n-th call's trace, as that service's SDK would send it. Hours ago, as `fanout()` (the other tests list the
- * newest first), all of it "shop" (the Services map stays): `now` is the moment it ended, for the browser's clock.
- * `tag` keeps tests apart (1…99), and each run of a test (a repeat, a retry) has ids of its own: the agent of a run
- * keeps what an earlier one served, and a call whose trace is already there doesn't wait.
- */
-export async function arriving(
-  tag: number,
-  calls: readonly ArrivingCall[],
-): Promise<{ bff: string; now: number; serve: (n: number) => Promise<void> }> {
-  const { repeatEachIndex, retry } = test.info();
-  const run = tag * 10_000 + repeatEachIndex * 10 + retry;
-  const w3c = `6b${String(run).padStart(30, "0")}`;
-  const fid = (n: number) => `01M4C4A1N7${String(run * 100 + n).padStart(16, "0")}`;
-  const sid = (n: number) => `${String(run).padStart(8, "0")}${String(n).padStart(8, "0")}`;
-  const now = (Date.now() - 8 * 3_600_000) * 1000;
-  const spans = calls.map((call, n) => {
-    // Each ends a moment before `now` (`ago` earlier still); the request 50 ms after its last.
-    const end = now - (call.ago ?? 0) - 100_000;
-    // One after another, each well before the next: its trace's row comes before the next call's.
-    const at = end - 200_000 + 20_000 * n;
-    const path = new URL(call.url).pathname;
-    return span(`c${n}`, "b0", "http.client", `GET ${path}`, at, end - at, {
-      "http.method": "GET",
-      "url.full": call.url,
-      "w3c.span_id": sid(n + 1),
-    });
-  });
-  // The request around its calls.
-  const start = Math.min(...spans.map((call) => call["start"] as number)) - 50_000;
-  const end = Math.max(...spans.map((call) => (call["start"] as number) + (call["duration"] as number))) + 50_000;
-  const bff = linked(fid(0), w3c, "POST /graphql", start, end - start, null);
-  bff["spans"] = [span("b0", null, "http", "POST /graphql", start, end - start), ...spans];
-  await send([bff]);
-  const serve = async (n: number) => {
-    const call = spans[n] as Doc;
-    const path = new URL((calls[n] as ArrivingCall).url).pathname;
-    const api = linked(fid(n + 1), w3c, `GET ${path}`, (call["start"] as number) + 1_000, 50_000, sid(n + 1), path);
-    api["spans"] = [span(`a${n}`, null, "http", `GET ${path}`, api["start"] as number, 50_000)];
-    const before = await chainLength(fid(0));
-    await send([api]);
-    await expect.poll(() => chainLength(fid(0))).toBe(before + 1);
-  };
-  await expect.poll(() => chainLength(fid(0))).toBe(1);
-  return { bff: fid(0), now: now / 1000, serve };
 }
 
 async function send(traces: Doc[]): Promise<void> {

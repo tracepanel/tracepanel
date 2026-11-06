@@ -13,7 +13,7 @@ import {
   WaitingIcon,
 } from "@tracepanel/ui";
 import { cn } from "@tracepanel/ui/lib/utils";
-import { SearchXIcon } from "lucide-react";
+import { SearchXIcon, UnplugIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useServiceCapability } from "./hooks";
 import { track, useRefresh } from "./refresh";
@@ -62,7 +62,8 @@ export interface TraceScreenProps {
   explore?: ((trace: Trace) => ExploreItem[]) | undefined;
   onTabChange?: TraceViewProps["onTabChange"];
   onTabShown?: TraceViewProps["onTabShown"];
-  variant?: "full" | "compact" | "strip" | undefined;
+  variant?: "full" | "compact" | "waterfall" | undefined;
+  beside?: TraceViewProps["beside"];
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];
@@ -93,6 +94,8 @@ export interface TraceScreenProps {
   arriving?: boolean | undefined;
   /** Still running in the browser (lib/live): a view still open, a request the page waits for. Its pane says so. */
   running?: Running | undefined;
+  /** In the panel's waterfall, in place of the screens for a trace not here yet. */
+  waiting?: ReactNode;
 }
 
 /**
@@ -136,7 +139,7 @@ function serviceName(trace: Trace): string {
 /** The service whose App tab the panel shows (its variants are compact and strip); none on a page. */
 function serviceOf(trace: Trace | null | undefined, variant: TraceScreenProps["variant"]): string | null {
   const service = trace?.attrs["service.name"];
-  const panel = variant === "compact" || variant === "strip";
+  const panel = variant === "compact" || variant === "waterfall";
   return panel && typeof service === "string" ? service : null;
 }
 
@@ -260,7 +263,7 @@ function ownParts(
 }
 
 /** The loading bar: on the page inset as the trace's head will be, across the panel. */
-function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
+export function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
   // The trace's shape while it loads: its name, its tabs and the first rows where they will be, not a blank pane.
   return (
     <div className={cn("grid gap-5", variant === "full" ? "mx-4 pt-1" : "p-4")} role="status" aria-busy="true">
@@ -285,10 +288,10 @@ function TraceLoading({ variant }: { variant: TraceScreenProps["variant"] }) {
 }
 
 /** What the screen shows for a trace: it, null when it is gone, "arriving" while it is on its way. */
-type Loaded = Trace | null | "arriving";
+type Loaded = Trace | null | "arriving" | "unreachable";
 
 function isTrace(value: Loaded | undefined): value is Trace {
-  return value !== undefined && value !== null && value !== "arriving";
+  return value !== undefined && value !== null && value !== "arriving" && value !== "unreachable";
 }
 
 function traceOf(value: Loaded | undefined): Trace | null {
@@ -309,6 +312,9 @@ interface Loading {
  * Loads a trace: retried briefly while it may not be stored yet, then, while it is on its way, less and less often
  * until it is stored. Returns the way to stop.
  */
+/** How often a trace is asked for again while the agent doesn't answer. */
+const UNREACHABLE_RETRY_MS = 3_000;
+
 function loadTrace({ id, source, retries, onItsWay, show }: Loading): () => void {
   let cancelled = false;
   let timer: number | undefined;
@@ -328,7 +334,12 @@ function loadTrace({ id, source, retries, onItsWay, show }: Loading): () => void
         if (result === null) missing(left, delay);
         else show(result);
       },
-      () => !cancelled && show(null),
+      // No answer at all (the agent restarting, gone): said as such, not as a trace gone, and asked again.
+      () => {
+        if (cancelled) return;
+        show("unreachable");
+        later(() => attempt(left, delay), UNREACHABLE_RETRY_MS);
+      },
     );
   };
   // Known to be on its way (the list says so): it says so at once, not after the quick looks, while it is asked for.
@@ -374,7 +385,8 @@ function useTrace(
       onItsWay: () => waiting.current ?? recent(id),
       show: (value) => {
         setLoaded({ id, value });
-        if (value !== "arriving") onLoaded?.(value);
+        // Told once there is an answer: a trace, or none; not while it is on its way or the agent is silent.
+        if (value !== "arriving" && value !== "unreachable") onLoaded?.(value);
       },
     });
   }, [id, source, variant, known]);
@@ -424,6 +436,13 @@ function NoTrace({
 }) {
   if (loaded === undefined) return <TraceLoading variant={variant} />;
   if (loaded === "arriving") return <TraceArriving variant={variant} running={running} />;
+  if (loaded === "unreachable") {
+    return (
+      <Empty title="No answer from Tracepanel" icon={UnplugIcon} page={true}>
+        The agent didn't answer: it may be restarting. Trying again…
+      </Empty>
+    );
+  }
   return (
     <Empty title="Trace not found" action={back} icon={SearchXIcon} page={true}>
       It is no longer in the local store: older traces are removed as new ones arrive, and the store starts fresh after
@@ -449,7 +468,7 @@ function StillRunning({ running }: { running: Running }) {
   const { view, start, until } = running;
   return (
     <Empty title={view ? "View still open" : "Request in flight"} icon={RunningIcon} page={true}>
-      <RunningTime start={start} until={until} className="dt-arriving-time" />
+      <RunningTime start={start} until={until} className="tp-arriving-time" />
       {view ? VIEW_RUNS : REQUEST_RUNS}
     </Empty>
   );
@@ -471,7 +490,7 @@ function OnItsWay() {
 
 /** The empty state's icon for a trace still running: the ring every running thing turns. */
 function RunningIcon({ className }: { className?: string }) {
-  return <span className={cn("dt-running dt-running-big", className)} role="img" aria-label="running" />;
+  return <span className={cn("tp-running tp-running-big", className)} role="img" aria-label="running" />;
 }
 
 export function TraceScreen(props: TraceScreenProps) {
@@ -482,6 +501,8 @@ export function TraceScreen(props: TraceScreenProps) {
   // The panel (compact, or docked as a strip) has an App tab: the console's trace page doesn't.
   const app = useApp(source, serviceOf(trace, variant));
   const can = useAppsCan(source);
+  // Beside the tree, nothing to show yet is one row, not a screen: the record's own, its time ticking.
+  if (trace === null && props.waiting && loaded !== null) return props.waiting;
   if (trace === null) return <NoTrace loaded={loaded} variant={variant} back={props.back} running={props.running} />;
   return <LoadedTrace props={props} trace={trace} related={relatedOf(trace.id)} reload={again} app={app} can={can} />;
 }

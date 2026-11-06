@@ -51,12 +51,21 @@ test("the footer shows where the agent takes OTLP, a line under the store", asyn
   await expect(footer.getByRole("note")).toHaveCount(0);
 });
 
-test("a port another project's agent holds is named, with the address to set instead", async ({ page }) => {
+test("a port another project's agent holds is one line, its owner and the address to set a click away", async ({
+  page,
+}) => {
   await otlp(page, status("127.0.0.1:4318", false, "shop", "127.0.0.1:4319"));
   await page.goto("/#/endpoints");
   const notice = page.locator("aside footer").getByRole("note", { name: "OTLP" });
 
-  await expect(notice).toHaveText(
+  // One line on every page, its how-to a click away.
+  const line = notice.locator("summary");
+  await expect(line).toHaveText("OTLP: 127.0.0.1:4318 taken");
+  await expect(notice.getByText(/is taken by/)).toBeHidden();
+
+  await line.click();
+
+  await expect(notice.locator("summary + div")).toHaveText(
     "OTLP: 127.0.0.1:4318 is taken by the agent of shop. Set TRACEPANEL_OTLP=127.0.0.1:4319 for this project's apps and point its OTLP exporters there.",
   );
   await expect(page.locator("aside footer")).not.toContainText("OTLP · ");

@@ -87,7 +87,7 @@ function bandPlace(range: TimeRange, total: number): CSSProperties {
  * long is said once, by the legend's chip that lets it go.
  */
 export function RangeBand({ range, total }: { range: TimeRange; total: number }) {
-  return <div className="dt-range" style={bandPlace(range, total)} aria-hidden="true" />;
+  return <div className="tp-range" style={bandPlace(range, total)} aria-hidden="true" />;
 }
 
 const writeStretch = (windows: Windows | null): string | undefined => (windows ? stretchText(windows) : undefined);

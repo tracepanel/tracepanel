@@ -1,5 +1,14 @@
 import { AppWindowIcon, ArrowRightIcon, HourglassIcon } from "lucide-react";
-import { type ComponentType, type ReactNode, useLayoutEffect, useRef } from "react";
+import {
+  type ComponentType,
+  type CSSProperties,
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+} from "react";
+import { useBeside } from "./beside";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { ISSUE_LABELS } from "./labels";
@@ -23,15 +32,15 @@ export function MethodBadge({
 }) {
   const value = (method ?? "GET").toUpperCase();
   const badge = (
-    <span className="dt-method" data-method={value}>
+    <span className="tp-method" data-method={value}>
       {value}
     </span>
   );
   if (!htmx) return badge;
   return (
-    <span className="dt-method-group" title={htmx === "boosted" ? "Sent by htmx (a boosted page)" : "Sent by htmx"}>
+    <span className="tp-method-group" title={htmx === "boosted" ? "Sent by htmx (a boosted page)" : "Sent by htmx"}>
       {badge}
-      <span className="dt-htmx">hx</span>
+      <span className="tp-htmx">hx</span>
     </span>
   );
 }
@@ -42,7 +51,7 @@ export function MethodBadge({
  */
 export function FailedStatus({ failure }: { failure?: string | undefined }) {
   return (
-    <span className="dt-status" data-tone="error" title={failure ?? "No answer"}>
+    <span className="tp-status" data-tone="error" title={failure ?? "No answer"}>
       failed
     </span>
   );
@@ -51,8 +60,9 @@ export function FailedStatus({ failure }: { failure?: string | undefined }) {
 export function StatusBadge({ status }: { status: number | null | undefined }) {
   if (status === null || status === undefined) return null;
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";
+  // Its tone's pill on white too, wherever a status shows: the console's lists, its call tree, the panel, the pill.
   return (
-    <span className="dt-status" data-tone={tone}>
+    <span className="tp-status" data-tone={tone}>
       {status}
     </span>
   );
@@ -88,7 +98,7 @@ export function IssueChip({
  */
 export function Times({ count }: { count: number }) {
   if (count <= 1) return null;
-  return <span className="dt-map-times">×{count}</span>;
+  return <span className="tp-map-times">×{count}</span>;
 }
 
 /**
@@ -101,12 +111,12 @@ export function GroupStatus({ answer }: { answer: GroupAnswer }) {
   return (
     <>
       {failed > 0 ? (
-        <span className="dt-status" data-tone="error" title={`${failed} of these calls failed`}>
+        <span className="tp-status" data-tone="error" title={`${failed} of these calls failed`}>
           {failed} failed
         </span>
       ) : null}
       {warned > 0 ? (
-        <span className="dt-status" data-tone="warn" title={`${warned} of these calls were answered ${code ?? "4xx"}`}>
+        <span className="tp-status" data-tone="warn" title={`${warned} of these calls were answered ${code ?? "4xx"}`}>
           {warned} × {code ?? "4xx"}
         </span>
       ) : null}
@@ -116,9 +126,11 @@ export function GroupStatus({ answer }: { answer: GroupAnswer }) {
 
 /** Database or cache alias, shown only when it is not "default". */
 export function AliasChip({ value }: { value: unknown }) {
-  if (value === undefined || value === null || value === "" || value === "default") return null;
+  const beside = useBeside();
+  // Beside the waterfall a query's details say its database: no chip for it on the row.
+  if (beside || value === undefined || value === null || value === "" || value === "default") return null;
   return (
-    <span className="dt-alias" title={String(value)}>
+    <span className="tp-alias" title={String(value)}>
       {String(value)}
     </span>
   );
@@ -132,8 +144,8 @@ export function TemplateChip({ attrs }: { attrs: Readonly<Record<string, unknown
   const place = templatePlace(attrs);
   if (!place) return null;
   return (
-    <span className="dt-from-template" title={`From the template ${place}: it ran as the template rendered`}>
-      <span className="dt-from-template-label">template</span> {place}
+    <span className="tp-from-template" title={`From the template ${place}: it ran as the template rendered`}>
+      <span className="tp-from-template-label">template</span> {place}
     </span>
   );
 }
@@ -142,11 +154,11 @@ export function TemplateChip({ attrs }: { attrs: Readonly<Record<string, unknown
 export function RoutePath({ path }: { path: string }) {
   const parts = path.split(/(<[^>]+>)/g).filter(Boolean);
   return (
-    <span className="dt-path">
+    <span className="tp-path">
       {parts.map((part, index) =>
         part.startsWith("<") ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: parts of one string never reorder.
-          <span key={index} className="dt-path-param">
+          <span key={index} className="tp-path-param">
             {part}
           </span>
         ) : (
@@ -177,9 +189,9 @@ export function TailPath({
   const [head, tail] = splitPath(path);
   const text = (part: string) => (params ? <RoutePath path={part} /> : part);
   return (
-    <span className="dt-request-path" data-split="" title={title}>
-      {head ? <span className="dt-path-head">{text(head)}</span> : null}
-      <span className="dt-path-tail">{text(tail)}</span>
+    <span className="tp-request-path" data-split="" title={title}>
+      {head ? <span className="tp-path-head">{text(head)}</span> : null}
+      <span className="tp-path-tail">{text(tail)}</span>
       {children}
     </span>
   );
@@ -234,11 +246,11 @@ export function Empty({
   page?: boolean;
 }) {
   return (
-    <div className="dt-empty" data-page={page ? "" : undefined}>
+    <div className="tp-empty" data-page={page ? "" : undefined}>
       <EmptyIcon icon={Icon} />
-      <p className="dt-empty-title">{title}</p>
-      {children ? <p className="dt-empty-text">{children}</p> : null}
-      {action ? <p className="dt-empty-action">{action}</p> : null}
+      <p className="tp-empty-title">{title}</p>
+      {children ? <p className="tp-empty-text">{children}</p> : null}
+      {action ? <p className="tp-empty-action">{action}</p> : null}
     </div>
   );
 }
@@ -248,14 +260,14 @@ export function Empty({
  * turns over and over while it waits, one wherever that is said. Still with reduced motion.
  */
 export function WaitingIcon({ className }: { className?: string }) {
-  return <HourglassIcon className={cn("dt-waiting-icon", className)} aria-hidden="true" />;
+  return <HourglassIcon className={cn("tp-waiting-icon", className)} aria-hidden="true" />;
 }
 
 /** An empty state's icon in its tile, when it has one. */
 function EmptyIcon({ icon: Icon }: { icon: ComponentType<{ className?: string }> | undefined }) {
   if (!Icon) return null;
   return (
-    <span className="dt-empty-icon">
+    <span className="tp-empty-icon">
       <Icon className="size-6" />
     </span>
   );
@@ -277,7 +289,7 @@ export function DetailsFooter({
   rule?: boolean;
 }) {
   return (
-    <div className="dt-details-footer" data-rule={rule ? "" : undefined}>
+    <div className="tp-details-footer" data-rule={rule ? "" : undefined}>
       {children}
       {open ? (
         <Button variant="outline" size="sm" className="ml-auto" asChild>
@@ -304,7 +316,7 @@ export function Skeleton({
   height?: string;
   className?: string;
 }) {
-  return <span className={cn("dt-skeleton", className)} style={{ width, height }} aria-hidden="true" />;
+  return <span className={cn("tp-skeleton", className)} style={{ width, height }} aria-hidden="true" />;
 }
 
 /** A section's heading wherever a trace's details are shown: its info tab and the call tree's pane. */
@@ -322,19 +334,45 @@ const KINDS = new Set(["task", "job", "ws", "gql", "rpc", "page"]);
  * shape in the brand's colour. `muted`: what a call is in the call tree (a view, a query, a task enqueued), the same
  * shape, quiet, so the traces it links to stand out among its calls.
  */
+/** Shorter words for the kinds, where rows are tight (the panel's waterfall). */
+export const KindWords = createContext<Readonly<Record<string, string>> | null>(null);
+
+/** The waterfall's words for them. */
+export const WATERFALL_KINDS: Readonly<Record<string, string>> = {
+  request: "req",
+  transaction: "tx",
+  function: "fn",
+  graphql: "gql",
+  template: "tpl",
+  framework: "fw",
+  "http.client": "http",
+};
+
 export function KindBadge({
   kind,
   muted = false,
   className,
+  style,
+  "data-kind-colour": colour,
 }: {
   kind: string;
   muted?: boolean | undefined;
   className?: string | undefined;
+  /** Its kind's own colour, where the row's share would colour it otherwise (`--tp-k`, `--tp-k-ink`). */
+  style?: CSSProperties | undefined;
+  "data-kind-colour"?: string | undefined;
 }) {
   // A call's kind is its own word (a span may be a "command"); a trace's in short.
-  const word = muted ? kind : shortKind(kind);
+  const own = muted ? kind : shortKind(kind);
+  // The short words everywhere a call tree shows (the console's and the panel's): one look for one kind.
+  const word = (useContext(KindWords) ?? WATERFALL_KINDS)[own.toLowerCase()] ?? own;
   return (
-    <span className={cn("dt-kind", className)} data-muted={muted ? "" : undefined}>
+    <span
+      className={cn("tp-kind", className)}
+      data-muted={muted ? "" : undefined}
+      data-kind-colour={colour}
+      style={style}
+    >
       {word}
     </span>
   );
@@ -354,7 +392,7 @@ export function NeutralTag({
   className?: string | undefined;
 }) {
   return (
-    <span className={cn("dt-kind normal-case", className)} data-muted="" title={title}>
+    <span className={cn("tp-kind normal-case", className)} data-muted="" title={title}>
       {children}
     </span>
   );
@@ -391,7 +429,7 @@ const STATE_TONES: Record<string, string> = {
 export function StateBadge({ state }: { state: string }) {
   const shown = state.toLowerCase();
   return (
-    <span className="dt-status" data-tone={STATE_TONES[shown] ?? "neutral"}>
+    <span className="tp-status" data-tone={STATE_TONES[shown] ?? "neutral"}>
       {shown}
     </span>
   );
@@ -402,13 +440,29 @@ export function StateBadge({ state }: { state: string }) {
  * switcher): its runtime's when known, else the plain app icon, so an app has a mark everywhere. `labelled` names the
  * plain icon "App" where the mark stands for the app (a map's box), not beside its name.
  */
-export function AppMark({ runtime, labelled = false }: { runtime?: string | null | undefined; labelled?: boolean }) {
+export function AppMark({
+  runtime,
+  labelled = false,
+  app,
+}: {
+  runtime?: string | null | undefined;
+  labelled?: boolean;
+  /** The app it marks: in its colour then (appColour), as its chip has it everywhere. */
+  app?: string | undefined;
+}) {
   const kind = runtime ? runtimeKind(runtime) : null;
-  if (kind) return <RuntimeIcon kind={kind} />;
-  return labelled ? (
-    <AppWindowIcon className="dt-icon size-3.5" role="img" aria-label="App" />
+  const mark = kind ? (
+    <RuntimeIcon kind={kind} />
+  ) : labelled ? (
+    <AppWindowIcon className="tp-icon size-3.5" role="img" aria-label="App" />
   ) : (
-    <AppWindowIcon className="dt-icon size-3.5" aria-hidden="true" />
+    <AppWindowIcon className="tp-icon size-3.5" aria-hidden="true" />
+  );
+  if (!app) return mark;
+  return (
+    <span className="contents" style={{ color: appColour(app) }}>
+      {mark}
+    </span>
   );
 }
 
@@ -426,6 +480,14 @@ export interface AppChipPick {
  * a table's); the full size where it heads something or filters. With `pick`, it is the filter: a button with its
  * count, pressed while the list shows only that app.
  */
+/** An app's own colour: one of six (`--tp-app-*`) by its name, the same app the same everywhere. */
+export function appColour(name: string): string {
+  // FNV-1a: names alike but for their end (library-api, library-bff) land apart.
+  let hash = 0x811c9dc5;
+  for (const char of name) hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 0x01000193);
+  return `var(--tp-app-${(hash >>> 0) % 6})`;
+}
+
 export function AppChip({
   name,
   runtime,
@@ -439,10 +501,15 @@ export function AppChip({
 }) {
   const size = compact ? "compact" : undefined;
   const mark = <AppMark runtime={runtime} />;
-  const label = <span className="dt-app-name">{name}</span>;
+  const label = <span className="tp-app-name">{name}</span>;
   if (!pick) {
     return (
-      <span className="dt-app-chip" data-size={size} title={runtime ? `${name} · ${runtime}` : name}>
+      <span
+        className="tp-app-chip"
+        data-size={size}
+        title={runtime ? `${name} · ${runtime}` : name}
+        style={{ "--tp-app": appColour(name) } as CSSProperties}
+      >
         {mark}
         {label}
       </span>
@@ -451,15 +518,16 @@ export function AppChip({
   return (
     <button
       type="button"
-      className="dt-app-chip dt-map-filter"
+      className="tp-app-chip tp-map-filter"
       data-size={size}
+      style={{ "--tp-app": appColour(name) } as CSSProperties}
       aria-pressed={pick.pressed}
       title={pick.title}
       onClick={pick.onPress}
     >
       {mark}
       {label}
-      <span className="dt-map-filter-count">{pick.count}</span>
+      <span className="tp-map-filter-count">{pick.count}</span>
     </button>
   );
 }
@@ -534,6 +602,6 @@ function fits(element: HTMLElement, text: string): boolean {
 
 /** Where a status goes, kept when there is none (a task, a job, a view), so the columns after it line up. */
 export function StatusSlot({ status }: { status: number | null | undefined }) {
-  if (status === null || status === undefined) return <span className="dt-status dt-status-empty" aria-hidden="true" />;
+  if (status === null || status === undefined) return <span className="tp-status tp-status-empty" aria-hidden="true" />;
   return <StatusBadge status={status} />;
 }

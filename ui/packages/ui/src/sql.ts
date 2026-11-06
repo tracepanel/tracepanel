@@ -5,6 +5,27 @@ export function placeholders(sql: string): string {
   return sql.replace(/(?<!%)%(?:\([a-zA-Z_]\w*\))?s/g, "?");
 }
 
+/** A value as SQL writes it: 'text' (quotes doubled), 12, TRUE, NULL. */
+export function sqlLiteral(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return `'${text.replaceAll("'", "''")}'`;
+}
+
+/**
+ * A statement with the values it ran with in place of its placeholders: %(name)s by its name, %s, ? and $1 in turn.
+ * A placeholder with no value stays.
+ */
+export function withValues(sql: string, values: readonly unknown[], names?: readonly unknown[]): string {
+  let next = 0;
+  return sql.replace(/(?<!%)%\(([a-zA-Z_]\w*)\)s|(?<!%)%s|\$(\d+)|\?(?!:)/g, (token, name, number) => {
+    const at = name !== undefined ? (names ?? []).indexOf(name) : number !== undefined ? Number(number) - 1 : next++;
+    return at >= 0 && at < values.length ? sqlLiteral(values[at]) : token;
+  });
+}
+
 /** Django's parametrized SQL, formatted, with placeholders shown as `?`. */
 export function formatSql(sql: string, vendor = "postgresql"): string {
   return placeholders(formatRaw(sql, vendor));

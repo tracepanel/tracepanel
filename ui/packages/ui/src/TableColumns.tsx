@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useBeside } from "./beside";
 import { Button } from "./components/ui/button";
 import {
   DropdownMenu,
@@ -30,7 +31,7 @@ import type { ColumnSpec, Columns } from "./hooks/useColumns";
 
 /** A column's name in a table's header, every table's and the lists drawn as one (a profile's functions). */
 export const HEAD_TEXT =
-  "text-xs font-semibold tracking-wide text-(--dt-table-head-text) uppercase light:text-2xs light:font-medium light:tracking-[0.06em]";
+  "text-xs font-semibold tracking-wide text-(--tp-table-head-text) uppercase light:text-2xs light:font-medium light:tracking-[0.06em]";
 /**
  * One header for every list, the logs' too: a header cell's height, type and padding. The table's own text is
  * `text-base`. On white, lower and lighter type on a quiet band, the rows carry the weight.
@@ -41,13 +42,15 @@ const HEAD_CELL = `h-10 px-5 first:pl-6 light:h-[2.125rem] ${HEAD_TEXT}`;
  * How tall a list's rows are: `default` for the lists of records a reader scans a row at a time, `compact` for a
  * stream read many lines at once (the logs), one line of text with little room around it.
  */
-export type Density = "default" | "compact";
+export type Density = "default" | "compact" | "dense";
 
 // On white every list's text is 13px (monospace a half step smaller, as it reads larger), the records' rows 36px.
 const LIGHT_TEXT = "light:text-sm light:[&_.font-mono]:text-[0.78125rem]";
 const BODY_CELLS = new Map<Density, string>([
   ["default", `px-5 py-3 first:pl-6 light:py-2 ${LIGHT_TEXT}`],
   ["compact", `px-5 py-1.5 first:pl-6 ${LIGHT_TEXT}`],
+  // Beside the panel's waterfall: a row of a line, as the tree's rows are.
+  ["dense", `h-[1.625rem] px-5 py-0.5 first:pl-6 ${LIGHT_TEXT}`],
 ]);
 
 /** A body cell's padding at the list's density: the same sides for every list, the height by density. */
@@ -459,14 +462,16 @@ const ROOM_AT = new Map<Side, string>([
 ]);
 
 /** A header cell's classes: the shared density, its name's side, and what a move says (hovered, dropped on). */
-function headClass(side: Side, moves: boolean, over: boolean, className: string | undefined): string {
+function headClass(side: Side, moves: boolean, over: boolean, className: string | undefined, dense = false): string {
   return cn(
     HEAD_CELL,
+    // Beside the waterfall: as low as a row, its name in the small print.
+    dense && "h-[1.625rem] text-2xs light:h-[1.625rem]",
     "group/head relative transition-colors",
     side === "start" && "text-right",
     // A header that moves says so on hover: a step darker, a grip at its end, the grab cursor on its name. Opaque:
     // a sticky header's rows scroll under it.
-    moves && "hover:bg-[color-mix(in_oklab,var(--dt-table-head),var(--color-foreground)_4%)]",
+    moves && "hover:bg-[color-mix(in_oklab,var(--tp-table-head),var(--color-foreground)_4%)]",
     over && "bg-brand-soft",
     className,
   );
@@ -512,7 +517,8 @@ function RemoveColumn({ label, side, onRemove }: { label: string; side: Side; on
       title={`Hide the ${label} column`}
       onClick={onRemove}
       className={cn(
-        "absolute top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100",
+        // 16px to see, 24px to hit (WCAG 2.5.8): a miss beside it doesn't start a drag of the column.
+        "absolute top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-muted-foreground opacity-0 transition-opacity group-hover/head:opacity-100 hover:text-foreground focus-visible:opacity-100 after:absolute after:-inset-1 after:content-['']",
         BUTTON_AT.get(side),
       )}
     >
@@ -601,11 +607,12 @@ function ColumnHead({
   const { flex, shown, style } = sized(width, draft);
   const drop = useDrop(onMove);
   const side = sideOf(num);
+  const dense = useBeside();
   return (
     <TableHead
       data-flex={flex || undefined}
       style={style}
-      className={headClass(side, onStep !== undefined, drop.over, className)}
+      className={headClass(side, onStep !== undefined, drop.over, className, dense)}
       // Its name is its label: the resize handle inside has a name of its own.
       aria-label={label}
       {...drop.props}
@@ -649,6 +656,8 @@ function ColumnsMenu({
 }) {
   // In the panel a click on the page doesn't reach the menu: it closes when the frame loses focus.
   const [open, setOpen] = useMenuOpen();
+  // Beside the waterfall the details' tables keep the columns they were given: no menu to change them.
+  if (useBeside()) return null;
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
@@ -722,10 +731,11 @@ export function ColumnsHeader({
   onRemove?: ((spec: ColumnSpec, columns: Columns) => (() => void) | undefined) | undefined;
   children?: ReactNode;
 }) {
+  const dense = useBeside();
   return (
     // A band a step off the rows, opaque (a sticky header's rows scroll under it), a hairline under each cell: a
     // collapsed table's own borders stay behind with the rows a sticky header leaves.
-    <TableHeader className="bg-(--dt-table-head) [&_th]:shadow-[inset_0_-1px_0_var(--dt-table-head-rule)] [&_tr]:border-b-0">
+    <TableHeader className="bg-(--tp-table-head) [&_th]:shadow-[inset_0_-1px_0_var(--tp-table-head-rule)] [&_tr]:border-b-0">
       <TableRow className="hover:bg-transparent">
         {columns.shown.map((spec, index) => (
           <ColumnHead
@@ -741,7 +751,7 @@ export function ColumnsHeader({
             onRemove={onRemove(spec, columns)}
           />
         ))}
-        <TableHead className="relative w-9 px-1 text-right">
+        <TableHead className={cn("relative w-9 px-1 text-right", dense && "h-[1.625rem]")}>
           <ColumnsMenu columns={columns} changed={changed} onReset={onReset}>
             {children}
           </ColumnsMenu>

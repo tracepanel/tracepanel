@@ -394,9 +394,9 @@ test("a Go frame's source shows highlighted in the trace", async ({ page, reques
   ).json()) as { traces: { id: string }[] };
   await page.goto(`/#/t/${found.traces[0]?.id}`);
   await page.getByRole("tab", { name: /^Error/ }).click();
-  const current = page.locator(".dt-source li[data-current]").first();
+  const current = page.locator(".tp-source li[data-current]").first();
 
   await expect(current).toContainText('books["missing"]++');
   await expect(current.locator(".token.string")).toHaveText('"missing"');
-  await expect(page.locator(".dt-source .token.keyword", { hasText: /^func$/ }).first()).toBeVisible();
+  await expect(page.locator(".tp-source .token.keyword", { hasText: /^func$/ }).first()).toBeVisible();
 });

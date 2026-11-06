@@ -10,6 +10,7 @@ import { partOfCategory } from "./callTree";
 import { duration } from "./format";
 import { keyed } from "./keys";
 import { withoutAnsi } from "./lib/ansi";
+import { axisTicks } from "./lib/axis";
 import { type Category, spanCategories } from "./lib/breakdown";
 import { answers, callAnswer, cutLength } from "./lib/callAnswer";
 import { GC } from "./lib/memory";
@@ -156,39 +157,6 @@ function saysMore(lane: Lane): boolean {
 }
 
 /** A tick of the time axis: where it is (a share of the trace's time) and what it says. */
-interface Tick {
-  at: number;
-  label: string;
-}
-
-/** The round steps an axis counts in, of a power of ten. */
-const STEPS = [1, 2, 2.5, 5, 10];
-
-/** At least this many steps across the axis: 3 to 6 of them, whatever the time. */
-const MIN_STEPS = 3;
-
-/**
- * The time axis' ticks: from 0 by the largest round step (1, 2, 2.5 or 5 of a power of ten) that fits MIN_STEPS
- * times, none past its end; all said in one unit with the decimals the step needs ("0.5 ms", "1.0 ms"), so they read
- * evenly spaced and no two the same.
- */
-function axisTicks(duration: number): Tick[] {
-  const total = Math.max(duration, 1);
-  const power = 10 ** Math.floor(Math.log10(total / MIN_STEPS));
-  const fits = [...STEPS, ...STEPS.map((each) => each / 10)]
-    .map((each) => each * power)
-    .filter((each) => total / each >= MIN_STEPS - 1e-9);
-  const step = Math.max(Math.max(...fits), 1);
-  const [unit, scale] = step >= 100_000 && total >= 1_000_000 ? ["s", 1e6] : step >= 100 ? ["ms", 1e3] : ["µs", 1];
-  const said = step / scale;
-  let decimals = 0;
-  while (decimals < 3 && Math.abs(Math.round(said * 10 ** decimals) - said * 10 ** decimals) > 1e-6) decimals += 1;
-  const ticks: Tick[] = [];
-  for (let n = 0; n * step <= total * (1 + 1e-9); n += 1) {
-    ticks.push({ at: (n * step) / total, label: n === 0 ? "0" : `${(n * said).toFixed(decimals)} ${unit}` });
-  }
-  return ticks;
-}
 
 /** The axis' ticks between its ends: where the lanes draw their grid lines. */
 function gridTicks(duration: number): number[] {
@@ -253,21 +221,21 @@ function LaneRow({
 }) {
   const total = Math.max(trace.duration, 1);
   return (
-    <div className="dt-lane">
-      <span className="dt-lane-label">
-        <span className="dt-lane-count">{lane.marks.length}</span>{" "}
+    <div className="tp-lane">
+      <span className="tp-lane-label">
+        <span className="tp-lane-count">{lane.marks.length}</span>{" "}
         {lane.marks.length === 1 ? lane.noun[0] : lane.noun[1]}
       </span>
-      <div className="dt-lane-track">
+      <div className="tp-lane-track">
         {gridTicks(trace.duration).map((at) => (
-          <span key={at} className="dt-lane-grid" style={{ left: `${at * 100}%` }} />
+          <span key={at} className="tp-lane-grid" style={{ left: `${at * 100}%` }} />
         ))}
         {lane.marks.map((mark) => (
           <MarkOn
             key={mark.key}
             mark={mark}
             look={{
-              className: "dt-mark",
+              className: "tp-mark",
               "data-tone": mark.tone,
               "data-point": mark.duration === 0 && !mark.cut ? "" : undefined,
               "data-cut": mark.cut ? "" : undefined,
@@ -296,16 +264,16 @@ interface Picking {
 
 /** A press on a lane or the axis may start a drag across them (on a mark too: it stays a click unless it moves). */
 function pressOnLanes(event: PointerEvent<HTMLDivElement>, picking: Picking): void {
-  const onTrack = (event.target as Element).closest(".dt-lane-track, .dt-timeline-axis");
+  const onTrack = (event.target as Element).closest(".tp-lane-track, .tp-timeline-axis");
   if (onTrack && picking.layer.current) picking.start(event, picking.layer.current);
 }
 
 /** A click on a share's stretch picks its rows; on a lane beside its marks, the range goes. */
 function clickOnLanes(event: MouseEvent<HTMLDivElement>, picking: Picking): void {
   const target = event.target as Element;
-  const share = target.closest<HTMLElement>(".dt-time-track [data-category]");
+  const share = target.closest<HTMLElement>(".tp-time-track [data-category]");
   if (share) clickOnShare(share, picking);
-  else if (target.classList.contains("dt-lane-track")) picking.onRange(null);
+  else if (target.classList.contains("tp-lane-track")) picking.onRange(null);
 }
 
 /**
@@ -340,13 +308,13 @@ function LanesBody({
     // biome-ignore lint/a11y/noStaticElementInteractions: a drag over the marks, which are buttons of their own.
     // biome-ignore lint/a11y/useKeyWithClickEvents: from the keyboard, Esc lets the range go (useSlice).
     <div
-      className="dt-timeline-body"
+      className="tp-timeline-body"
       onPointerDown={(event) => pressOnLanes(event, picking)}
       onClick={(event) => clickOnLanes(event, picking)}
       onDoubleClick={() => picking.onRange(null)}
     >
-      <div className="dt-timeline-axis" aria-hidden="true">
-        <span className="dt-timeline-unit">time</span>
+      <div className="tp-timeline-axis" aria-hidden="true">
+        <span className="tp-timeline-unit">time</span>
         {/* Each label as far along itself as its tick is along the axis: the first starts there, the last ends. */}
         {axisTicks(trace.duration).map((tick) => (
           <span key={tick.at} style={{ left: `${tick.at * 100}%`, transform: `translateX(${-tick.at * 100}%)` }}>
@@ -358,7 +326,7 @@ function LanesBody({
       {drawn.map((lane) => (
         <LaneRow key={lane.noun[1]} lane={lane} trace={trace} range={range} onSelect={onSelect} />
       ))}
-      <div className="dt-timeline-layer" ref={picking.layer}>
+      <div className="tp-timeline-layer" ref={picking.layer}>
         {range ? <RangeBand range={range} total={Math.max(trace.duration, 1)} /> : null}
       </div>
     </div>
@@ -397,15 +365,26 @@ function useLanesSlice(onSelect: ((target: MarkTarget) => void) | undefined, pro
  * lanes picks a stretch of the time; a click beside the marks, or a double click, lets it go. Always there, its own
  * lane alone too: every call tree is read over its time the same way.
  */
-export function Timeline({ trace, onSelect }: { trace: Trace; onSelect?: ((target: MarkTarget) => void) | undefined }) {
+export function Timeline({
+  trace,
+  onSelect,
+  still = false,
+}: {
+  trace: Trace;
+  onSelect?: ((target: MarkTarget) => void) | undefined;
+  /** Beside the tree, in a row's details: its marks open what they are; no drag, no share picks the tree's rows. */
+  still?: boolean | undefined;
+}) {
   const layer = useRef<HTMLDivElement>(null);
   const { slice, onRange, onShare, openProfile } = useLanesSlice(onSelect, trace.profile);
   const drawn = lanes(trace, slice.logs);
   const drag = useRangeDrag(Math.max(trace.duration, 1), onRange);
   const onQuiet = trace.profile ? (range: TimeRange | undefined) => openProfile(range) : undefined;
-  const picking = { onRange, onShare, onQuiet, start: drag.start, layer };
+  const picking = still
+    ? { onRange: () => undefined, onShare: () => undefined, onQuiet: undefined, start: () => undefined, layer }
+    : { onRange, onShare, onQuiet, start: drag.start, layer };
   return (
-    <figure className="dt-timeline" aria-label="Timeline">
+    <figure className="tp-timeline" aria-label="Timeline">
       <LanesBody
         trace={trace}
         drawn={drawn}
@@ -426,16 +405,20 @@ export function TimeStrip({
   trace,
   related,
   onSelect,
+  still,
 }: {
   trace: Trace;
   related: Related | undefined;
   onSelect: (target: MarkTarget) => void;
+  /** Its legend only says, picks nothing (TimeLegend). */
+  still?: boolean | undefined;
 }) {
   return (
     // A segment hovered on any lane lights its legend item, and the legend item every segment of it.
-    <section className="dt-strip" aria-label="Time" {...litScope}>
-      <Timeline trace={trace} onSelect={onSelect} />
-      <TimeLegend trace={trace} related={related} />
+    <section className="tp-strip" aria-label="Time" {...litScope}>
+      <Timeline trace={trace} onSelect={onSelect} still={still} />
+      {/* Its shares pick the tree's rows: beside the details, those under the row picked (CallMap). */}
+      <TimeLegend trace={trace} related={related} shares={still} />
     </section>
   );
 }

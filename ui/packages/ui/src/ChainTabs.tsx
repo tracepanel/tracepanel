@@ -255,6 +255,8 @@ export function ScopedCalls({
   const clock = useMemo(() => clockText(shown, chain.members), [shown, chain.members]);
   const [mode, setMode] = useState<SqlMode>("grouped");
   const sql = tab === "sql";
+  // One query run again and again (a group opened in the tree): each run in its order, nothing left to group.
+  const oneQuery = chain.scope !== null && shown.length > 1 && new Set(shown.map(sqlKey)).size === 1;
   return (
     <>
       <CallsHeader
@@ -268,7 +270,11 @@ export function ScopedCalls({
         onPick={setPicks}
         noun={of.noun}
         clock={clock}
-        end={sql ? <Segmented label="Queries shown" segments={SQL_MODES} value={mode} onChange={setMode} /> : null}
+        end={
+          sql && !oneQuery ? (
+            <Segmented label="Queries shown" segments={SQL_MODES} value={mode} onChange={setMode} />
+          ) : null
+        }
       />
       <CallsOf spans={shown} empty={emptyCalls(of.empty, chain.scope !== null)}>
         {sql ? (
@@ -278,7 +284,7 @@ export function ScopedCalls({
             focus={focus}
             onExplain={onExplain}
             links={links}
-            mode={mode}
+            mode={oneQuery ? "timeline" : mode}
             clock={clock}
           />
         ) : (
@@ -301,14 +307,14 @@ function emptyCalls(empty: string, scoped: boolean): string {
 
 /** The list, or what says there is nothing in it. */
 function CallsOf({ spans, empty, children }: { spans: readonly Span[]; empty: string; children: ReactNode }) {
-  if (spans.length === 0) return <p className="dt-note">{empty}</p>;
+  if (spans.length === 0) return <p className="tp-note">{empty}</p>;
   return children;
 }
 
 /** What an issue is across the scope: its apps, and in how many traces how many times. */
 function IssueReach({ issue, runtimes }: { issue: ScopedIssue; runtimes: ReadonlyMap<string, string | undefined> }) {
   return (
-    <span className="dt-issue-reach">
+    <span className="tp-issue-reach">
       {issue.apps.map((app) => (
         <AppChip key={app} name={app} runtime={runtimes.get(app)} compact />
       ))}
@@ -333,11 +339,12 @@ function issueCount(shown: number, all: number): string {
 export function ScopedIssues({
   chain,
   links,
-  onShowRow,
+  onShowRows,
 }: {
   chain: TraceScope;
   links: TraceLinks | undefined;
-  onShowRow: (row: string) => void;
+  /** An issue's rows in the call tree: the row they are all under. */
+  onShowRows: (ids: readonly string[]) => void;
 }) {
   const issues = useMemo(
     () => scopedIssues(chain.members, chain.scope, chain.chainIssues).filter((issue) => issue.kind !== "error"),
@@ -359,12 +366,12 @@ export function ScopedIssues({
         summary={shown.length > 0 ? issueCount(shown.length, issues.length) : null}
       />
       {shown.length === 0 ? (
-        <p className="dt-note">{chain.scope ? "No issues under this." : "No issues in this request."}</p>
+        <p className="tp-note">{chain.scope ? "No issues under this." : "No issues in this request."}</p>
       ) : (
         <IssueList
           issues={shown}
           reach={(issue) => <IssueReach issue={issue as ScopedIssue} runtimes={runtimes} />}
-          onShowSpans={(ids) => ids[0] && onShowRow(ids[0])}
+          onShowSpans={onShowRows}
           showLabel={() => "In the call tree"}
           links={links}
         />

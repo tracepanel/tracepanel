@@ -284,7 +284,7 @@ test("a Go profile is spread over its code at ingest: its queries the database's
   const functions = page.getByRole("region", { name: "Functions" });
   await expect(functions.getByRole("list", { name: "Not a function" }).getByRole("listitem")).toHaveText(GO_ROWS);
   await expect.poll(() => boxes(page)).toEqual(GO_BOXES);
-  await expect(box(page, "waiting · off CPU").first()).toHaveClass(/dt-hatched/);
+  await expect(box(page, "waiting · off CPU").first()).toHaveClass(/tp-hatched/);
 });
 
 test("a Node profile's idle loop is waiting: the call tree's legend and the Profile tab say the same", async ({

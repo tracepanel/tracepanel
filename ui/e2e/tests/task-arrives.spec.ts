@@ -98,7 +98,7 @@ function traces(tail: string): { request: object; run: object; id: string } {
 }
 
 async function expectArrives(scope: Page | FrameLocator, run: object): Promise<void> {
-  const tree = scope.locator(".dt-map-timed");
+  const tree = scope.locator(".tp-map-timed");
 
   await expect(tree.getByText("waiting for a worker…")).toBeVisible();
 
@@ -117,7 +117,6 @@ test("in the panel, a task's run replaces its waiting row as it arrives", async 
   await page.getByRole("button", { name: "Load products" }).click();
   await pill(page).click();
   const frame = panel(page);
-  await frame.getByRole("tab", { name: /^Call tree/ }).click();
 
   await expectArrives(frame, run);
 });

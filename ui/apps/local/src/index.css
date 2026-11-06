@@ -36,7 +36,7 @@
 
 @layer base {
   html {
-    font-family: var(--dt-font);
+    font-family: var(--tp-font);
     /* Geist: figures of one width, so numbers line up in tables and do not jitter as they update. */
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
@@ -80,8 +80,17 @@
   );
 }
 
+/* A row of a tree or a list, walked with the keys: a stronger tint than a control's, so it shows over a row already
+   tinted (the one selected, the open record's). Still no ring. */
+.tp-map-row:focus-visible {
+  background-image: linear-gradient(
+    color-mix(in oklab, currentColor 18%, transparent),
+    color-mix(in oklab, currentColor 18%, transparent)
+  );
+}
+
 /* A trace's call tree with its details beside it runs to the page's bottom: scrolled to the end, the line between
    the tree and the details reaches the view's bottom edge, not the page's padding short of it. */
-.dt-trace-page:has(.dt-map-body[data-side]) {
+.tp-trace-page:has(.tp-map-body[data-side]) {
   padding-bottom: 0;
 }
