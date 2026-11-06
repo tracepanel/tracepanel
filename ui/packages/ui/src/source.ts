@@ -1,4 +1,4 @@
-import type { RowCounts } from "./lib/chainCounts";
+import { type RowCounts, withChain } from "./lib/chainCounts";
 import type { Snapshot } from "./snapshot";
 import type {
   App,
@@ -241,8 +241,14 @@ export function httpSource(base: string | URL): DataSource {
       return { traces: body.traces ?? [], runs: body.runs ?? {}, counts: body.counts };
     },
     async searchTraces(q, before) {
-      const body = await getJson<{ traces: TraceSummary[]; next: number | null }>(url("traces", { q, before }));
-      return { items: body?.traces ?? [], next: body?.next ?? null };
+      // With each row's chain numbers: a view's queries and issues are those of the calls under it, as the panel says.
+      const body = await getJson<{
+        traces: TraceSummary[];
+        next: number | null;
+        counts?: Record<string, RowCounts>;
+      }>(url("traces", { q, before, counts: 1 }));
+      const items = (body?.traces ?? []).map((trace) => withChain(trace, body?.counts?.[trace.id]));
+      return { items, next: body?.next ?? null };
     },
     getTrace(id) {
       // A trace not stored yet (on its way) is no error: the browser logs none for its 204.

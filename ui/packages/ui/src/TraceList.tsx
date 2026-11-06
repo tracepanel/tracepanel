@@ -7,7 +7,7 @@ import { ago, dayTime, duration } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { NoAnswer, Pending, Running } from "./LiveMarks";
 import { ISSUE_LABELS } from "./labels";
-import type { RowCounts } from "./lib/chainCounts";
+import { type RowCounts, withChain } from "./lib/chainCounts";
 import {
   type ChainApp,
   type ChainEntry,
@@ -157,22 +157,6 @@ export interface ListChains {
   cut?: ReadonlyMap<string, number> | undefined;
   /** What a trace's row says it opens on (TraceListProps), for the chain's trace rows. */
   opensOn?: ((trace: TraceSummary) => string | undefined) | undefined;
-}
-
-/** A row's summary with what its chain did, when it has one: its own trace's numbers are part of it. */
-export function withChain(trace: TraceSummary, counts: RowCounts | undefined): TraceSummary {
-  if (!counts || counts.traces < 2) return trace;
-  const { db_time: dbTime = trace.db_time, errors = trace.errors } = counts;
-  return {
-    ...trace,
-    queries: counts.queries,
-    issues: counts.issues,
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    issue_kinds: counts.kinds,
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    db_time: dbTime,
-    errors,
-  };
 }
 
 /** The list's end: in view, it asks for older rows (and again, once they came, while it still is). */

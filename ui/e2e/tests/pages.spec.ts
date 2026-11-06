@@ -1,5 +1,6 @@
 // A page's view and what was done on it, as the browser recording sends them: one row each, the failure counted.
 import { expect, test } from "../fixtures.ts";
+import { gatewayView } from "../gateway.ts";
 
 test("a page lists its view, then its actions, a failed one counted", async ({ page }) => {
   await page.goto("/#/pages?view=overview");
@@ -20,4 +21,19 @@ test("an action's trace is headed by what was done, on which page", async ({ pag
   await page.getByRole("tab", { name: /^Call tree/ }).click();
 
   await expect(page.getByRole("button", { name: /GET 127\.0\.0\.1\/api\/books/ }).first()).toBeVisible();
+});
+
+test("a view's row counts what its calls did: their queries and issues, as the panel's record says", async ({
+  page,
+}) => {
+  // The view's own trace has no queries: its calls' traces (the gateway's, a subgraph's, a service's) have three.
+  await gatewayView(2, ["query Features"]);
+  await page.goto("/#/pages");
+  const cells = page
+    .getByRole("link", { name: /^\/app\/,/ })
+    .first()
+    .getByRole("cell");
+
+  await expect(cells.nth(3)).toHaveText("3");
+  await expect(cells.nth(4)).toContainText("N+1");
 });

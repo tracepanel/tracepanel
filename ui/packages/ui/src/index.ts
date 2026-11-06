@@ -19,6 +19,7 @@ export * from "./Logo";
 export { LogRecord, logAttrs } from "./LogRecordDetails";
 export { type AttributeColumns, type LogColumn, LogLevel, LogTable, useAttributeColumns } from "./LogTable";
 export { ISSUE_LABELS, issueTitle } from "./labels";
+export { withChain } from "./lib/chainCounts";
 export {
   type ChainApp,
   type ChainCall,
@@ -92,7 +93,6 @@ export {
   TraceList,
   type TraceRow,
   traceLabel,
-  withChain,
 } from "./TraceList";
 export { type ExploreItem, type TabId, TraceView, type TraceViewProps } from "./TraceView";
 export type * from "./types";
