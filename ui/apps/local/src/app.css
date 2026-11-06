@@ -2066,9 +2066,12 @@ body {
   padding: 0;
   gap: 0;
 }
+/* The details' tabs are the bar's second floor over them, in its colour (as the devtools' panes): not a header of
+   their own beside the rows, which start under the bar. */
 .panel-wf-details .tp-tabs {
   margin-top: 0;
   padding-top: 0;
+  background: var(--tp-chrome, var(--tp-bg));
 }
 
 .panel-wf-details .tp-scope-summary {
