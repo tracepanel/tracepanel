@@ -115,12 +115,14 @@ test("a column moves with the arrow keys on Database, and by a drag on All reque
   await expect(headers(page).last()).not.toHaveAccessibleName("When");
 
   await header(page, "When").getByText("When").dragTo(header(page, "Status"));
+  // Dropped on Status, it goes before it (wherever the App column puts Status).
+  const beforeStatus = () => header(page, "Status").locator("xpath=preceding-sibling::*[1]");
 
-  await expect(headers(page).nth(1)).toHaveAccessibleName("When");
+  await expect(beforeStatus()).toHaveAccessibleName("When");
 
   await page.reload();
 
-  await expect(headers(page).nth(1)).toHaveAccessibleName("When");
+  await expect(beforeStatus()).toHaveAccessibleName("When");
 });
 
 test("a reset in the menu brings a list's columns back as they were", async ({ page }) => {

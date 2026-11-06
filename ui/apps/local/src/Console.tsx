@@ -24,7 +24,7 @@ import {
   useSidebarCollapsed,
   useSidebarWidth,
 } from "./Sidebar";
-import { scopedSource, useApps, useScope } from "./scope";
+import { type App, AppsKnown, scopedSource, useApps, useScope } from "./scope";
 import { useScrollMemory } from "./scroll";
 import { sectionLabel } from "./sections";
 import { TracePage } from "./TracePage";
@@ -213,75 +213,84 @@ export function Console({ route, source: everything }: { route: Route; source: D
   const current = sectionOf(route);
   return (
     <FirstPaint catalog={counts !== undefined && apps !== undefined}>
-      <div
-        className={cn(
-          "grid h-full grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]",
-          moving && "transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none",
-        )}
-        style={{ "--sidebar-width": collapsed ? RAIL_WIDTH : `${sidebar.width}px` } as CSSProperties}
-      >
-        {/* Where the sidebar has no room: a bar with the menu and search, the sidebar in a drawer. */}
-        <header className="hidden items-center gap-3 border-b bg-sidebar px-4 py-2.5 max-[980px]:flex">
-          <button type="button" className="icon-button" aria-label="Menu" onClick={() => setMenu(true)}>
-            <MenuIcon className="size-5" />
-          </button>
-          <a href="#/" aria-label="Tracepanel home" className="flex items-center">
-            <LogoMark className="size-6" />
-          </a>
-          <span className="truncate font-semibold">{current ? sectionLabel(current) : "Tracepanel"}</span>
-          <button type="button" className="icon-button ml-auto" aria-label="Search" onClick={() => setSearching(true)}>
-            <SearchIcon className="size-5" />
-          </button>
-        </header>
-        <Dialog open={menu} onOpenChange={setMenu}>
-          <DialogContent
-            className="top-0 left-0 h-full w-[17.5rem] max-w-[85vw] translate-x-0 translate-y-0 rounded-none border-0 border-r p-0 sm:max-w-[17.5rem]"
-            showCloseButton={false}
-          >
-            <DialogTitle className="sr-only">Menu</DialogTitle>
-            <DialogDescription className="sr-only">The console's sections</DialogDescription>
+      <AppsKnown.Provider value={apps ?? NO_APPS}>
+        <div
+          className={cn(
+            "grid h-full grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[980px]:grid-cols-1 max-[980px]:grid-rows-[auto_minmax(0,1fr)]",
+            moving && "transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none",
+          )}
+          style={{ "--sidebar-width": collapsed ? RAIL_WIDTH : `${sidebar.width}px` } as CSSProperties}
+        >
+          {/* Where the sidebar has no room: a bar with the menu and search, the sidebar in a drawer. */}
+          <header className="hidden items-center gap-3 border-b bg-sidebar px-4 py-2.5 max-[980px]:flex">
+            <button type="button" className="icon-button" aria-label="Menu" onClick={() => setMenu(true)}>
+              <MenuIcon className="size-5" />
+            </button>
+            <a href="#/" aria-label="Tracepanel home" className="flex items-center">
+              <LogoMark className="size-6" />
+            </a>
+            <span className="truncate font-semibold">{current ? sectionLabel(current) : "Tracepanel"}</span>
+            <button
+              type="button"
+              className="icon-button ml-auto"
+              aria-label="Search"
+              onClick={() => setSearching(true)}
+            >
+              <SearchIcon className="size-5" />
+            </button>
+          </header>
+          <Dialog open={menu} onOpenChange={setMenu}>
+            <DialogContent
+              className="top-0 left-0 h-full w-[17.5rem] max-w-[85vw] translate-x-0 translate-y-0 rounded-none border-0 border-r p-0 sm:max-w-[17.5rem]"
+              showCloseButton={false}
+            >
+              <DialogTitle className="sr-only">Menu</DialogTitle>
+              <DialogDescription className="sr-only">The console's sections</DialogDescription>
+              <Sidebar
+                drawer={true}
+                section={current}
+                counts={counts}
+                onSearch={() => {
+                  setMenu(false);
+                  setSearching(true);
+                }}
+                onClear={source.clearStore ? () => setClearing(true) : undefined}
+                scope={scope}
+                otlp={otlp}
+              />
+            </DialogContent>
+          </Dialog>
+          <div className="relative grid min-h-0 max-[980px]:hidden">
             <Sidebar
-              drawer={true}
               section={current}
               counts={counts}
-              onSearch={() => {
-                setMenu(false);
-                setSearching(true);
-              }}
+              onSearch={() => setSearching(true)}
               onClear={source.clearStore ? () => setClearing(true) : undefined}
               scope={scope}
               otlp={otlp}
+              collapsed={collapsed}
             />
-          </DialogContent>
-        </Dialog>
-        <div className="relative grid min-h-0 max-[980px]:hidden">
-          <Sidebar
-            section={current}
-            counts={counts}
-            onSearch={() => setSearching(true)}
-            onClear={source.clearStore ? () => setClearing(true) : undefined}
-            scope={scope}
-            otlp={otlp}
-            collapsed={collapsed}
+            {collapsed ? null : <SidebarHandle {...sidebar} />}
+            <SidebarToggle collapsed={collapsed} collapse={collapse} />
+          </div>
+          {page}
+          <SearchPalette open={searching} onOpenChange={setSearching} source={source} items={navItems(counts)} />
+          <ClearDialog
+            mode="console"
+            open={clearing}
+            onOpenChange={setClearing}
+            // Deleting is for every app: the dialog counts them all.
+            source={everything}
+            onCleared={() => {
+              // Every page shows data that is gone: start over from the home page.
+              location.hash = "#/";
+              location.reload();
+            }}
           />
-          {collapsed ? null : <SidebarHandle {...sidebar} />}
-          <SidebarToggle collapsed={collapsed} collapse={collapse} />
         </div>
-        {page}
-        <SearchPalette open={searching} onOpenChange={setSearching} source={source} items={navItems(counts)} />
-        <ClearDialog
-          mode="console"
-          open={clearing}
-          onOpenChange={setClearing}
-          // Deleting is for every app: the dialog counts them all.
-          source={everything}
-          onCleared={() => {
-            // Every page shows data that is gone: start over from the home page.
-            location.hash = "#/";
-            location.reload();
-          }}
-        />
-      </div>
+      </AppsKnown.Provider>
     </FirstPaint>
   );
 }
+
+const NO_APPS: readonly App[] = [];

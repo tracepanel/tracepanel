@@ -2447,3 +2447,23 @@ body {
   gap: 0.375rem;
   min-width: 0;
 }
+
+/* A list's time bar: its share of the longest listed, in the records' colour; a slow one's amber. */
+.tp-list-track {
+  display: block;
+  flex: 1 1 auto;
+  max-width: 3.5rem;
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--tp-hover);
+}
+.tp-list-track > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--tp-k-view) 45%, transparent);
+}
+.tp-list-track > span[data-slow] {
+  background: color-mix(in srgb, var(--tp-warn-strong) 55%, transparent);
+}

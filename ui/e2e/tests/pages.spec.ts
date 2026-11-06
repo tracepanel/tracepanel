@@ -29,11 +29,12 @@ test("a view's row counts what its calls did: their queries and issues, as the p
   // The view's own trace has no queries: its calls' traces (the gateway's, a subgraph's, a service's) have three.
   await gatewayView(2, ["query Features"]);
   await page.goto("/#/pages");
-  const cells = page
-    .getByRole("link", { name: /^\/app\/,/ })
-    .first()
-    .getByRole("cell");
+  const row = page.getByRole("link", { name: /^\/app\/,/ }).first();
+  await expect(row).toBeVisible();
+  // By its column's header: an App column comes in where the list has more than one app.
+  const heads = await page.getByRole("main").locator("thead th").allTextContents();
+  const cell = (name: string) => row.getByRole("cell").nth(heads.findIndex((head) => head.startsWith(name)));
 
-  await expect(cells.nth(3)).toHaveText("3");
-  await expect(cells.nth(4)).toContainText("N+1");
+  await expect(cell("Queries")).toHaveText("3");
+  await expect(cell("Issues")).toContainText("N+1");
 });

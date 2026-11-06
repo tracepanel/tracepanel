@@ -215,11 +215,16 @@ test("a list's time is amber where the request is slow for what it is: a request
   const rows = page.getByRole("main").getByRole("link").filter({ hasText: "/slow-probe" });
   await expect(rows).toHaveCount(3);
 
-  const times = await rows.evaluateAll((links) =>
-    links
-      .map((link) => link.querySelectorAll("td")[2]?.querySelector("span"))
-      .map((time) => ({ time: time?.textContent, amber: time?.classList.contains("text-warn") ?? false }))
-      .sort((a, b) => String(a.time).localeCompare(String(b.time))),
+  const column = (await page.getByRole("main").locator("thead th").allTextContents()).findIndex((head) =>
+    head.startsWith("Duration"),
+  );
+  const times = await rows.evaluateAll(
+    (links, at) =>
+      links
+        .map((link) => link.querySelectorAll("td")[at]?.querySelector(":scope > span > span:last-child"))
+        .map((time) => ({ time: time?.textContent, amber: time?.classList.contains("text-warn") ?? false }))
+        .sort((a, b) => String(a.time).localeCompare(String(b.time))),
+    column,
   );
 
   expect(times).toEqual([

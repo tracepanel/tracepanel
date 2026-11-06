@@ -55,7 +55,7 @@ import { ArrowRightIcon, ChevronRightIcon, Columns3Icon, ListFilterIcon } from "
 import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { useServiceCapability } from "./hooks";
 import { currentPeriod, endpointGroup, go, groupRoute, href, issueRoute, traceHref, withPeriod } from "./routes";
-import { useScope } from "./scope";
+import { useRuntimeOf, useScope } from "./scope";
 import { graphqlOperation, requestPath, taskSystem } from "./sections";
 import { type Noun, overText, shareText } from "./slower";
 import { useSummaries } from "./summaries";
@@ -136,6 +136,53 @@ function IssueChips({ kinds }: { kinds: readonly IssueKind[] }) {
   );
 }
 
+/** The app that answered, as its chip has it everywhere: shown where the list has more than one app. */
+const APP_COLUMN: DataColumn<TraceSummary> = {
+  id: "app",
+  label: "App",
+  width: 10,
+  drop: 3,
+  cell: (trace) => (trace.service ? <TraceApp service={trace.service} /> : null),
+};
+
+function TraceApp({ service }: { service: string }) {
+  return <AppChip name={service} runtime={useRuntimeOf(service)} compact />;
+}
+
+/**
+ * The columns for these rows: the app's only where they come from more than one; each time with its bar, on the
+ * scale of the typical longest listed (the 90th percentile: one far longer doesn't flatten the rest, it reaches the
+ * end), as the panel's records have theirs.
+ */
+function traceColumns(items: readonly TraceSummary[]): DataColumn<TraceSummary>[] {
+  const times = items.map((trace) => trace.duration).sort((a, b) => a - b);
+  const longest = Math.max(1, times[Math.floor((times.length - 1) * 0.9)] ?? 1);
+  const columns = TRACE_COLUMNS.map((column) =>
+    column.id === "duration"
+      ? { ...column, width: 10, cell: (trace: TraceSummary) => <TraceTime trace={trace} longest={longest} /> }
+      : column,
+  );
+  if (new Set(items.map((trace) => trace.service)).size < 2) return columns;
+  const [trace, ...rest] = columns;
+  return trace ? [trace, APP_COLUMN, ...rest] : columns;
+}
+
+/** A trace's time and its bar: slow for what it is (isSlow) in amber, as its record in the panel. */
+function TraceTime({ trace, longest }: { trace: TraceSummary; longest: number }) {
+  const slow = isSlow(trace);
+  return (
+    <span className="flex items-center justify-end gap-2">
+      <span className="tp-list-track" aria-hidden="true">
+        <span
+          style={{ width: `${Math.min(Math.max((trace.duration / longest) * 100, 2), 100)}%` }}
+          data-slow={slow ? "" : undefined}
+        />
+      </span>
+      <span className={cn("w-16 text-right", slow && "font-semibold text-warn")}>{duration(trace.duration)}</span>
+    </span>
+  );
+}
+
 const traceTone = (trace: TraceSummary) => (trace.status === "error" ? "error" : trace.issues > 0 ? "warn" : undefined);
 
 /**
@@ -158,7 +205,7 @@ export function TracesTable({
   newIds?: ReadonlySet<string> | undefined;
 }) {
   return (
-    <DataTable table={table} columns={TRACE_COLUMNS}>
+    <DataTable table={table} columns={traceColumns(items)}>
       {({ cells }) =>
         items.map((trace) => (
           <Tr

@@ -126,3 +126,11 @@ function merge(apps: ServiceApp[]): App[] {
     .map(([service, its]) => ({ service, runtime: serviceRuntime(its.map((role) => role.runtime)) }))
     .sort((a, b) => a.service.localeCompare(b.service));
 }
+
+/** The apps sending to the agent, with their runtimes, as the console loaded them: an app's chip has its mark. */
+export const AppsKnown = createContext<readonly App[]>([]);
+
+/** An app's runtime, as the apps the console knows say it. */
+export function useRuntimeOf(service: string): string | undefined {
+  return useContext(AppsKnown).find((app) => app.service === service)?.runtime ?? undefined;
+}

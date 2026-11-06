@@ -598,6 +598,21 @@ function useTraceChain(
 }
 
 /** A trace of its chain picked from outside, by the row it hangs under; a chain without it, given time, says so. */
+/**
+ * The row the tree is asked to show, the last asked: the record's row the panel's list picked, or a row a link, an
+ * issue's or a record's "In the call tree", asked for after it. Either alone kept the other from ever being shown.
+ */
+function useLastAsked(focusRow: string | undefined, treeSpan: string | undefined): string | undefined {
+  const [last, setLast] = useState(focusRow ?? treeSpan);
+  useEffect(() => {
+    if (focusRow) setLast(focusRow);
+  }, [focusRow]);
+  useEffect(() => {
+    if (treeSpan) setLast(treeSpan);
+  }, [treeSpan]);
+  return last;
+}
+
 function useFocusRow(
   chain: TraceScope,
   focusTrace: string | undefined,
@@ -1231,6 +1246,7 @@ export function TraceView({
   // A tab the link asked for that only the chain has (the DB tab of a browser's view): opened once the chain came.
   const asked = useAskedTab(initialTab, tabs, setActive);
 
+  const askedRow = useLastAsked(focusRow, treeSpan);
   // A record's or an issue's row in the call tree.
   const showRow = (row: string) => {
     setTreeSpan(row);
@@ -1263,7 +1279,7 @@ export function TraceView({
       reloadRelated={reloadRelated}
       loadRelated={loadRelated}
       links={links}
-      initialSpan={focusRow ?? treeSpan}
+      initialSpan={askedRow}
       explainOf={explainOf}
       onTraceProfile={onTraceProfile}
       profilesIn={held.profilesIn}
