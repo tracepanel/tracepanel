@@ -168,34 +168,12 @@ export function barPlace(trace: Trace, start: number, length: number): { style: 
 }
 
 /**
- * How slow a call reads beside its time, as the trace's share it took: amber from a fifth, red from a half. The
- * request's own code (its view, its framework) takes most of it by nature: only calls to a system say it.
+ * A row's time, tabular, in the text's colour: its bar says its share of the trace, and a call slow for what it is
+ * has its issue (a slow query, a slow HTTP call), not a time in red that reads as a failure.
  */
-export function slowness(time: number, trace: Trace, category: Category | undefined): "warn" | "error" | undefined {
-  if (category === undefined || OWN_TIME.has(category)) return undefined;
-  // Most of a short request is still quick: a call is said slow only from this long, whatever its share.
-  if (time < SLOW_LEAST_US) return undefined;
-  const share = time / Math.max(trace.duration, 1);
-  if (share >= 0.5) return "error";
-  return share >= 0.2 ? "warn" : undefined;
-}
-
-const SLOW_LEAST_US = 100_000;
-
-const OWN_TIME: ReadonlySet<Category> = new Set(["django", "code", "template", "signal"]);
-
-/** A row's time, tabular, in amber or red when the call took much of the trace. */
-export function RowTime({
-  time,
-  slow,
-  title,
-}: {
-  time: number;
-  slow: "warn" | "error" | undefined;
-  title?: string | undefined;
-}) {
+export function RowTime({ time, title }: { time: number; title?: string | undefined }) {
   return (
-    <span className="tp-map-time" data-slow={slow} title={title}>
+    <span className="tp-map-time" title={title}>
       {duration(time)}
     </span>
   );
@@ -261,15 +239,14 @@ export function OwnTime({ span, ctx }: { span: Span; ctx: RowContext }) {
       </span>
     );
   }
-  // Cut short, no answer yet: its time is where it was cut, not how slow it was (lib/live): never amber or red.
-  if (isCut(span)) return <RowTime time={span.duration} slow={undefined} title={cutNote(span.duration)} />;
+  // Cut short, no answer yet: its time is where it was cut (lib/live).
+  if (isCut(span)) return <RowTime time={span.duration} title={cutNote(span.duration)} />;
   // The record's own time, one number wherever it shows: what the page waited, what the server took on hover.
   if (span.parent_id === null && ctx.rootTime !== undefined && ctx.rootTime > span.duration) {
     const title = `The page waited ${duration(ctx.rootTime)}; the server took ${duration(span.duration)}`;
-    return <RowTime time={ctx.rootTime} slow={undefined} title={title} />;
+    return <RowTime time={ctx.rootTime} title={title} />;
   }
-  const slow = span.parent_id === null ? undefined : slowness(span.duration, ctx.trace, ctx.categories.get(span.id));
-  return <RowTime time={span.duration} slow={slow} title={timeTitle(span, ctx.trace)} />;
+  return <RowTime time={span.duration} title={timeTitle(span, ctx.trace)} />;
 }
 
 /** A span's bar; a call cut short runs to where it was cut, fading out there, never a 0-width mark. */

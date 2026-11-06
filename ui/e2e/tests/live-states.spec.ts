@@ -203,8 +203,6 @@ test("a call with no answer yet says so in the call tree, its time neutral, and 
   await laidOut(page);
   expect(await shownWords(row.locator('[data-state="cut"]'))).toBe("all");
   await expect(row.locator(".tp-map-time")).toHaveText("15.0 s");
-  // Not slow: it hadn't ended.
-  await expect(row.locator(".tp-map-time")).not.toHaveAttribute("data-slow", /.+/);
   await expect(page.locator(".tp-on-its-way")).toHaveText(
     "1 call with no answer yet: the tree fills in if its trace arrives",
   );

@@ -26,7 +26,6 @@ import {
   SpanFold,
   SpanName,
   sameRoute,
-  slowness,
   spanButton,
   TaskState,
   type Within,
@@ -543,11 +542,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
           <GroupName node={node} ctx={ctx} parent={parent} answer={answer} />
         </span>
         <GroupTicks spans={node.spans} trace={ctx.trace} within={ctx.within} />
-        <RowTime
-          time={wall}
-          slow={slowness(wall, ctx.trace, ctx.categories.get(node.spans[0]?.id ?? ""))}
-          title={groupTimes(node)}
-        />
+        <RowTime time={wall} title={groupTimes(node)} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
       {open ? (
@@ -764,7 +759,6 @@ function HopRow({ node, served, place }: { node: SpanNode; served: ServedRun; pl
         <HopBar trace={ctx.trace} span={span} run={served.run} within={ctx.within} />
         <RowTime
           time={span.duration}
-          slow={slowness(span.duration, ctx.trace, ctx.categories.get(span.id))}
           title={node.cut ? `${CUT_NOTE}\n${hopTimes(span, served)}` : hopTimes(span, served)}
         />
       </button>

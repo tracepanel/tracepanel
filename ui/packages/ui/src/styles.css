@@ -3272,14 +3272,6 @@ div.tp-map-row[data-kind="code"] {
 .tp-map-lead > .tp-map-text.tp-map-hop-name {
   min-width: 0;
 }
-.tp-map-time[data-slow="warn"] {
-  color: var(--tp-warn-strong);
-  font-weight: 600;
-}
-.tp-map-time[data-slow="error"] {
-  color: var(--tp-error);
-  font-weight: 600;
-}
 
 /* An LLM call's conversation: a turn each, folded open or shut, its role in the LLM colour. */
 .tp-llm-turns {
