@@ -90,6 +90,8 @@
   --tp-k-django: rgb(140 147 166 / 0.32);
   --tp-k-view: #a587ff;
   --tp-k-template: #2dd4bf;
+  /* GraphQL: its own, apart from your code's violet (functions, code) and SQL's blue. */
+  --tp-k-graphql: #5eead4;
   --tp-k-sql: #9db2ff;
   --tp-k-cache: #f5b544;
   --tp-k-http: #4ade80;
@@ -236,6 +238,7 @@
   --tp-k-django: rgb(99 99 110 / 0.26);
   --tp-k-view: #6a3be0;
   --tp-k-template: #0d9488;
+  --tp-k-graphql: #0f766e;
   --tp-k-sql: #3456d6;
   --tp-k-cache: #d97706;
   --tp-k-http: #15803d;

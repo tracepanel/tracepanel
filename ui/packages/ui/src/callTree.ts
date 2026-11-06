@@ -393,6 +393,7 @@ const FILTER_COLOURS: Readonly<Record<string, string>> = {
   migration: "migration",
   signal: "signal",
   template: "template",
+  graphql: "graphql",
   mail: "mail",
   task: "messaging",
   channels: "messaging",
@@ -401,7 +402,7 @@ const FILTER_COLOURS: Readonly<Record<string, string>> = {
   log: "log",
 };
 
-/** A kind's colour, the bars' own: the closest share where a kind has none of its own (GraphQL, functions: code). */
+/** A kind's colour, the bars' own: the closest share where a kind has none of its own (functions: code). */
 export function filterColor(id: string): string {
   return FILTER_COLOURS[id] ?? "view";
 }
