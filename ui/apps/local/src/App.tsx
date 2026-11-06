@@ -239,10 +239,7 @@ function PanelActions({
   return (
     <>
       {user}
-      <Hint
-        title="Open in the console"
-        detail="This request in the full console, in a new tab: every request, issue and query."
-      >
+      <Hint title="Open in the console" detail="Opens this request in the console, in a new tab.">
         <a
           // Filled in both themes: the panel's one way out to the console, the same button dark or light. The solid
           // primary (the brand's strong violet, 5:1 with white: AA), not the light accent (2.2:1, which read as
@@ -744,11 +741,7 @@ function ListNotes({
 }) {
   return (
     <>
-      {letGo ? (
-        <p className="panel-let-go">
-          Older requests of this tab are no longer in the local store: newer traces took their place.
-        </p>
-      ) : null}
+      {letGo ? <p className="panel-let-go">Older requests left the local store: it keeps the newest traces.</p> : null}
       {narrowedTo === null ? null : (
         <p className="panel-no-match">
           {narrowedTo ? `No other requests match “${narrowedTo}”.` : "No other requests have these kinds."}

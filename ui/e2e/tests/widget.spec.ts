@@ -606,7 +606,7 @@ for (const width of [640, 900, 1280]) {
 
 type Box = { x: number; y: number; width: number; height: number };
 
-test("Console opens the request in the full console, and its hint says so", async ({ page }) => {
+test("Console opens the request in the console, and its hint says so", async ({ page }) => {
   const call = await posts();
   await openApp(page, { posts: call });
   await page.getByRole("button", { name: "Load posts" }).click();
@@ -618,7 +618,7 @@ test("Console opens the request in the full console, and its hint says so", asyn
 
   await console.hover();
 
-  await expect(panel(page).getByRole("tooltip")).toContainText("This request in the full console, in a new tab");
+  await expect(panel(page).getByRole("tooltip")).toContainText("Opens this request in the console, in a new tab");
 });
 
 const STYLES = readFileSync(new URL("../../packages/ui/src/styles.css", import.meta.url), "utf8");

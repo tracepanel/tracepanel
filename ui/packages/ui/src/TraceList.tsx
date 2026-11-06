@@ -318,11 +318,7 @@ export function RecordMarks({
         {pending ? null : <CompactChips kinds={trace.issue_kinds} issues={trace.issues} />}
       </span>
       <span className="tp-record-queries" data-opens="sql">
-        {pending ? (
-          <Pending what="Its queries, while its calls' traces are on their way" />
-        ) : (
-          <Queries count={trace.queries} time={trace.db_time} />
-        )}
+        {pending ? <Pending what="Queries down its calls" /> : <Queries count={trace.queries} time={trace.db_time} />}
       </span>
     </span>
   );

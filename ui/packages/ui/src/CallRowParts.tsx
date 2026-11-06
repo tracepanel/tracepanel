@@ -635,7 +635,7 @@ export function HiddenLogs({
       aria-label={plural(count, "log", "logs")}
       aria-pressed={shown}
       data-shown={shown ? "" : undefined}
-      title={shown ? `${records} here, shown; a click hides them again` : `${records} here; a click shows every record`}
+      title={`${records} · click to ${shown ? "hide" : "show"}`}
       onClick={(event) => {
         event.stopPropagation();
         onShow();
