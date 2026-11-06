@@ -50,7 +50,15 @@ import type { ChainWaiting } from "./lib/chainRows";
 import { isTyping } from "./lib/keys";
 import { pageParts, redirectedFrom, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
-import { type Member, type SpanScope, scopedIssues, scopedSpans, scopeWindow, stripTraceOf } from "./lib/scope";
+import {
+  type Member,
+  type SpanScope,
+  scopedErrors,
+  scopedIssues,
+  scopedSpans,
+  scopeWindow,
+  stripTraceOf,
+} from "./lib/scope";
 import { type Slice, stretchText } from "./lib/slice";
 import { callsTime } from "./lib/split";
 import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMemoryScope } from "./lib/viewMemory";
@@ -76,7 +84,7 @@ import { type MarkTarget, TimeStrip } from "./Timeline";
 import { SliceScope } from "./TimeSlice";
 import { HeadingTitle, heading, htmxOf, outcomeOf } from "./TraceHeading";
 import { CompactChips } from "./TraceList";
-import type { App, Chain, Issue, IssueKind, Related, Trace } from "./types";
+import type { App, Chain, Issue, IssueKind, Related, Trace, TraceError } from "./types";
 import { UntracedCalls } from "./Untraced";
 
 export type TabId = "request" | "app" | "tree" | "issues" | "sql" | "cache" | "http" | "logs" | "error" | "profile";
@@ -351,6 +359,7 @@ function shortTab<T extends { id: string; label: string; detail?: unknown }>(tab
 /** The trace's tabs, in the order they show: each list's only when it has anything. */
 function traceTabs({
   trace,
+  errors,
   outcome,
   findings,
   calls,
@@ -363,6 +372,8 @@ function traceTabs({
   waterfall?: boolean;
   issueBySpan?: ReadonlyMap<string, IssueKind> | undefined;
   trace: Trace;
+  /** The errors it shows: the trace's, or its chain's down its calls (scopedErrors). */
+  errors: readonly TraceError[];
   outcome: ReactNode;
   findings: readonly Issue[];
   calls: Partial<Record<CallsTabId, SystemCalls>>;
@@ -384,11 +395,11 @@ function traceTabs({
     // Second, but open by default: the call tree is where a slow or failing request is explained.
     { id: "tree" as const, label: waterfall ? "Details" : "Call tree", icon: <ListTreeIcon /> },
     // What failed comes before what could be better.
-    ...tabIfAny(trace.errors, {
+    ...tabIfAny(errors, {
       id: "error" as const,
       label: "Error",
       icon: <BugIcon />,
-      count: trace.errors.length,
+      count: errors.length,
       tone: "error" as const,
     }),
     ...tabIfAny(findings, {
@@ -468,6 +479,11 @@ function tabsOfRow<T extends { id: string; label: string; icon?: unknown }>(
     return tabs.filter((tab) => ["tree", "error", "logs"].includes(tab.id) || (own && tab.id === "issues"));
   }
   return tabs.filter((tab) => tab.id !== "request" && tab.id !== "app");
+}
+
+/** A trace's errors and its chain's, under the row picked (scopedErrors); a trace alone, its own. */
+function errorsOf(trace: Trace, chain: TraceScope): readonly TraceError[] {
+  return chain.members.length > 0 ? scopedErrors(chain.members, chain.scope) : trace.errors;
 }
 
 /** The record's own row: its one Details tab is what it was, the request's or the page's. */
@@ -1233,6 +1249,7 @@ export function TraceView({
   const allTabs = traceTabs({
     waterfall,
     trace,
+    errors: errorsOf(trace, chain),
     outcome,
     findings: tabbed.findings,
     calls: tabbed.calls,
@@ -1469,7 +1486,7 @@ function TracePanes({
         <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={onShowRow} />
         {active === "error" ? (
           <ErrorView
-            errors={trace.errors}
+            errors={errorsOf(trace, chain)}
             issues={trace.issues.filter((issue) => issue.kind === "error")}
             links={links}
           />

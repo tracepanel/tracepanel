@@ -2,7 +2,7 @@
 // clock, and the part of it under some of its rows. The trace's tabs list and add up what is in it; the agent's
 // `GET /traces/{id}/logs?span=&only=` takes the same scope (crates/store-local/src/scope.rs), and so do the MCP tools.
 
-import type { ChainTrace, Issue, Log, Related, ScopeIssue, Span, Trace } from "../types";
+import type { ChainTrace, Issue, Log, Related, ScopeIssue, Span, Trace, TraceError } from "../types";
 import { serviceRuntime, traceRuntime } from "./runtime";
 import type { Windows } from "./slice";
 
@@ -266,6 +266,17 @@ export function scopedSpans(
         .map((span) => ({ ...span, traceId: member.id, app: member.app })),
     )
     .sort((a, b) => a.start - b.start);
+}
+
+/**
+ * The errors of a scope, down every trace of the chain: the whole chain's (a click whose call failed in the app it
+ * reached), or those raised in the spans under a row.
+ */
+export function scopedErrors(members: readonly Member[], scope: SpanScope | null): TraceError[] {
+  const parts = partsOf(members, scope);
+  return members.flatMap((member, index) =>
+    member.trace.errors.filter((error) => (error.span_id ? hasSpan(parts[index], error.span_id) : scope === null)),
+  );
 }
 
 /** An issue of a scope: one per fingerprint, with the trace and app it is first in, its apps, traces and times. */
