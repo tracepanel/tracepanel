@@ -2539,3 +2539,27 @@ body {
   color: var(--tp-text-3);
   font-size: var(--tp-size-xs);
 }
+
+/* The panel's bars, records' and calls' alike, nearly their track's height: a solid stroke of time to read at a
+   glance in the narrow column, not a hairline. */
+.panel-wf .tp-map-bar {
+  top: 1px;
+  bottom: 1px;
+  /* Rounded, not a capsule: a short one stays a small block, never a dot read as a status's. */
+  border-radius: 2px;
+}
+.panel-wf .tp-map-bar[data-past] {
+  border-radius: 2px 0 0 2px;
+}
+.panel-wf .tp-map-bar[data-piece] {
+  border-radius: 0;
+}
+.panel-wf .tp-map-bar[data-piece]:first-child {
+  border-radius: 2px 0 0 2px;
+}
+.panel-wf .tp-map-bar[data-piece]:last-child {
+  border-radius: 0 2px 2px 0;
+}
+.panel-wf .tp-map-bar[data-piece]:only-child {
+  border-radius: 2px;
+}
