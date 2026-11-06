@@ -58,7 +58,7 @@
   /* An app's own colour, one of six by its name (AppChip): no runtime's brand, the same app the same everywhere; none
      of a status's or a finding's (green, amber, red). */
   --tp-app-0: #7dd3fc;
-  --tp-app-1: #f9a8d4;
+  --tp-app-1: #b4c2d6;
   --tp-app-2: #c4b5fd;
   --tp-app-3: #5eead4;
   --tp-app-4: #a5b4fc;
@@ -202,7 +202,7 @@
   --tp-text-2: #3f3f46;
 
   --tp-app-0: #0369a1;
-  --tp-app-1: #be185d;
+  --tp-app-1: #4b5d78;
   --tp-app-2: #6d28d9;
   --tp-app-3: #0f766e;
   --tp-app-4: #4338ca;
