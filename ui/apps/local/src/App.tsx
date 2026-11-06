@@ -8,8 +8,8 @@ import {
   type ListChains,
   LogoMark,
   memoryFromParams,
+  OpenRecordMarks,
   parseSlice,
-  RecordMarks,
   RecordRow,
   RowFilter,
   RowKinds,
@@ -718,11 +718,15 @@ function OpenRecord({
   );
 }
 
-/** The open record's marks as its closed row says them, from what the list counted of its chain. */
+/** The open record's when, status and marks as its closed row says them, from what the list counted of its chain. */
 function recordMarksOf(record: TraceRow | undefined, chains: ListChains): ReactNode {
   if (!record) return undefined;
   return (
-    <RecordMarks trace={withChain(record.trace, chains.counts?.get(record.trace.id))} pending={recordPending(record)} />
+    <OpenRecordMarks
+      trace={withChain(record.trace, chains.counts?.get(record.trace.id))}
+      failed={record.failed}
+      pending={recordPending(record)}
+    />
   );
 }
 

@@ -307,6 +307,45 @@ export function RecordMarks({
   );
 }
 
+/** A record's status, as its call's row in the tree has it: none for a view, none while its numbers are on their way. */
+function RecordStatus({
+  trace,
+  failed,
+  pending,
+}: {
+  trace: TraceSummary;
+  failed: string | undefined;
+  pending: boolean;
+}) {
+  if (failed !== undefined) return <FailedStatus failure={failed} />;
+  return <StatusSlot status={trace.kind === "page" || pending ? null : trace.http_status} />;
+}
+
+/**
+ * The open record's first row says what its closed row did: when it was, its status, what it found (RecordMarks).
+ */
+export function OpenRecordMarks({
+  trace,
+  failed,
+  pending,
+}: {
+  trace: TraceSummary;
+  failed: string | undefined;
+  pending: boolean;
+}) {
+  return (
+    <>
+      <span className="tp-record-ago" title={dayTime(trace.start)}>
+        {ago(trace.start)}
+      </span>
+      <Beside value={true}>
+        <RecordStatus trace={trace} failed={failed} pending={pending} />
+      </Beside>
+      <RecordMarks trace={trace} pending={pending} />
+    </>
+  );
+}
+
 export function RecordRow({
   row: { trace, open, until, target: _target, opens: target, failed },
   fresh,
@@ -352,11 +391,7 @@ export function RecordRow({
           {/* Its status the pill its call's row has in the tree, and with the tree's numbers: none while they are on
               their way. A failure shows at once: its call may never send a trace. */}
           <Beside value={true}>
-            {failed === undefined ? (
-              <StatusSlot status={page || pending ? null : trace.http_status} />
-            ) : (
-              <FailedStatus failure={failed} />
-            )}
+            <RecordStatus trace={trace} failed={failed} pending={pending} />
           </Beside>
           <RecordMarks trace={trace} pending={pending} className="tp-map-chips" />
         </span>
