@@ -1,9 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 (2026-11-06)
+
+### Added
+
+- A call can name the trace that served it (`tracepanel.served_by`). A
+  page's own document now shows in its browser view's call tree.
+- A record's Error tab has the errors down its chain, and an error's row in
+  the call tree has its stack.
 
 ### Changed
 
+- The panel is one list: the tab's records newest first, the open one as its
+  call tree in place, the row picked with its details beside it.
 - Slow by what a trace is: a request from 1 s, a page's view from 2.5 s,
   an action from 1 s. Tasks and jobs never are. Lists show it in amber,
   and `has:slow` finds it.
