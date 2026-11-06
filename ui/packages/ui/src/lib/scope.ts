@@ -37,6 +37,8 @@ export interface SpanScope {
   hop?: { call: string; app: string; runtime: string | undefined } | undefined;
   /** A code or wait row's: its trace's stretches (µs since that trace started), what its profile is of. */
   at?: CodeStretch | undefined;
+  /** Its own stretch (µs), where its trace isn't one of the chain's (a task's run): its time, not the chain's. */
+  extent?: [number, number] | undefined;
   /** A log record's or an error's row: when it was (µs), and when its trace started, its row's "+210 ms". */
   moment?: { time: number; start: number } | undefined;
 }
@@ -224,7 +226,7 @@ export function scopeWindow(members: readonly Member[], scope: SpanScope | null)
     if (!(found && member)) return [];
     return [found.span ? extent(found.span) : [member.trace.start, member.trace.start + member.trace.duration]];
   });
-  if (windows.length === 0) return whole;
+  if (windows.length === 0) return scope?.extent ?? whole;
   return [Math.min(...windows.map((w) => w[0])), Math.max(...windows.map((w) => w[1]))];
 }
 

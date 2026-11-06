@@ -314,8 +314,14 @@ function scopeOfNode(node: Node, trace?: Trace): SpanScope | undefined {
       only: false,
     };
   }
-  if (node.type === "task" && node.kind === "call") {
-    return { targets: [node.run.id], label: appName(node) ?? node.run.name, only: false };
+  // A call's trace, or a task's run: the whole of that trace, its details and tabs that trace's.
+  if (node.type === "task") {
+    return {
+      targets: [node.run.id],
+      label: (node.kind === "call" ? appName(node) : undefined) ?? node.run.name,
+      only: false,
+      extent: [node.run.start, node.run.start + node.run.duration],
+    };
   }
   // A log record or an error: a row of its own, nothing under it: its details, not the record's.
   const start = trace?.start ?? 0;
