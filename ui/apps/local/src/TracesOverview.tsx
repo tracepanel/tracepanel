@@ -153,7 +153,10 @@ export function TracesOverview({
       </section>
     );
   }
-  const threshold = duration(overview.slow_threshold);
+  // An agent from before the rule by kind says one time for every trace.
+  const rule = overview.slow_rule === undefined ? `≥ ${duration(overview.slow_threshold)}` : overview.slow_rule;
+  const slowTerms =
+    overview.slow_rule === undefined ? { duration: `>${overview.slow_threshold / 1000}ms` } : { has: "slow" };
   return (
     <OverviewSection
       open={open}
@@ -173,13 +176,16 @@ export function TracesOverview({
           tone={s.errors ? "error" : undefined}
           onClick={s.errors ? () => onRefine({ has: "error" }) : undefined}
         />
-        <Stat
-          label={`Slow ≥ ${threshold}`}
-          value={String(s.slow)}
-          sub={percent(s.slow, s.calls)}
-          tone={s.slow ? "warn" : undefined}
-          onClick={s.slow ? () => onRefine({ duration: `>${overview.slow_threshold / 1000}ms` }) : undefined}
-        />
+        {rule === null ? null : (
+          <Stat
+            label={`Slow · ${rule}`}
+            value={String(s.slow)}
+            sub={percent(s.slow, s.calls)}
+            tone={s.slow ? "warn" : undefined}
+            // Slow for what each is (a request, a view, an action): the agent's own rule, not one time for all.
+            onClick={s.slow ? () => onRefine(slowTerms) : undefined}
+          />
+        )}
         {latencyTiles(s)}
       </StatGrid>
       {scope.filter === "" ? <KindChips kinds={overview.kinds} failures={true} onRefine={onRefine} /> : null}

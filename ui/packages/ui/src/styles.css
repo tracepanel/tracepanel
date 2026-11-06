@@ -3729,3 +3729,8 @@ div.tp-map-row[data-kind="code"] {
 .tp-map-slot {
   display: contents;
 }
+
+/* A record slow for what it is, as the agent counts it (slowFrom): its time amber, never red: slow is no failure. */
+.tp-map-time [data-slow] {
+  color: var(--tp-warn-strong);
+}

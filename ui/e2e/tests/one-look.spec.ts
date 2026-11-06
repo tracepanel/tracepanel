@@ -190,7 +190,7 @@ test("a group's summary has the tiles an entry point's Overview has, in the same
   await page.goto(`/#/group/endpoints/${encodeURIComponent("GET /api/posts")}`);
   const summary = page.getByRole("region", { name: "Summary" });
 
-  await expect(summary.getByText(/^(Calls|Errors|Slow ≥ 500 ms|p50|p95|p99|Avg queries)$/)).toHaveCount(7);
+  await expect(summary.getByText(/^(Calls|Errors|Slow · requests ≥ 1 s|p50|p95|p99|Avg queries)$/)).toHaveCount(7);
   await laidOut(page);
   // In one row at 1440 px, as the Overview's.
   const tops = await summary

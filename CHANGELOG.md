@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Slow by what a trace is: a request from 1 s, a page's view from 2.5 s,
+  an action from 1 s. Tasks and jobs never are. Lists show it in amber,
+  and `has:slow` finds it.
+
 ## 0.14.0 (2026-11-04)
 
 ### Fixed

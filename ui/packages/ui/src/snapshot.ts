@@ -82,7 +82,9 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
     series: [],
     histogram: [],
     // biome-ignore lint/style/useNamingConvention: wire format.
-    slow_threshold: 500_000,
+    slow_threshold: 1_000_000,
+    // biome-ignore lint/style/useNamingConvention: wire format.
+    slow_rule: null,
     kinds: [],
     slowest: [],
     failing: [],

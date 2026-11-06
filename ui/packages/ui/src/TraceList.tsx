@@ -3,7 +3,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
 import { Beside } from "./beside";
 import { indentOf } from "./CallCode";
 import { Badge } from "./components/ui/badge";
-import { ago, dayTime, duration } from "./format";
+import { ago, dayTime, duration, isSlow } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
 import { NoAnswer, Pending, Running } from "./LiveMarks";
 import { ISSUE_LABELS } from "./labels";
@@ -460,7 +460,8 @@ function RowTime({
   until: number | undefined;
 }) {
   if (open) return <Running start={trace.start} until={until} />;
-  return <span>{duration(trace.duration)}</span>;
+  // Slow for what it is, as the agent counts it: amber, not red (slow is no failure).
+  return <span data-slow={isSlow(trace) ? "" : undefined}>{duration(trace.duration)}</span>;
 }
 
 interface ChainRowsProps {

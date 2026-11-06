@@ -1413,7 +1413,7 @@ components:
     TracesOverview:
       type: object
       additionalProperties: false
-      required: [summary, series, histogram, slow_threshold, kinds, slowest, failing]
+      required: [summary, series, histogram, slow_threshold, slow_rule, kinds, slowest, failing]
       properties:
         summary:
           oneOf:
@@ -1422,6 +1422,9 @@ components:
         series: { type: array, items: { $ref: "#/components/schemas/SeriesBucket" } }
         histogram: { type: array, items: { $ref: "#/components/schemas/HistogramBucket" } }
         slow_threshold: { $ref: "#/components/schemas/Duration" }
+        slow_rule:
+          type: [string, "null"]
+          description: "What these traces are slow from, by kind (\"requests ≥ 1 s · views ≥ 2.5 s\"); null where none is held to a time (tasks, jobs)."
         kinds: { type: array, items: { $ref: "#/components/schemas/KindStats" } }
         slowest: { type: array, description: Highest p95 first., items: { $ref: "#/components/schemas/OperationStats" } }
         failing: { type: array, description: Most errors first., items: { $ref: "#/components/schemas/OperationStats" } }

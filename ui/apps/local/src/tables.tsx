@@ -15,6 +15,7 @@ import {
   IssueChip,
   type IssueKind,
   type IssueRow,
+  isSlow,
   issueTitle,
   type JobRow,
   KindBadge,
@@ -96,7 +97,14 @@ const TRACE_COLUMNS: DataColumn<TraceSummary>[] = [
     num: true,
     cell: (trace) => <TraceStatus trace={trace} />,
   },
-  { id: "duration", label: "Duration", width: 6.75, num: true, cell: (trace) => duration(trace.duration) },
+  {
+    id: "duration",
+    label: "Duration",
+    width: 6.75,
+    num: true,
+    // Slow for what it is, as the agent counts it (the overview's "slow"): amber, as the panel's record says it.
+    cell: (trace) => <span className={isSlow(trace) ? "text-warn" : undefined}>{duration(trace.duration)}</span>,
+  },
   { id: "queries", label: "Queries", width: 6.25, num: true, drop: 2, cell: (trace) => trace.queries },
   {
     id: "issues",

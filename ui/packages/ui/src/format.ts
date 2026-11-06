@@ -1,3 +1,30 @@
+/**
+ * From how long a trace is slow, as the agent holds it (stats::slow_from): a request from a second, a page's view from
+ * 2.5 s (where its largest paint stops being good), an action on a page from a second; tasks, jobs and WebSockets run
+ * as long as their work does: never. The overview's "slow" and a list's time in amber.
+ */
+export function slowFrom(kind: string, name: string): number | undefined {
+  if (kind === "task" || kind === "command" || kind === "websocket") return undefined;
+  // An action is named after its page: `/books › click "Save"`.
+  if (kind === "page") return name.includes(" › ") ? 1_000_000 : 2_500_000;
+  return 1_000_000;
+}
+
+/** The rule a trace is held to, as the overview says it ("requests ≥ 1 s"); none for a task, a job, a WebSocket. */
+export function slowRuleOf(kind: string, name: string): string | undefined {
+  const from = slowFrom(kind, name);
+  if (from === undefined) return undefined;
+  const what = kind !== "page" ? "requests" : name.includes(" › ") ? "actions" : "views";
+  // In whole and half seconds, as the agent says it ("1 s", "2.5 s").
+  return `${what} ≥ ${from / 1_000_000} s`;
+}
+
+/** A trace slow for what it is (slowFrom). */
+export function isSlow(trace: { kind: string; name: string; duration: number }): boolean {
+  const from = slowFrom(trace.kind, trace.name);
+  return from !== undefined && trace.duration >= from;
+}
+
 /** Microseconds to a short human duration: "0.4 ms", "142 ms", "1.8 s". */
 export function duration(us: number): string {
   const ms = us / 1000;

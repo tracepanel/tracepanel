@@ -2,8 +2,72 @@
 
 use super::*;
 
-/// Requests at least this slow count as slow in the overview.
-pub const SLOW_REQUEST_US: i64 = 500_000;
+/// A request (HTTP, GraphQL, RPC) is slow from this long.
+pub const SLOW_REQUEST_US: i64 = 1_000_000;
+/// A page's view (a load, a route change) is slow from this long: where a page's largest paint stops being good.
+pub const SLOW_VIEW_US: i64 = 2_500_000;
+/// What a user did on a page (a click, a submit) is slow from this long: an answer they wait for.
+pub const SLOW_ACTION_US: i64 = 1_000_000;
+
+/// From how long a trace is slow, by what it is: a request, a page's view, an action on a page. Tasks, jobs and
+/// WebSocket connections run as long as their work does: none (a task's wait in its queue is its issue instead).
+pub fn slow_from(kind: &str, name: &str) -> Option<i64> {
+    match kind {
+        "task" | "command" | "websocket" => None,
+        // An action is named after its page: `/books › click "Save"`.
+        "page" if name.contains(" › ") => Some(SLOW_ACTION_US),
+        "page" => Some(SLOW_VIEW_US),
+        _ => Some(SLOW_REQUEST_US),
+    }
+}
+
+/// `slow_from` in SQL, over the traces table's `kind` and `name`: `has:slow`.
+pub(crate) const SLOW_FROM_SQL: &str = "CASE WHEN kind IN ('task', 'command', 'websocket') THEN NULL \
+     WHEN kind = 'page' AND instr(name, ' › ') > 0 THEN 1000000 WHEN kind = 'page' THEN 2500000 ELSE 1000000 END";
+
+fn text<'a>(row: &'a serde_json::Map<String, Value>, key: &str) -> &'a str {
+    row.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+/// A trace slow for what it is (`slow_from`).
+pub(crate) fn is_slow(row: &serde_json::Map<String, Value>) -> bool {
+    slow_from(text(row, "kind"), text(row, "name")).is_some_and(|from| int(row, "duration") >= from)
+}
+
+/// The rule these traces are held to, said as the overview says it, and its lowest limit: none when no trace of
+/// them is held to one (tasks, jobs).
+pub fn slow_rule(rows: &[serde_json::Map<String, Value>]) -> (Option<String>, Option<i64>) {
+    let (mut views, mut actions, mut requests) = (false, false, false);
+    for row in rows {
+        match (
+            text(row, "kind"),
+            slow_from(text(row, "kind"), text(row, "name")),
+        ) {
+            (_, None) => {}
+            ("page", Some(SLOW_VIEW_US)) => views = true,
+            ("page", Some(_)) => actions = true,
+            _ => requests = true,
+        }
+    }
+    let mut parts = Vec::new();
+    if requests {
+        parts.push("requests ≥ 1 s");
+    }
+    if views {
+        parts.push("views ≥ 2.5 s");
+    }
+    if actions {
+        parts.push("actions ≥ 1 s");
+    }
+    let lowest = if requests || actions {
+        Some(SLOW_REQUEST_US.min(SLOW_ACTION_US))
+    } else if views {
+        Some(SLOW_VIEW_US)
+    } else {
+        None
+    };
+    ((!parts.is_empty()).then(|| parts.join(" · ")), lowest)
+}
 
 /// Python's round(x, 1): half to even on the exact value, as the shortest decimal shows it.
 pub(crate) fn round1(value: f64) -> f64 {
@@ -68,7 +132,7 @@ pub fn stats(
                 "end": low + width,
                 "calls": bucket.len(),
                 "errors": bucket.iter().filter(|row| is_error(row)).count(),
-                "slow": values.iter().filter(|value| **value >= SLOW_REQUEST_US).count(),
+                "slow": bucket.iter().filter(|row| is_slow(row)).count(),
                 "p50": if values.is_empty() { Value::Null } else { Value::from(pct(&values, 0.5)) },
                 "p95": if values.is_empty() { Value::Null } else { Value::from(pct(&values, 0.95)) },
             })
@@ -109,7 +173,7 @@ pub fn stats(
         "summary": {
             "calls": rows.len(),
             "errors": rows.iter().filter(|row| is_error(row)).count(),
-            "slow": durations.iter().filter(|value| **value >= SLOW_REQUEST_US).count(),
+            "slow": rows.iter().filter(|row| is_slow(row)).count(),
             "p50": pct(&durations, 0.5),
             "p75": pct(&durations, 0.75),
             "p90": pct(&durations, 0.9),
@@ -125,4 +189,97 @@ pub fn stats(
         "series": series,
         "histogram": histogram,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TRACES: [(&str, &str); 6] = [
+        ("http", "GET /books"),
+        ("page", "/books"),
+        ("page", "/books › click \"Save\""),
+        ("task", "shop.tasks.send"),
+        ("command", "import_books"),
+        ("websocket", "/ws/chat"),
+    ];
+
+    fn row(kind: &str, name: &str, duration: i64) -> serde_json::Map<String, Value> {
+        let Value::Object(row) =
+            serde_json::json!({"kind": kind, "name": name, "duration": duration})
+        else {
+            unreachable!()
+        };
+        row
+    }
+
+    #[test]
+    fn a_trace_is_slow_from_a_limit_of_its_kind() {
+        let limits: Vec<Option<i64>> = TRACES
+            .iter()
+            .map(|(kind, name)| slow_from(kind, name))
+            .collect();
+
+        assert_eq!(
+            limits,
+            [
+                Some(1_000_000),
+                Some(2_500_000),
+                Some(1_000_000),
+                None,
+                None,
+                None
+            ]
+        );
+
+        assert!(is_slow(&row("http", "GET /books", 1_000_000)));
+        assert!(!is_slow(&row("http", "GET /books", 999_999)));
+        assert!(!is_slow(&row("page", "/books", 2_000_000)));
+        assert!(!is_slow(&row("task", "shop.tasks.send", 60_000_000)));
+    }
+
+    #[test]
+    fn has_slow_holds_a_trace_to_the_same_limit_in_sql() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        let limits: Vec<Option<i64>> = TRACES
+            .iter()
+            .map(|(kind, name)| {
+                db.query_row(
+                    &format!("SELECT {SLOW_FROM_SQL} FROM (SELECT ?1 AS kind, ?2 AS name)"),
+                    [kind, name],
+                    |row| row.get(0),
+                )
+                .unwrap()
+            })
+            .collect();
+
+        let expected: Vec<Option<i64>> = TRACES
+            .iter()
+            .map(|(kind, name)| slow_from(kind, name))
+            .collect();
+        assert_eq!(limits, expected);
+    }
+
+    #[test]
+    fn the_overview_says_the_rule_its_traces_are_held_to() {
+        let pages = [
+            row("page", "/books", 0),
+            row("page", "/books › click \"Save\"", 0),
+        ];
+        let requests = [row("http", "GET /books", 0)];
+        let tasks = [row("task", "shop.tasks.send", 0)];
+
+        assert_eq!(
+            slow_rule(&pages),
+            (
+                Some("views ≥ 2.5 s · actions ≥ 1 s".into()),
+                Some(1_000_000)
+            )
+        );
+        assert_eq!(
+            slow_rule(&requests),
+            (Some("requests ≥ 1 s".into()), Some(1_000_000))
+        );
+        assert_eq!(slow_rule(&tasks), (None, None));
+    }
 }
