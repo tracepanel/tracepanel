@@ -44,3 +44,18 @@ test("a snapshot's tabs add up its whole chain: the service's queries two calls 
     "Profile of 4 traces",
   );
 });
+
+test("a snapshot leads nowhere it doesn't hold: its trace has no list's crumb, as the console's has", async ({
+  page,
+  context,
+}, info) => {
+  const view = await chain();
+  await page.goto(`/#/t/${view}?tab=tree`);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link")).not.toHaveCount(0);
+
+  const offline = await shared(page, context, info);
+  await expect(offline.getByRole("tab", { name: /^Call tree/ })).toBeVisible();
+
+  // No list of the console is in the file: its trace has no crumbs.
+  await expect(offline.getByRole("navigation", { name: "Breadcrumb" })).toHaveCount(0);
+});
