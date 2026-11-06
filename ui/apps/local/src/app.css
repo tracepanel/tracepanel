@@ -2059,6 +2059,8 @@ body {
 /* The details' tabs are the bar's second floor over them, in its colour (as the devtools' panes): not a header of
    their own beside the rows, which start under the bar. */
 .panel-wf-details .tp-tabs {
+  /* Over what scrolls under it, the switches laid over a tab's head too (Time and Memory, Your code). */
+  z-index: 2;
   margin-top: 0;
   padding-top: 0;
   background: var(--tp-chrome, var(--tp-bg));
