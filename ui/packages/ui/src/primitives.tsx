@@ -51,7 +51,7 @@ export function MethodBadge({
  */
 export function FailedStatus({ failure }: { failure?: string | undefined }) {
   return (
-    <span className="tp-status" data-tone="error" data-boxed="" title={failure ?? "No answer"}>
+    <span className="tp-status" data-tone="error" title={failure ?? "No answer"}>
       failed
     </span>
   );
@@ -62,7 +62,7 @@ export function StatusBadge({ status }: { status: number | null | undefined }) {
   const tone = status >= 500 ? "error" : status >= 400 ? "warn" : status >= 300 ? "info" : "ok";
   // Its tone's pill on white too, wherever a status shows: the console's lists, its call tree, the panel, the pill.
   return (
-    <span className="tp-status" data-tone={tone} data-boxed="">
+    <span className="tp-status" data-tone={tone}>
       {status}
     </span>
   );
