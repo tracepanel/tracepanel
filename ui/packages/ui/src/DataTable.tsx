@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import { useBeside } from "./beside";
 // A list of records as every list of the console shows them: a boxed table whose columns the reader drags wider,
 // hides, brings back from the columns menu and moves, kept per browser per list. The logs table is the same, with
 // rows of its own (LogTable).
@@ -55,7 +56,7 @@ export function DataTable<T>({
   table,
   columns: allColumns,
   stickyHeader = true,
-  density = "default",
+  density: asked = "default",
   boxed = true,
   children,
 }: {
@@ -69,6 +70,8 @@ export function DataTable<T>({
   boxed?: boolean | undefined;
   children: (rows: DataRows<T>) => ReactNode;
 }) {
+  // Beside the waterfall every table is dense: its rows a line, as the tree's are.
+  const density = useBeside() ? "dense" : asked;
   const hiddenHere = useContext(HiddenColumns);
   const columns = hiddenHere ? allColumns.filter((column) => !hiddenHere.has(column.id)) : allColumns;
   const { ref, columns: arranged, widths } = useColumnWidths(useColumns(table, columns), MENU_REM);

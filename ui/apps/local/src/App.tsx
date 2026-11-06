@@ -427,7 +427,8 @@ function PanelWaterfall({
           {listTools}
           {/* At the rows' end, by the details' line: what the panel records, and the details shown or not. */}
           <div className="panel-top-controls">
-            {toolbar}
+            {/* A row picked in the tree as it stands: nowhere was left, so no way back to offer. */}
+            {focusTrace ? null : toolbar}
             <PanelProfile />
             {/* Docked right, the details are under the rows: nothing to fold away. */}
             {empty || dock === "right" ? null : <DetailsToggle shown={detailsShown} onShown={showDetails} />}

@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useBeside } from "./beside";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuLabel,
@@ -43,6 +44,8 @@ type LogLike = Pick<Log, "time" | "level" | "logger" | "message" | "exception" |
 /** A column of the table: its spec, and what its cell shows for a record (`open`: its details are shown). */
 export interface LogColumn<R> extends ColumnSpec {
   cell: (log: R, open: boolean) => ReactNode;
+  /** Its cell's own classes beyond the row's: a dot's column centres it, with no room around. */
+  cellClass?: string | undefined;
 }
 
 const LEVEL_TEXT: Record<string, string> = {
@@ -194,6 +197,7 @@ function leading<R extends LogLike>(
           label: "",
           width: 2.75,
           fixed: true,
+          cellClass: "px-0 first:pl-0 text-center text-clip",
           cell: (log) => <LevelDot level={log.level} />,
         }
       : { id: "level", label: "Level", width: 7, fixed: true, cell: (log) => <LogLevel level={log.level} /> },
@@ -463,6 +467,7 @@ function LogRecordRow<R extends LogLike>({
   context: RowContext<R>;
   placed: Placed;
 }) {
+  const beside = useBeside();
   const { shown, open, onOpen, action } = context;
   const opened = open === rowKey;
   const onToggle = () => onOpen(opened ? null : rowKey);
@@ -479,7 +484,7 @@ function LogRecordRow<R extends LogLike>({
       onKeyDown={(event) => onRowKey(event, opened, onToggle)}
     >
       {shown.map((column) => (
-        <TableCell key={column.id} className={cn(bodyCell("compact"), "truncate")}>
+        <TableCell key={column.id} className={cn(bodyCell(beside ? "dense" : "compact"), "truncate", column.cellClass)}>
           {column.cell(log, opened)}
         </TableCell>
       ))}

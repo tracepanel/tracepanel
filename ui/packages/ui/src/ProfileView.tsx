@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useBeside } from "./beside";
 import { HiddenColumns } from "./DataTable";
 import { bytes, duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
@@ -479,20 +480,28 @@ const WHOLE_TRACE: MemoryWhat = { title: "Memory of the whole trace", traces: 1 
  */
 function MemoryHead({ memory, what = WHOLE_TRACE }: { memory: Memory; what?: MemoryWhat }) {
   const several = what.traces > 1;
+  // An app's memory beside the waterfall: its switch names the app, the details' title the row; the peak smaller.
+  const beside = useBeside() && what.app !== undefined;
   return (
     <div className="grid gap-0.5" data-memory-head="">
-      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-        {what.app}
-        {what.title}
-      </span>
-      <span className="text-2xl font-semibold tracking-tight tabular-nums">
+      {beside ? null : (
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          {what.app}
+          {what.title}
+        </span>
+      )}
+      <span
+        className={
+          beside ? "text-base font-semibold tabular-nums" : "text-2xl font-semibold tracking-tight tabular-nums"
+        }
+      >
         {bytes(memory.peak)}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           {several ? "peak of one of them, above where it started" : "peak, above where it started"}
         </span>
       </span>
       <span className="text-xs text-muted-foreground tabular-nums">{keptLine(memory)}</span>
-      <NoteLine text={sitesLine(memory, what)} />
+      {beside ? null : <NoteLine text={sitesLine(memory, what)} />}
       <MemoryNotes memory={memory} what={what} />
     </div>
   );
@@ -604,13 +613,19 @@ function Dropped({ whole, timed: filled }: { whole: Profile; timed: boolean }) {
  * thread ran other traces too), how long and why.
  */
 function ProfileHead({ whole, trace, scope }: { whole: Profile; trace: Trace; scope: Scope }) {
+  // Beside the waterfall the details' title names it and the strip times it: only what it adds.
+  const beside = useBeside();
   return (
     <div className="grid gap-0.5" data-split-head="">
-      <span className="text-xs text-muted-foreground">{scope.title}</span>
-      <SplitCover split={scope.split} about={about(whole)} />
-      <span className="text-xs text-muted-foreground" data-sampled="">
-        {scope.note ?? scope.split.sampled}
-      </span>
+      {beside ? null : (
+        <>
+          <span className="text-xs text-muted-foreground">{scope.title}</span>
+          <SplitCover split={scope.split} about={about(whole)} />
+          <span className="text-xs text-muted-foreground" data-sampled="">
+            {scope.note ?? scope.split.sampled}
+          </span>
+        </>
+      )}
       <Reason trace={trace} />
       <Dropped whole={whole} timed={timed(whole)} />
     </div>
@@ -1348,6 +1363,7 @@ function ChainProfiles({ profiles, chain }: { profiles: readonly ScopedProfile[]
         apps={{ apps: apps.map((app) => app.app), runtimes, counts, picked, onPick: setPicked }}
         summary={chainSummary(listed, memory ? memories : null)}
         end={measured ? <Segmented label="Profile of" segments={KINDS} value={kind} onChange={setKind} /> : null}
+        keepsEnd={true}
       />
       {memory ? (
         <ChainMemory apps={listed} memories={memories} tab={tab} onTab={setTab} />
@@ -1583,6 +1599,8 @@ function ProfileSumRow({ app, view }: { app: AppProfile; view: Scope | undefined
 /** One app's flame and functions, under its name: an app's own, never mixed with another's. */
 function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
   const frames = useFrames(view.profile);
+  // Beside the waterfall: one app at a time, its switch over it, the details' title naming the row.
+  const beside = useBeside();
   return (
     <section
       className="tp-app-profile"
@@ -1599,19 +1617,21 @@ function AppProfileSection({ app, view }: { app: AppProfile; view: Scope }) {
         kinds={null}
         split={view.split}
         head={
-          <div className="grid gap-0.5" data-split-head="">
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <AppChip name={app.app} runtime={appRuntime(app)} />
-              {view.title}
-            </span>
-            <SplitCover
-              split={view.split}
-              about={app.traces.some((each) => each.profile.estimated_from !== undefined) ? "≈ " : ""}
-            />
-            <span className="text-xs text-muted-foreground" data-sampled="">
-              {view.note ?? view.split.sampled}
-            </span>
-          </div>
+          beside ? null : (
+            <div className="grid gap-0.5" data-split-head="">
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <AppChip name={app.app} runtime={appRuntime(app)} />
+                {view.title}
+              </span>
+              <SplitCover
+                split={view.split}
+                about={app.traces.some((each) => each.profile.estimated_from !== undefined) ? "≈ " : ""}
+              />
+              <span className="text-xs text-muted-foreground" data-sampled="">
+                {view.note ?? view.split.sampled}
+              </span>
+            </div>
+          )
         }
         list={({ view: frames, palette, measure }) => (
           <Functions rows={functions(frames)} limit={15} palette={palette} time={measure} />

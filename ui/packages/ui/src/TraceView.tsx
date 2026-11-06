@@ -20,6 +20,7 @@ import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, u
 import { createPortal } from "react-dom";
 import { AppDetails, appSaidAnything } from "./AppDetails";
 import { appWarnings, warningsTone } from "./AppWarnings";
+import { Beside } from "./beside";
 import { CallMap } from "./CallMap";
 import { type ProfilesIn, rowKind, type TraceProfileOpener } from "./CallRowParts";
 import type { Explain, ExplainOf } from "./CallTable";
@@ -1244,30 +1245,32 @@ export function TraceView({
 
   if (waterfall) {
     return (
-      <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
-        <UntracedCalls value={chain.untraced}>
-          <WaterfallParts
-            traceId={trace.id}
-            head={
-              <>
-                {chain.scope && active === "tree" ? <RowTitle chain={chain} scope={chain.scope} /> : null}
-                <RowStrip
-                  trace={!chain.scope && active === "request" ? trace : active === "tree" ? rowStrip(chain) : null}
-                  related={chain.scope ? undefined : related}
-                  onSelect={openAt}
-                />
-              </>
-            }
-            rows={treePane}
-            tabs={tabs.length > 1 ? tabsBar : null}
-            panel={panel}
-            explore={exploreMenu}
-            hosts={{ details: detailsHost, actions: actionsHost }}
-            showRow={active === "tree"}
-            onSlot={setDetailsSlot}
-          />
-        </UntracedCalls>
-      </ViewScopes>
+      <Beside value={true}>
+        <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
+          <UntracedCalls value={chain.untraced}>
+            <WaterfallParts
+              traceId={trace.id}
+              head={
+                <>
+                  {chain.scope && active === "tree" ? <RowTitle chain={chain} scope={chain.scope} /> : null}
+                  <RowStrip
+                    trace={!chain.scope && active === "request" ? trace : active === "tree" ? rowStrip(chain) : null}
+                    related={chain.scope ? undefined : related}
+                    onSelect={openAt}
+                  />
+                </>
+              }
+              rows={treePane}
+              tabs={tabs.length > 1 ? tabsBar : null}
+              panel={panel}
+              explore={exploreMenu}
+              hosts={{ details: detailsHost, actions: actionsHost }}
+              showRow={active === "tree"}
+              onSlot={setDetailsSlot}
+            />
+          </UntracedCalls>
+        </ViewScopes>
+      </Beside>
     );
   }
 

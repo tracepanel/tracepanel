@@ -1,5 +1,6 @@
 import { AppWindowIcon, ArrowRightIcon, HourglassIcon } from "lucide-react";
 import { type ComponentType, createContext, type ReactNode, useContext, useLayoutEffect, useRef } from "react";
+import { useBeside } from "./beside";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { ISSUE_LABELS } from "./labels";
@@ -116,7 +117,9 @@ export function GroupStatus({ answer }: { answer: GroupAnswer }) {
 
 /** Database or cache alias, shown only when it is not "default". */
 export function AliasChip({ value }: { value: unknown }) {
-  if (value === undefined || value === null || value === "" || value === "default") return null;
+  const beside = useBeside();
+  // Beside the waterfall a query's details say its database: no chip for it on the row.
+  if (beside || value === undefined || value === null || value === "" || value === "default") return null;
   return (
     <span className="tp-alias" title={String(value)}>
       {String(value)}

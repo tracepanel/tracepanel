@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useBeside } from "./beside";
 import { cn } from "./lib/utils";
 
 export interface Segment<T extends string> {
@@ -48,6 +49,8 @@ export function Segmented<T extends string>({
   onChange: (id: T) => void;
   label: string;
 }) {
+  // Beside the waterfall, one segment is no switch: its content says what it is.
+  if (useBeside() && segments.length < 2) return null;
   return (
     <div className={SEGMENT_TRACK} role="tablist" aria-label={label}>
       {segments.map((segment) => (

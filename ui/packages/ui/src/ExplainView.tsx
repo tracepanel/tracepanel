@@ -1,5 +1,6 @@
 import { CircleCheckIcon, GaugeIcon, InfoIcon, ListTreeIcon, TriangleAlertIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useBeside } from "./beside";
 import { CopyBlock } from "./CopyButton";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
@@ -80,12 +81,16 @@ export function ExplainView({ load, vendor, analyzeRefusal }: ExplainViewProps) 
 /** Beside the buttons: the plan's database and connection, and whether it warns. */
 function PlanFacts({ plan }: { plan: ExplainPlan }) {
   const warnings = plan.lines.filter((line) => line.warning).length;
+  // Beside the waterfall the query's own fields, right above, say which database.
+  const beside = useBeside();
   return (
     <>
-      <span className="tp-plan-where text-sm text-muted-foreground">
-        {plan.vendor} · {plan.alias}
-        {plan.analyzed ? " · analyzed" : ""}
-      </span>
+      {beside ? null : (
+        <span className="tp-plan-where text-sm text-muted-foreground">
+          {plan.vendor} · {plan.alias}
+          {plan.analyzed ? " · analyzed" : ""}
+        </span>
+      )}
       {warnings ? (
         <Badge variant="outline" className="border-warn/30 bg-warn-soft text-warn">
           <TriangleAlertIcon />

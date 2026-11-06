@@ -4,6 +4,7 @@
 
 import { ArrowUpRightIcon, DatabaseIcon, FlameIcon, ScrollTextIcon, TriangleAlertIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+import { useBeside } from "./beside";
 import type { UnderSubject } from "./CallMap";
 import {
   DropdownMenu,
@@ -131,7 +132,10 @@ export function ScopeHeader({
   end,
   filters,
   filtersLabel,
+  keepsEnd = false,
 }: {
+  /** Beside the panel's waterfall its end alone stays (the Profile's Time and Memory): the details' title says the rest. */
+  keepsEnd?: boolean | undefined;
   scope: SpanScope | null;
   onScope: (scope: SpanScope | null) => void;
   apps: AppPicks;
@@ -141,6 +145,14 @@ export function ScopeHeader({
   filters?: ReactNode;
   filtersLabel?: string | undefined;
 }) {
+  const beside = useBeside();
+  if (beside) {
+    return keepsEnd && end ? (
+      <div className="tp-scope-head">
+        <SummaryLine summary={null} end={end} />
+      </div>
+    ) : null;
+  }
   return (
     <div className="tp-scope-head">
       <ScopeAndApps scope={scope} onScope={onScope} apps={apps} />

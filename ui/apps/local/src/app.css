@@ -2053,17 +2053,6 @@ body {
   padding-top: 0;
 }
 
-/* What the tree beside them already says goes from the details and its rows: one place for one thing. */
-.panel-wf .tp-map-row .tp-alias,
-.panel-wf-details .tp-alias,
-.panel-wf-details .tp-scope-row,
-.panel-wf-details .tp-scope-summary-text {
-  display: none;
-}
-/* A section's name on a pill track, where it has one section to switch to, is no switch. */
-.panel-wf-details section > .inline-flex:has(> :only-child) {
-  display: none;
-}
 .panel-wf-details .tp-scope-summary {
   justify-content: flex-end;
 }
@@ -2167,19 +2156,6 @@ body {
   }
 }
 
-/* Profile beside the tree: the bar and the flame say it. The row says the time; one app needs no table or name. */
-.panel-wf-details .tp-profile-sums-wrap:has(tbody > tr:only-child),
-.panel-wf-details
-  .tp-profile-sums-wrap:has(tbody > tr:only-child)
-  ~ .tp-app-profile
-  [data-split-head]
-  > span:first-child,
-.panel-wf-details [data-split-head] > span:first-child:not(.flex),
-.panel-wf-details [data-split-head] [data-cover],
-.panel-wf-details [data-split-head] [data-sampled] {
-  display: none;
-}
-
 /* The details' line runs up through the bar above, between its two parts. */
 .panel-wf:not([data-dock="right"]) .panel-wf-details-split {
   top: -2.5rem;
@@ -2259,15 +2235,6 @@ body {
   opacity: 0.7;
 }
 
-/* Queries and HTTP read alike: rows under the tabs. The tree beside them has the order; no column menu here.
-   Profile keeps its head for Time / Memory. */
-.panel-wf-details .tp-scope-head:not(:has([aria-label="Profile of"])) {
-  display: none;
-}
-.panel-wf-details button[aria-label="Columns"] {
-  display: none !important;
-}
-
 /* Rows stay clean: closed records' times and marks in columns, profiles on their tab. */
 .tp-record .tp-map-chips {
   flex: none;
@@ -2288,10 +2255,6 @@ body {
 }
 .tp-record-ago {
   margin-left: auto;
-}
-.panel-wf .tp-map-row :is(button, span):has(> svg.lucide-flame),
-.panel-wf .tp-map-row svg.lucide-flame {
-  display: none !important;
 }
 
 /* A narrow bar keeps its order: the field gives way first, then the words. */
@@ -2353,10 +2316,6 @@ body {
   }
 }
 
-/* Profile's tabs name the app: its section doesn't again, nor a lone table. */
-.panel-wf-details [data-one-app] [data-split-head] > span:first-child {
-  display: none !important;
-}
 /* The app's tabs and Your code / All frames share one row: the head left empty holds only the latter. */
 .tp-profile-one {
   position: relative;
@@ -2448,6 +2407,7 @@ body {
   left: 11.5rem;
 }
 
+/* Memory reads as Time does: the switches on one row, under them what it held, in a line. */
 /* One tight column for the word before a call's name. */
 .panel-wf-details td .tp-method,
 .panel-wf-details [role="row"] .tp-method {
@@ -2455,22 +2415,13 @@ body {
   width: 2.5rem;
   min-width: 2.5rem;
 }
-
-/* Memory reads as Time does: the switches on one row, under them what it held, in a line. */
 .panel-wf-details [data-one-app] :has(> [data-memory-head]) {
   align-items: flex-start;
 }
 .panel-wf-details [data-one-app] [data-memory-head] {
   padding-top: 2.5rem;
 }
-.panel-wf-details [data-one-app] [data-memory-head] > span:first-child,
-.panel-wf-details [data-one-app] [data-memory-head] > span:nth-child(4) {
-  display: none !important;
-}
-.panel-wf-details [data-one-app] [data-memory-head] > span:nth-child(2) {
-  font-size: 1rem !important;
-  line-height: 1.5rem !important;
-}
+
 /* A chosen switch looks chosen under the pointer too. */
 .panel-wf-details [role="tablist"] [role="tab"][aria-selected="true"]:hover {
   background: var(--background, #fff);
@@ -2493,35 +2444,9 @@ body {
   justify-content: flex-end;
 }
 
-/* The query's fields just above say which database. */
-.panel-wf-details .tp-plan-where {
-  display: none;
-}
-
-/* A row picked in the tree as it stands: nowhere was left, so no way back to offer. */
-.panel-top[data-focus] button[aria-label^="Back to"] {
-  display: none !important;
-}
-
 .panel-wf .tp-map-row .tp-map-chips > span[data-issue-kind],
 .panel-wf .tp-map-row .tp-map-chips > span:has(> .tp-request-chips) {
   cursor: pointer;
-}
-
-/* The details' tables beside the tree: compact rows, a level's dot in a cell of its own size. */
-/* Over the table's own utilities (a layer above this sheet's rules). */
-.panel-wf-details td {
-  height: 1.625rem !important;
-  padding-block: 0.125rem !important;
-}
-.panel-wf-details th {
-  height: 1.625rem !important;
-  font-size: var(--tp-size-2xs) !important;
-}
-.panel-wf-details td:has([data-level-dot]) {
-  padding-inline: 0 !important;
-  text-align: center;
-  text-overflow: clip !important;
 }
 
 /* With the details hidden, a record says more on its row (TraceList): the room is there. */
