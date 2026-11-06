@@ -361,32 +361,15 @@ export function RecordRow({
         type="button"
         className="tp-map-row tp-record"
         data-record={trace.id}
-        data-gone={gone ? "" : undefined}
-        title={gone ? GONE_NOTE : undefined}
+        {...recordState({ gone, live, current, fresh })}
         data-kind={trace.kind}
         // Its badge in its open tree's root colour: a view's is its code's, as the tree's first row has it.
-        data-category={trace.kind === "page" ? "code" : undefined}
-        data-live={live ? "" : undefined}
-        aria-current={live || current ? "true" : undefined}
-        data-new={fresh ? "" : undefined}
-        aria-disabled={gone || undefined}
+        data-category={page ? "code" : undefined}
         // Gone from the store, there is nothing to open: it stays a quiet line, its note on hover.
         onClick={() => (gone ? undefined : onSelect(target ?? trace.id))}
       >
         <span className="tp-map-name" style={indentOf(depth)}>
-          <span className="tp-map-lead">
-            <span className="tp-map-caret" data-toggle="">
-              <ChevronRightIcon />
-            </span>
-            <KindBadge
-              kind={page ? page.badge.toLowerCase() : spanKindLabel(trace.kind, {})}
-              muted={true}
-              className="tp-map-kind"
-            />
-            <span className="tp-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
-            {/* A record says when; a call under the open one is a row of its tree, as its stored tree will say it. */}
-            {live || depth > 0 ? null : <span className="tp-record-ago">{ago(trace.start)}</span>}
-          </span>
+          <RecordLead trace={trace} page={page} ago={!(live || depth > 0)} />
           {failed === undefined ? (
             <StatusSlot status={page ? null : trace.http_status} />
           ) : (
@@ -394,17 +377,73 @@ export function RecordRow({
           )}
           <RecordMarks trace={trace} pending={pending} className="tp-map-chips" />
         </span>
-        <span className="tp-map-track">
-          {live ? <span className="tp-map-bar tp-record-live" /> : null}
-          {share === undefined ? null : (
-            <span className="tp-map-bar tp-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
-          )}
-        </span>
+        <RecordTrack live={live} share={share} />
         <span className="tp-map-time">
           <RowTime trace={trace} open={open} until={until} />
         </span>
       </button>
     </KindWords.Provider>
+  );
+}
+
+/** A record row's state, as its attributes say it: gone, live, the open one, just arrived. */
+function recordState({
+  gone,
+  live,
+  current,
+  fresh,
+}: {
+  gone: boolean;
+  live: boolean;
+  current: boolean;
+  fresh: boolean;
+}) {
+  return {
+    "data-gone": gone ? "" : undefined,
+    title: gone ? GONE_NOTE : undefined,
+    "data-live": live ? "" : undefined,
+    "aria-current": live || current ? ("true" as const) : undefined,
+    "data-new": fresh ? "" : undefined,
+    "aria-disabled": gone || undefined,
+  };
+}
+
+/** A record's caret, badge and name, and when it was. */
+function RecordLead({
+  trace,
+  page,
+  ago: when,
+}: {
+  trace: TraceSummary;
+  page: ReturnType<typeof pageParts> | null;
+  /** A record says when; a call under the open one is a row of its tree, as its stored tree will say it. */
+  ago: boolean;
+}) {
+  return (
+    <span className="tp-map-lead">
+      <span className="tp-map-caret" data-toggle="">
+        <ChevronRightIcon />
+      </span>
+      <KindBadge
+        kind={page ? page.badge.toLowerCase() : spanKindLabel(trace.kind, {})}
+        muted={true}
+        className="tp-map-kind"
+      />
+      <span className="tp-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
+      {when ? <span className="tp-record-ago">{ago(trace.start)}</span> : null}
+    </span>
+  );
+}
+
+/** A record's bar: running while it runs, its time on the list's scale once closed. */
+function RecordTrack({ live, share }: { live: boolean; share: number | undefined }) {
+  return (
+    <span className="tp-map-track">
+      {live ? <span className="tp-map-bar tp-record-live" /> : null}
+      {share === undefined ? null : (
+        <span className="tp-map-bar tp-record-share" style={{ left: 0, width: `${Math.max(share * 100, 1)}%` }} />
+      )}
+    </span>
   );
 }
 

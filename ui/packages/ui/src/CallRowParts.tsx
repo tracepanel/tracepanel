@@ -312,10 +312,10 @@ function piecesOf(span: Span, owner: Trace, trace: Trace): Piece[] | null {
 }
 
 const PIECES = new WeakMap<Trace, WeakMap<Trace, Map<string, Piece[] | null>>>();
-const SORTED = new WeakMap<Trace, ReturnType<typeof segmentsOf>>();
+const SORTED = new WeakMap<Trace, Segments>();
 
 /** The owner's segments by their start, once: a span's are found from where it starts, not by a walk of all. */
-function sortedSegments(owner: Trace): ReturnType<typeof segmentsOf> {
+function sortedSegments(owner: Trace): Segments {
   let sorted = SORTED.get(owner);
   if (!sorted) {
     sorted = [...segmentsOf(owner)].sort((a, b) => a.from - b.from);
@@ -324,15 +324,10 @@ function sortedSegments(owner: Trace): ReturnType<typeof segmentsOf> {
   return sorted;
 }
 
-function cutPieces(span: Span, owner: Trace, trace: Trace): Piece[] | null {
-  // The span's own trace has its segments (a call's trace, under the page's): on this trace's clock from its start.
-  const total = Math.max(trace.duration, 1);
-  const offset = owner.start - trace.start;
-  const from = span.start - owner.start;
-  const to = from + span.duration;
-  const pieces: Piece[] = [];
-  const segments = sortedSegments(owner);
-  // The first segment that may reach into the span: a binary search on their starts, then on until past its end.
+type Segments = ReturnType<typeof segmentsOf>;
+
+/** The first segment that may reach into a stretch from `from` on: a binary search on where they end. */
+function firstReaching(segments: Segments, from: number): number {
   let low = 0;
   let high = segments.length;
   while (low < high) {
@@ -340,23 +335,48 @@ function cutPieces(span: Span, owner: Trace, trace: Trace): Piece[] | null {
     if ((segments[mid]?.to ?? 0) <= from) low = mid + 1;
     else high = mid;
   }
-  for (let at = low; at < segments.length; at++) {
+  return low;
+}
+
+/** A segment's part of the span, on the trace's clock in % of it; none where it doesn't reach into the span. */
+function pieceIn(
+  segment: Segments[number],
+  [from, to]: readonly [number, number],
+  { offset, total }: { offset: number; total: number },
+): Piece | null {
+  const start = Math.max(segment.from, from);
+  const end = Math.min(segment.to, to);
+  if (end <= start) return null;
+  const waiting = segment.share === WAITING;
+  return {
+    left: ((start + offset) / total) * 100,
+    width: ((end - start) / total) * 100,
+    category: waiting ? ("waiting" as Category) : segment.category,
+    waiting,
+  };
+}
+
+/** A piece added on: one with the one before it where they touch and are alike, or it is too thin to show. */
+function addPiece(pieces: Piece[], piece: Piece): void {
+  const last = pieces.at(-1);
+  const touches = last !== undefined && Math.abs(last.left + last.width - piece.left) < 0.05;
+  if (last && touches && (last.category === piece.category || piece.width < PIECE_MIN)) {
+    last.width = piece.left + piece.width - last.left;
+  } else pieces.push(piece);
+}
+
+function cutPieces(span: Span, owner: Trace, trace: Trace): Piece[] | null {
+  // The span's own trace has its segments (a call's trace, under the page's): on this trace's clock from its start.
+  const clock = { offset: owner.start - trace.start, total: Math.max(trace.duration, 1) };
+  const from = span.start - owner.start;
+  const stretch = [from, from + span.duration] as const;
+  const segments = sortedSegments(owner);
+  const pieces: Piece[] = [];
+  for (let at = firstReaching(segments, from); at < segments.length; at++) {
     const segment = segments[at];
-    if (!segment || segment.from >= to) break;
-    const start = Math.max(segment.from, from);
-    const end = Math.min(segment.to, to);
-    if (end <= start) continue;
-    const piece = {
-      left: ((start + offset) / total) * 100,
-      width: ((end - start) / total) * 100,
-      category: segment.share === WAITING ? ("waiting" as Category) : segment.category,
-      waiting: segment.share === WAITING,
-    };
-    const last = pieces.at(-1);
-    const touches = last && Math.abs(last.left + last.width - piece.left) < 0.05;
-    if (last && touches && (last.category === piece.category || piece.width < PIECE_MIN)) {
-      last.width = piece.left + piece.width - last.left;
-    } else pieces.push(piece);
+    if (!segment || segment.from >= stretch[1]) break;
+    const piece = pieceIn(segment, stretch, clock);
+    if (piece) addPiece(pieces, piece);
   }
   return pieces.length > 1 ? pieces : null;
 }

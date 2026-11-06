@@ -62,11 +62,8 @@ export interface TraceScreenProps {
   explore?: ((trace: Trace) => ExploreItem[]) | undefined;
   onTabChange?: TraceViewProps["onTabChange"];
   onTabShown?: TraceViewProps["onTabShown"];
-  variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
-  detailsHost?: HTMLElement | null | undefined;
-  actionsHost?: HTMLElement | null | undefined;
-  recordTime?: TraceViewProps["recordTime"];
-  recordMarks?: TraceViewProps["recordMarks"];
+  variant?: "full" | "compact" | "waterfall" | undefined;
+  beside?: TraceViewProps["beside"];
   initialTab?: TraceViewProps["initialTab"];
   preferredTab?: TraceViewProps["preferredTab"];
   actions?: TraceViewProps["actions"];
@@ -97,9 +94,6 @@ export interface TraceScreenProps {
   arriving?: boolean | undefined;
   /** Still running in the browser (lib/live): a view still open, a request the page waits for. Its pane says so. */
   running?: Running | undefined;
-  /** In the panel's waterfall: a trace of this one's chain to pick the row of; and what to do when it has none. */
-  focusTrace?: string | undefined;
-  onOutsideChain?: ((id: string) => void) | undefined;
   /** In the panel's waterfall, in place of the screens for a trace not here yet. */
   waiting?: ReactNode;
 }
@@ -145,7 +139,7 @@ function serviceName(trace: Trace): string {
 /** The service whose App tab the panel shows (its variants are compact and strip); none on a page. */
 function serviceOf(trace: Trace | null | undefined, variant: TraceScreenProps["variant"]): string | null {
   const service = trace?.attrs["service.name"];
-  const panel = variant === "compact" || variant === "strip" || variant === "waterfall";
+  const panel = variant === "compact" || variant === "waterfall";
   return panel && typeof service === "string" ? service : null;
 }
 

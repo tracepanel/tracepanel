@@ -399,31 +399,6 @@ function traceTabs({
   ];
 }
 
-/**
- * The panel's one toolbar row: the way back to the trace this one was opened from, the tabs, Explore and the host's
- * buttons. No status or duration here: the request list beside the trace shows them on the selected row.
- */
-function StripHeader({
-  lead,
-  tabs,
-  explore,
-  actions,
-}: {
-  lead: ReactNode;
-  tabs: ReactNode;
-  explore: ReactNode;
-  actions: ReactNode;
-}) {
-  return (
-    <header className="tp-trace-strip">
-      {lead}
-      {tabs}
-      {explore}
-      {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
-    </header>
-  );
-}
-
 /** Explore on its own before the host's buttons, or wherever the host's function puts it among them. */
 function placeExplore(
   explore: ReactNode,
@@ -541,6 +516,133 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
   );
 }
 
+/** What the view is at: its tab, the rows focused, what its parts remember, the tree's row, the details' slot. */
+function useViewState(
+  trace: Trace,
+  {
+    initialTab,
+    preferredTab,
+    app,
+    onTabShown,
+    initialMemory,
+    onMemoryChange,
+    initialSpan,
+  }: Pick<
+    TraceViewProps,
+    "initialTab" | "preferredTab" | "app" | "onTabShown" | "initialMemory" | "onMemoryChange" | "initialSpan"
+  >,
+) {
+  const [active, setActive] = useState<TabId>(() => firstTab(trace, initialTab, preferredTab, app));
+  useTabShown(active, onTabShown);
+  const spansNoun = useMemo(() => nounsOf(trace), [trace]);
+  const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
+  // What the view's parts remember (the row selected, the rows folded, the Profile tab's choices), for Back.
+  const memory = useViewMemory(initialMemory, onMemoryChange);
+  const [treeSpan, setTreeSpan] = useTreeSpan(memory, initialSpan);
+  const [detailsSlot, setDetailsSlot] = useState<HTMLElement | null>(null);
+  return { active, setActive, spansNoun, focus, setFocus, memory, treeSpan, setTreeSpan, detailsSlot, setDetailsSlot };
+}
+
+/**
+ * The trace's chain of calls, and what of it the tabs list (all of it, or what is under a row of the call tree):
+ * its findings, the row a trace picked from outside hangs under, each query's EXPLAIN by the app of its trace.
+ */
+function useTraceChain(
+  trace: Trace,
+  {
+    related,
+    loadChain,
+    initialUnder,
+    beside,
+    waterfall,
+    onExplain,
+    explainIn,
+    memory,
+    setTreeSpan,
+  }: Pick<TraceViewProps, "related" | "loadChain" | "initialUnder" | "onExplain" | "explainIn"> & {
+    beside: BesideParts;
+    waterfall: boolean;
+    memory: ReturnType<typeof useViewMemory>;
+    setTreeSpan: (span: string | undefined) => void;
+  },
+) {
+  const findings = useMemo(() => findingsOf(trace), [trace]);
+  const chain = useTraceScope(trace, related, loadChain, initialUnder);
+  const focusRow = useFocusRow(chain, beside.focusTrace, beside.onOutsideChain);
+  useUnderRow(chain.members, initialUnder, memory, setTreeSpan);
+  const tabbed = useChainTabs(trace, chain, findings, waterfall);
+  // A query's EXPLAIN by the app of its trace: the call tree's details and the DB tab alike.
+  const explainOf = useCallback<ExplainOf>(
+    (each) => (each.id === trace.id ? onExplain : explainIn?.(each.id, serviceName(each))),
+    [trace.id, onExplain, explainIn],
+  );
+  const explain = useMemo(() => chainExplain(chain, explainOf), [chain, explainOf]);
+  return { findings, chain, focusRow, tabbed, explainOf, explain };
+}
+
+/** A trace of its chain picked from outside, by the row it hangs under; a chain without it, given time, says so. */
+function useFocusRow(
+  chain: TraceScope,
+  focusTrace: string | undefined,
+  onOutsideChain: ((id: string) => void) | undefined,
+): string | undefined {
+  const member = chain.members.find((each) => each.id === focusTrace);
+  const inChain = member !== undefined;
+  // Given time to load, a chain without it doesn't have it.
+  useEffect(() => {
+    if (!focusTrace || inChain) return;
+    const timer = window.setTimeout(() => onOutsideChain?.(focusTrace), FOCUS_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [focusTrace, inChain, onOutsideChain]);
+  return focusTrace ? (member?.via ?? undefined) : undefined;
+}
+
+/**
+ * The tree's wiring beside the panel's details: where they go, what a pick tells the tabs, the record's time and
+ * marks on its root row, what each row's issues mark counts and opens.
+ */
+function waterfallWiring({
+  chain,
+  findings,
+  detailsSlot,
+  onPicked,
+  setActive,
+  recordTime,
+  recordMarks,
+}: {
+  chain: TraceScope;
+  findings: readonly Issue[];
+  detailsSlot: HTMLElement | null;
+  onPicked: (scope: SpanScope | null) => void;
+  setActive: (tab: TabId) => void;
+  recordTime: number | undefined;
+  recordMarks: ReactNode;
+}) {
+  return {
+    detailsHost: detailsSlot,
+    onPicked,
+    onProfileTab: () => setActive("profile"),
+    rootTime: recordTime,
+    rootMark: recordMarks ?? (
+      // In the closed records' columns (TraceList): the open one's marks under theirs.
+      <span className="tp-record-marks">
+        <span className="tp-record-errors" />
+        <span className="tp-record-issues">
+          <RecordIssues issues={chainFindings(chain, findings)} />
+        </span>
+        <span className="tp-record-queries" data-opens="sql">
+          <Queries count={scopedSpans(chain.members, null, callsOfTab("sql")).length} />
+        </span>
+      </span>
+    ),
+    issuesIn: (targets: readonly string[]) =>
+      scopedIssues(chain.members, { targets: [...targets], label: "", only: false }, chain.chainIssues).filter(
+        (issue) => issue.kind !== "error",
+      ).length,
+    onIssues: (tab: TabId = "issues") => setActive(tab),
+  };
+}
+
 /** The badge of what a scope picked, as its row in the tree has it: its first span's, or its trace's root's. */
 function scopeKind(members: readonly Member[], scope: SpanScope): string | null {
   const [target] = scope.targets;
@@ -628,25 +730,31 @@ function WaterfallParts({
   );
 }
 
-export interface TraceViewProps {
-  trace: Trace;
-  /**
-   * `compact` for the in-page panel: no title (the switcher shows it), one-line metrics, no overview timeline.
-   * `strip` for the panel docked at the bottom: tabs, Explore and `actions` in a single toolbar row.
-   */
-  variant?: "full" | "compact" | "strip" | "waterfall" | undefined;
-  /** `waterfall`: where the selected row's details and their tabs go, beside the rows. */
+/** The panel's parts for the record open in its waterfall. */
+export interface BesideParts {
   /** A trace of its chain to pick the row of, in the tree as it stands. */
   focusTrace?: string | undefined;
   /** The chain has loaded and hasn't `focusTrace`: it is no row of this tree. */
   onOutsideChain?: ((id: string) => void) | undefined;
+  /** Where the selected row's details and their tabs go, beside the rows. */
   detailsHost?: HTMLElement | null | undefined;
-  /** `waterfall`: where Explore goes, among the panel's buttons. */
+  /** Where Explore goes, among the panel's buttons. */
   actionsHost?: HTMLElement | null | undefined;
-  /** `waterfall`: the record's time as its closed row says it (the time the page waited): its root row's too. */
+  /** The record's time as its closed row says it (the time the page waited): its root row's too. */
   recordTime?: number | undefined;
-  /** `waterfall`: the record's marks as its closed row says them (TraceList's RecordMarks): its root row's too. */
+  /** The record's marks as its closed row says them (TraceList's RecordMarks): its root row's too. */
   recordMarks?: ReactNode;
+}
+
+export interface TraceViewProps {
+  trace: Trace;
+  /**
+   * `compact` for a narrow snapshot: no title, the tabs, Explore and `actions` in a single toolbar row.
+   * `waterfall` for the panel: the call tree as the record's rows, the picked row's details beside them (`beside`).
+   */
+  variant?: "full" | "compact" | "waterfall" | undefined;
+  /** `waterfall`: what the panel around it gives the record open. */
+  beside?: BesideParts | undefined;
   /** The Explore menu; hidden when empty. */
   explore?: readonly ExploreItem[] | undefined;
   /** Called when the reader picks another tab (its bar, its keys, a tile that leads to one). */
@@ -1067,47 +1175,27 @@ export function TraceView({
   initialMemory,
   onMemoryChange,
   variant = "full",
-  focusTrace,
-  onOutsideChain,
-  detailsHost,
-  actionsHost,
-  recordTime,
-  recordMarks,
+  beside = {},
   // The part of the time picked: the lanes and the call tree share it (SliceScope); whether apps profile.
   ...held
 }: TraceViewProps) {
   const waterfall = variant === "waterfall";
-  const compact = variant === "compact" || variant === "strip" || waterfall;
-  const findings = useMemo(() => findingsOf(trace), [trace]);
-  const [active, setActive] = useState<TabId>(() => firstTab(trace, initialTab, preferredTab, app));
-  useTabShown(active, onTabShown);
-  const spansNoun = useMemo(() => nounsOf(trace), [trace]);
-  const [focus, setFocus] = useState<ReadonlySet<string> | undefined>(undefined);
-  // What the view's parts remember (the row selected, the rows folded, the Profile tab's choices), for Back.
-  const memory = useViewMemory(initialMemory, onMemoryChange);
-  const [treeSpan, setTreeSpan] = useTreeSpan(memory, initialSpan);
-  const [detailsSlot, setDetailsSlot] = useState<HTMLElement | null>(null);
+  // A narrow snapshot's: the tabs carry the status and timings, one toolbar row, then the content.
+  const compact = variant === "compact" || waterfall;
 
-  // The trace's chain of calls, and what of it the tabs list: all of it, or what is under a row of the call tree.
-  const chain = useTraceScope(trace, related, loadChain, initialUnder);
-  const focusRow = focusTrace
-    ? (chain.members.find((member) => member.id === focusTrace)?.via ?? undefined)
-    : undefined;
-  const inChain = chain.members.some((member) => member.id === focusTrace);
-  // Given time to load, a chain without it doesn't have it.
-  useEffect(() => {
-    if (!focusTrace || inChain) return;
-    const timer = window.setTimeout(() => onOutsideChain?.(focusTrace), FOCUS_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [focusTrace, inChain, onOutsideChain]);
-  useUnderRow(chain.members, initialUnder, memory, setTreeSpan);
-  const tabbed = useChainTabs(trace, chain, findings, waterfall);
-  // A query's EXPLAIN by the app of its trace: the call tree's details and the DB tab alike.
-  const explainOf = useCallback<ExplainOf>(
-    (each) => (each.id === trace.id ? onExplain : explainIn?.(each.id, serviceName(each))),
-    [trace.id, onExplain, explainIn],
-  );
-  const explain = useMemo(() => chainExplain(chain, explainOf), [chain, explainOf]);
+  const { active, setActive, spansNoun, focus, setFocus, memory, treeSpan, setTreeSpan, detailsSlot, setDetailsSlot } =
+    useViewState(trace, { initialTab, preferredTab, app, onTabShown, initialMemory, onMemoryChange, initialSpan });
+  const { findings, chain, focusRow, tabbed, explainOf, explain } = useTraceChain(trace, {
+    related,
+    loadChain,
+    initialUnder,
+    beside,
+    waterfall,
+    onExplain,
+    explainIn,
+    memory,
+    setTreeSpan,
+  });
 
   const outcome = outcomeOf(trace);
   const allTabs = traceTabs({
@@ -1140,35 +1228,17 @@ export function TraceView({
     <TreePane
       open={waterfall ? true : active === "tree"}
       plain={waterfall}
-      detailsHost={waterfall ? detailsSlot : undefined}
-      onPicked={waterfall ? onPicked : undefined}
-      onProfileTab={waterfall ? () => setActive("profile") : undefined}
-      rootTime={waterfall ? recordTime : undefined}
-      rootMark={
-        waterfall
-          ? (recordMarks ?? (
-              // In the closed records' columns (TraceList): the open one's marks under theirs.
-              <span className="tp-record-marks">
-                <span className="tp-record-errors" />
-                <span className="tp-record-issues">
-                  <RecordIssues issues={chainFindings(chain, findings)} />
-                </span>
-                <span className="tp-record-queries" data-opens="sql">
-                  <Queries count={scopedSpans(chain.members, null, callsOfTab("sql")).length} />
-                </span>
-              </span>
-            ))
-          : undefined
-      }
-      issuesIn={
-        waterfall
-          ? (targets: readonly string[]) =>
-              scopedIssues(chain.members, { targets: [...targets], label: "", only: false }, chain.chainIssues).filter(
-                (issue) => issue.kind !== "error",
-              ).length
-          : undefined
-      }
-      onIssues={waterfall ? (tab = "issues") => setActive(tab) : undefined}
+      {...(waterfall
+        ? waterfallWiring({
+            chain,
+            findings,
+            detailsSlot,
+            onPicked,
+            setActive,
+            recordTime: beside.recordTime,
+            recordMarks: beside.recordMarks,
+          })
+        : {})}
       onSelect={openAt}
       trace={trace}
       issueBySpan={tabbed.issueBySpan}
@@ -1185,51 +1255,28 @@ export function TraceView({
     />
   );
   const panel = (
-    // The calls no trace answered: said on their rows in the call tree and the calls tabs alike.
-    <UntracedCalls value={chain.untraced}>
-      <div role="tabpanel" className="tp-tabpanel">
-        <RequestPane
-          open={active === "request"}
-          trace={trace}
-          related={related}
-          links={links}
-          panel={compact}
-          waterfall={waterfall}
-        />
-        <AppPane open={active === "app"} app={app} links={links} />
-        {waterfall ? null : treePane}
-        <IssuesPane
-          open={active === "issues"}
-          chain={chain}
-          findings={findings}
-          links={links}
-          onShowSpans={(ids) => {
-            setFocus(new Set(ids));
-            setTreeSpan(ids[0]);
-            setActive(tabOfSpans(trace, ids));
-          }}
-          onShowRow={showRow}
-          spansNoun={spansNoun}
-        />
-        <LogsPane open={active === "logs"} chain={chain} trace={trace} links={links} onShowRow={showRow} />
-        <SpanLists
-          active={active}
-          chain={chain}
-          issueBySpan={tabbed.issueBySpan}
-          focus={focus}
-          onExplain={explain}
-          links={links}
-        />
-        <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={showRow} />
-        {active === "error" ? (
-          <ErrorView
-            errors={trace.errors}
-            issues={trace.issues.filter((issue) => issue.kind === "error")}
-            links={links}
-          />
-        ) : null}
-      </div>
-    </UntracedCalls>
+    <TracePanes
+      active={active}
+      trace={trace}
+      related={related}
+      links={links}
+      waterfall={waterfall}
+      compact={compact}
+      app={app}
+      tree={waterfall ? null : treePane}
+      chain={chain}
+      findings={findings}
+      onShowSpans={(ids) => {
+        setFocus(new Set(ids));
+        setTreeSpan(ids[0]);
+        setActive(tabOfSpans(trace, ids));
+      }}
+      onShowRow={showRow}
+      spansNoun={spansNoun}
+      issueBySpan={tabbed.issueBySpan}
+      focus={focus}
+      explain={explain}
+    />
   );
   const exploreMenu = explore.length > 0 ? <ExploreMenu explore={explore} links={links} /> : null;
   const openTab = (id: TabId) => {
@@ -1245,36 +1292,17 @@ export function TraceView({
 
   if (waterfall) {
     return (
-      <Beside value={true}>
-        <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
-          <UntracedCalls value={chain.untraced}>
-            <WaterfallParts
-              traceId={trace.id}
-              head={
-                <>
-                  {chain.scope && active === "tree" ? <RowTitle chain={chain} scope={chain.scope} /> : null}
-                  <RowStrip
-                    trace={!chain.scope && active === "request" ? trace : active === "tree" ? rowStrip(chain) : null}
-                    related={chain.scope ? undefined : related}
-                    onSelect={openAt}
-                  />
-                </>
-              }
-              rows={treePane}
-              tabs={tabs.length > 1 ? tabsBar : null}
-              panel={panel}
-              explore={exploreMenu}
-              hosts={{ details: detailsHost, actions: actionsHost }}
-              showRow={active === "tree"}
-              onSlot={setDetailsSlot}
-            />
-          </UntracedCalls>
-        </ViewScopes>
-      </Beside>
+      <WaterfallView
+        at={{ trace, related, chain, active }}
+        scopes={{ memory, held }}
+        parts={{ rows: treePane, tabs: tabs.length > 1 ? tabsBar : null, panel, explore: exploreMenu }}
+        hosts={{ details: beside.detailsHost, actions: beside.actionsHost }}
+        onSelect={openAt}
+        onSlot={setDetailsSlot}
+      />
     );
   }
 
-  // In the panel (either dock) the tabs carry the status and timings: one toolbar row, then the content.
   if (compact) {
     return (
       <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
@@ -1294,5 +1322,164 @@ export function TraceView({
         {panel}
       </article>
     </ViewScopes>
+  );
+}
+
+/**
+ * The panel's one toolbar row: the way back to the trace this one was opened from, the tabs, Explore and the host's
+ * buttons. No status or duration here: the request list beside the trace shows them on the selected row.
+ */
+function StripHeader({
+  lead,
+  tabs,
+  explore,
+  actions,
+}: {
+  lead: ReactNode;
+  tabs: ReactNode;
+  explore: ReactNode;
+  actions: ReactNode;
+}) {
+  return (
+    <header className="tp-trace-strip">
+      {lead}
+      {tabs}
+      {explore}
+      {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
+    </header>
+  );
+}
+
+/** A trace's tabs' content, one pane each, the one picked shown: its request, app, tree, issues, logs, calls, profile, error. */
+function TracePanes({
+  active,
+  trace,
+  related,
+  links,
+  waterfall,
+  compact,
+  app,
+  tree,
+  chain,
+  findings,
+  onShowSpans,
+  onShowRow,
+  spansNoun,
+  issueBySpan,
+  focus,
+  explain,
+}: {
+  active: TabId;
+  trace: Trace;
+  related: Related | undefined;
+  links: TraceLinks | undefined;
+  waterfall: boolean;
+  compact: boolean;
+  app: TraceViewProps["app"];
+  tree: ReactNode;
+  chain: TraceScope;
+  findings: readonly Issue[];
+  onShowSpans: (ids: readonly string[]) => void;
+  onShowRow: (row: string) => void;
+  spansNoun: ReturnType<typeof nounsOf>;
+  issueBySpan: ReadonlyMap<string, IssueKind>;
+  focus: ReadonlySet<string> | undefined;
+  explain: ReturnType<typeof chainExplain>;
+}) {
+  return (
+    // The calls no trace answered: said on their rows in the call tree and the calls tabs alike.
+    <UntracedCalls value={chain.untraced}>
+      <div role="tabpanel" className="tp-tabpanel">
+        <RequestPane
+          open={active === "request"}
+          trace={trace}
+          related={related}
+          links={links}
+          panel={compact}
+          waterfall={waterfall}
+        />
+        <AppPane open={active === "app"} app={app} links={links} />
+        {tree}
+        <IssuesPane
+          open={active === "issues"}
+          chain={chain}
+          findings={findings}
+          links={links}
+          onShowSpans={onShowSpans}
+          onShowRow={onShowRow}
+          spansNoun={spansNoun}
+        />
+        <LogsPane open={active === "logs"} chain={chain} trace={trace} links={links} onShowRow={onShowRow} />
+        <SpanLists
+          active={active}
+          chain={chain}
+          issueBySpan={issueBySpan}
+          focus={focus}
+          onExplain={explain}
+          links={links}
+        />
+        <ProfileTab trace={trace} open={active === "profile"} chain={chain} onShowRow={onShowRow} />
+        {active === "error" ? (
+          <ErrorView
+            errors={trace.errors}
+            issues={trace.issues.filter((issue) => issue.kind === "error")}
+            links={links}
+          />
+        ) : null}
+      </div>
+    </UntracedCalls>
+  );
+}
+
+/**
+ * The panel's trace: its call tree in the rows, the picked row's title, time strip, tabs and content in the details
+ * beside them (Beside: what the rows already say is left out there).
+ */
+function WaterfallView({
+  at: { trace, related, chain, active },
+  scopes: { memory, held },
+  parts: { rows, tabs, panel, explore },
+  hosts,
+  onSelect,
+  onSlot,
+}: {
+  /** The trace, its links and chain, and the tab open. */
+  at: { trace: Trace; related: Related | undefined; chain: TraceScope; active: TabId };
+  /** What the view remembers, and the part of the time picked. */
+  scopes: {
+    memory: ReturnType<typeof useViewMemory>;
+    held: { initialSlice?: TraceViewProps["initialSlice"]; onSliceChange?: TraceViewProps["onSliceChange"] };
+  };
+  /** The rows, the tabs, the open tab's content, the Explore menu. */
+  parts: { rows: ReactNode; tabs: ReactNode; panel: ReactNode; explore: ReactNode };
+  hosts: { details: HTMLElement | null | undefined; actions: HTMLElement | null | undefined };
+  onSelect: (target: MarkTarget) => void;
+  onSlot: (slot: HTMLElement | null) => void;
+}) {
+  const strip = !chain.scope && active === "request" ? trace : active === "tree" ? rowStrip(chain) : null;
+  const title = chain.scope && active === "tree" ? <RowTitle chain={chain} scope={chain.scope} /> : null;
+  return (
+    <Beside value={true}>
+      <ViewScopes memory={memory} slice={held.initialSlice} onSlice={held.onSliceChange}>
+        <UntracedCalls value={chain.untraced}>
+          <WaterfallParts
+            traceId={trace.id}
+            head={
+              <>
+                {title}
+                <RowStrip trace={strip} related={chain.scope ? undefined : related} onSelect={onSelect} />
+              </>
+            }
+            rows={rows}
+            tabs={tabs}
+            panel={panel}
+            explore={explore}
+            hosts={hosts}
+            showRow={active === "tree"}
+            onSlot={onSlot}
+          />
+        </UntracedCalls>
+      </ViewScopes>
+    </Beside>
   );
 }

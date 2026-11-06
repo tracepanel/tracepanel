@@ -23,7 +23,7 @@ import {
   withChain,
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
@@ -316,54 +316,167 @@ function recordsOf(rows: readonly TraceRow[], selectedId: string | null): TraceR
   });
 }
 
-/** The panel as one waterfall: the tab's records as rows, the one selected open to its call tree, details beside them. */
-function PanelWaterfall({
-  route,
-  selectedId,
-  rows,
-  listRows,
-  stored,
-  chains,
-  toolbar,
-  actions,
-  dock,
-  empty,
-  sliced,
-  view,
-  clearing,
-  setClearing,
-  onMore,
-  listTools,
-}: {
-  /** Shows older rows of the tab's history, where there are more. */
-  onMore: (() => void) | undefined;
-  /** Follow and Clear, right after the filter: they act on the list it filters. */
-  listTools: ReactNode;
-  route: Route;
-  selectedId: string | null;
+/** The panel: the tab's records over their bars, the open one as its call tree, the picked row's details beside. */
+/** The tab's rows as the panel lists them: every row, the records, which are stored, their chains' numbers. */
+interface PanelTab {
   rows: readonly TraceRow[];
   listRows: readonly TraceRow[];
   stored: ReadonlySet<string>;
   chains: ListChains;
-  toolbar: ReactNode;
-  actions: (explore: ReactNode) => ReactNode;
+  /** Shows older rows of the tab's history, where there are more. */
+  onMore: (() => void) | undefined;
+}
+
+/** Where the panel is and what it shows: its route, the trace picked, its dock, and what it remembers of the view. */
+interface PanelPlace {
+  route: Route;
+  selectedId: string | null;
   dock: Dock;
   empty: boolean;
   sliced: ReturnType<typeof usePanelSlice>;
   view: ReturnType<typeof usePanelView>;
-  clearing: boolean;
-  setClearing: (open: boolean) => void;
+}
+
+/** The bar's parts from the panel's app: Follow and Clear, the way back, the actions with Explore's slot. */
+interface PanelBar {
+  /** Follow and Clear, right after the filter: they act on the list it filters. */
+  listTools: ReactNode;
+  toolbar: ReactNode;
+  actions: (explore: ReactNode) => ReactNode;
+}
+
+function PanelWaterfall({
+  tab,
+  place,
+  bar,
+  clear,
+}: {
+  tab: PanelTab;
+  place: PanelPlace;
+  bar: PanelBar;
+  clear: { open: boolean; onOpenChange: (open: boolean) => void };
 }) {
-  const [detailsHost, setDetailsHost] = useState<HTMLElement | null>(null);
-  const [actionsHost, setActionsHost] = useState<HTMLElement | null>(null);
+  const { rows, stored, chains, onMore } = tab;
+  const { route, dock, empty, sliced, view } = place;
+  const { list, anchor, hosts, setHosts, layout, filter, setFilter, kinds, setKinds, open, shown } = usePanelState(
+    tab,
+    place,
+  );
+  return (
+    <div className="panel" data-v2="" style={layout.style}>
+      <PanelTop
+        dock={dock}
+        layout={layout}
+        filter={<PanelFilter value={filter} onChange={setFilter} />}
+        kinds={<KindsMenu kinds={kinds} offered={shown.offered} onKinds={setKinds} />}
+        listTools={bar.listTools}
+        toolbar={open.focusTrace ? null : bar.toolbar}
+        actions={bar.actions(<span ref={setHosts.actions} className="panel-explore-slot" />)}
+      />
+      <div className="panel-wf" data-dock={dock} data-no-details={layout.noDetails}>
+        <div className="panel-wf-tree">
+          {empty ? null : <MapSplitter {...layout.map.handle} />}
+          <section
+            className="panel-wf-rows"
+            aria-label="Pages and requests in this browser tab"
+            ref={list}
+            // Closed details open again with a row picked (not with a fold opened or closed).
+            onClickCapture={(event) => layout.onRowClick(event.target as Element)}
+          >
+            {empty ? (
+              <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
+            ) : (
+              <RowFilter.Provider value={filter}>
+                <RowKinds.Provider value={kinds}>
+                  <TraceList
+                    compact={true}
+                    rows={shown.records}
+                    onMore={shown.letGo ? undefined : onMore}
+                    selectedId={open.rootId}
+                    chains={chains}
+                    onSelect={(id) => {
+                      anchor(id);
+                      go({ name: "trace", id });
+                    }}
+                    openContent={
+                      <OpenRecord
+                        route={route}
+                        open={open}
+                        shown={shown}
+                        rows={rows}
+                        stored={stored}
+                        chains={chains}
+                        hosts={hosts}
+                        sliced={sliced}
+                        view={view}
+                      />
+                    }
+                  />
+                  <ListNotes
+                    letGo={shown.letGo}
+                    narrowedTo={shown.nothingElse ? filter.trim() : null}
+                    onShowAll={() => {
+                      setFilter("");
+                      setKinds([]);
+                    }}
+                  />
+                </RowKinds.Provider>
+              </RowFilter.Provider>
+            )}
+          </section>
+        </div>
+        <DetailsSplitter {...layout.details.handle} />
+        <aside ref={setHosts.details} className="panel-wf-details" aria-label="Details" />
+      </div>
+      <ClearDialog
+        mode="panel"
+        open={clear.open}
+        onOpenChange={clear.onOpenChange}
+        source={source}
+        onCleared={(permanent) => {
+          tellWidget("tracepanel:clear", { all: permanent });
+          go({ name: "home" });
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * The panel's state: its list and where a click anchors it, its hosts, its split, its filter and kinds, the record
+ * open and the records shown.
+ */
+function usePanelState(tab: PanelTab, place: PanelPlace) {
+  const [hosts, setHosts] = useHosts();
   const list = useRef<HTMLElement>(null);
-  // The record opened stays under the click: the one closed above it would move it up, the list scrolls it back.
-  // Opened another way (Follow, a link), the list scrolls only to bring it into view.
+  const anchor = useClickAnchor(list, place.selectedId);
+  const layout = usePanelLayout(place.dock, place.empty);
+  const [filter, setFilter] = useState("");
+  const [kinds, setKinds] = useShownKinds();
+  const open = useOpenRecord(tab.listRows, place.selectedId);
+  const shown = useShownRecords({ ...tab, rootId: open.rootId, filter, kinds });
+  return { list, anchor, hosts, setHosts, layout, filter, setFilter, kinds, setKinds, open, shown };
+}
+
+/** Where the open record's details and its Explore go: the panel's details pane, and a slot among its buttons. */
+function useHosts(): [
+  { details: HTMLElement | null; actions: HTMLElement | null },
+  { details: (host: HTMLElement | null) => void; actions: (host: HTMLElement | null) => void },
+] {
+  const [details, setDetails] = useState<HTMLElement | null>(null);
+  const [actions, setActions] = useState<HTMLElement | null>(null);
+  return [
+    { details, actions },
+    { details: setDetails, actions: setActions },
+  ];
+}
+
+/**
+ * The record opened stays under the click: the one closed above it would move it up, the list scrolls it back.
+ * Opened another way (Follow, a link), the list scrolls only to bring it into view. Returns what a click calls first.
+ */
+function useClickAnchor(list: RefObject<HTMLElement | null>, selectedId: string | null): (id: string) => void {
   const clicked = useRef<number | null>(null);
-  const rowTop = (id: string) => {
-    const row = list.current?.querySelector(`[data-record="${CSS.escape(id)}"]`);
-    return row ? row.getBoundingClientRect().top : null;
-  };
   // biome-ignore lint/correctness/useExhaustiveDependencies: the record opened, not each thing it draws.
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -375,199 +488,242 @@ function PanelWaterfall({
     });
     return () => cancelAnimationFrame(frame);
   }, [selectedId]);
-  const trace = route.name === "trace" ? route : null;
+  return (id) => {
+    const row = list.current?.querySelector(`[data-record="${CSS.escape(id)}"]`);
+    clicked.current = row ? row.getBoundingClientRect().top : null;
+  };
+}
+
+/**
+ * The panel's split: the details shown or folded away (docked right they are under the rows, never folded), the
+ * details' and the bars' widths (the bars wider with the details hidden: the rows have the panel).
+ */
+function usePanelLayout(dock: Dock, empty: boolean) {
   const details = useDetailsSplit(dock);
   const [detailsShown, showDetails] = useDetailsShown();
-  // The bars' width, its own with the details hidden: wider there, as the rows have the panel.
   const narrowMap = useMapWidth(MAP);
   const wideMap = useMapWidth(MAP_WIDE);
   const map = detailsShown || dock === "right" ? narrowMap : wideMap;
-  const [filter, setFilter] = useState("");
-  const [kinds, setKinds] = useShownKinds();
-  // The waterfall stays put: a link to a trace in the open record's chain picks its row there. Only a trace outside
-  // the chain opens on its own.
+  const folded = !detailsShown && dock !== "right";
+  return {
+    details,
+    map,
+    detailsShown,
+    showDetails,
+    style: { ...details.style, ...map.style },
+    noDetails: empty || folded ? "" : undefined,
+    // Docked right, the details are under the rows: nothing to fold away.
+    toggle: empty || dock === "right" ? null : <DetailsToggle shown={detailsShown} onShown={showDetails} />,
+    onRowClick: (target: Element) => {
+      if (!detailsShown && target.closest(".tp-map-row") && !target.closest("[data-toggle]")) showDetails(true);
+    },
+  };
+}
+
+/**
+ * The record open, and the trace picked in its tree: the waterfall stays put, so a link to a trace in the open
+ * record's chain picks its row there; only a trace outside the chain opens on its own.
+ */
+function useOpenRecord(listRows: readonly TraceRow[], selectedId: string | null) {
   const shownRecord = useRef<string | null>(null);
   const [outside, setOutside] = useState<string | null>(null);
   const isRecord = listRows.some((row) => row.trace.id === selectedId);
   if (isRecord) shownRecord.current = selectedId;
   const rootId = isRecord || outside === selectedId ? selectedId : (shownRecord.current ?? selectedId);
   const focusTrace = rootId !== selectedId ? (selectedId ?? undefined) : undefined;
-  // The kinds shown keep the records that have them: a record with none of them goes, the open one too. An agent
-  // that doesn't say what ran (an older one) keeps every record, and offers every kind.
+  return { rootId, focusTrace, setOutside };
+}
+
+/**
+ * The records the list shows: those the store keeps (the ones it let go say so in one line, nothing older asked
+ * for), the filter's and the kinds' (an agent that doesn't say what ran, an older one, keeps every record and offers
+ * every kind); the open one always, and how the list says it holds nothing else.
+ */
+function useShownRecords({
+  listRows,
+  rows,
+  chains,
+  rootId,
+  filter,
+  kinds,
+}: {
+  listRows: readonly TraceRow[];
+  rows: readonly TraceRow[];
+  chains: ListChains;
+  rootId: string | null;
+  filter: string;
+  kinds: readonly string[];
+}) {
   const ranKinds = [...(chains.counts?.values() ?? [])].map((each) => each.span_kinds);
   const knowsKinds = ranKinds.some((each) => each !== undefined);
-  // Records the local store let go are no rows to open: one line says so at the list's end, and nothing older is
-  // asked for (older ones are gone too).
   const kept = listRows.filter((row) => row.trace.id === rootId || !isGone(row, chains.counts));
-  const letGo = kept.length < listRows.length;
   const records = filteredRecords(kept, filter, rootId).filter(
     (row) => !knowsKinds || showsKinds(chains.counts?.get(row.trace.id)?.span_kinds, kinds),
   );
   const opened = rows.find((row) => row.trace.id === rootId);
-  // As the list has it: whether its calls' numbers are still on their way.
-  const record = listRows.find((row) => row.trace.id === rootId) ?? opened;
-  // Narrowed to nothing but the open record: said so, with the way back, not a list that silently shrank.
   const narrowed = filter.trim() !== "" || kinds.length > 0;
-  const nothingElse = narrowed && records.every((row) => row.trace.id === rootId);
+  return {
+    records,
+    letGo: kept.length < listRows.length,
+    offered: knowsKinds ? offeredKinds(ranKinds, kinds) : FILTERS,
+    opened,
+    // As the list has it: whether its calls' numbers are still on their way.
+    record: listRows.find((row) => row.trace.id === rootId) ?? opened,
+    // Narrowed to nothing but the open record: said so, with the way back, not a list that silently shrank.
+    nothingElse: narrowed && records.every((row) => row.trace.id === rootId),
+  };
+}
+
+/** The panel's bar: its logo, the filter and the kinds shown, the list's tools, its own controls, the actions. */
+function PanelTop({
+  dock,
+  layout,
+  filter,
+  kinds,
+  listTools,
+  toolbar,
+  actions,
+}: {
+  dock: Dock;
+  layout: ReturnType<typeof usePanelLayout>;
+  filter: ReactNode;
+  kinds: ReactNode;
+  listTools: ReactNode;
+  toolbar: ReactNode;
+  actions: ReactNode;
+}) {
   return (
-    <div className="panel" data-v2="" style={{ ...details.style, ...map.style }}>
-      <header
-        className="panel-top"
-        data-dock={dock}
-        data-focus={focusTrace ? "" : undefined}
-        data-no-details={empty || (!detailsShown && dock !== "right") ? "" : undefined}
-      >
-        {/* Its own item: a narrow bar puts it on the actions' line, the filter's under it. */}
-        <span className="panel-top-logo">
-          <LogoMark className="size-5" />
-        </span>
-        <div className="panel-top-rows">
-          <PanelFilter value={filter} onChange={setFilter} />
-          <KindsMenu kinds={kinds} offered={knowsKinds ? offeredKinds(ranKinds, kinds) : FILTERS} onKinds={setKinds} />
-          {listTools}
-          {/* At the rows' end, by the details' line: what the panel records, and the details shown or not. */}
-          <div className="panel-top-controls">
-            {/* A row picked in the tree as it stands: nowhere was left, so no way back to offer. */}
-            {focusTrace ? null : toolbar}
-            <PanelProfile />
-            {/* Docked right, the details are under the rows: nothing to fold away. */}
-            {empty || dock === "right" ? null : <DetailsToggle shown={detailsShown} onShown={showDetails} />}
-          </div>
+    <header className="panel-top" data-dock={dock} data-no-details={layout.noDetails}>
+      {/* Its own item: a narrow bar puts it on the actions' line, the filter's under it. */}
+      <span className="panel-top-logo">
+        <LogoMark className="size-5" />
+      </span>
+      <div className="panel-top-rows">
+        {filter}
+        {kinds}
+        {listTools}
+        {/* At the rows' end, by the details' line: what the panel records, and the details shown or not. */}
+        <div className="panel-top-controls">
+          {toolbar}
+          <PanelProfile />
+          {layout.toggle}
         </div>
-        <div className="bar-actions">{actions(<span ref={setActionsHost} className="panel-explore-slot" />)}</div>
-      </header>
-      <div
-        className="panel-wf"
-        data-dock={dock}
-        data-no-details={empty || (!detailsShown && dock !== "right") ? "" : undefined}
-      >
-        <div className="panel-wf-tree">
-          {empty ? null : <MapSplitter {...map.handle} />}
-          <section
-            className="panel-wf-rows"
-            aria-label="Pages and requests in this browser tab"
-            ref={list}
-            // Closed details open again with a row picked (not with a fold opened or closed).
-            onClickCapture={(event) => {
-              const target = event.target as Element;
-              if (!detailsShown && target.closest(".tp-map-row") && !target.closest("[data-toggle]")) showDetails(true);
-            }}
-          >
-            {empty ? (
-              <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
-            ) : (
-              <RowFilter.Provider value={filter}>
-                <RowKinds.Provider value={kinds}>
-                  <TraceList
-                    compact={true}
-                    rows={records}
-                    onMore={letGo ? undefined : onMore}
-                    selectedId={rootId}
-                    chains={chains}
-                    onSelect={(id) => {
-                      clicked.current = rowTop(id);
-                      go({ name: "trace", id });
-                    }}
-                    openContent={
-                      rootId ? (
-                        <TraceScreen
-                          key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
-                          id={rootId}
-                          focusTrace={focusTrace}
-                          onOutsideChain={setOutside}
-                          source={source}
-                          arriving={arrivingIn(rows, stored, rootId)}
-                          running={runningIn(rows, rootId)}
-                          variant="waterfall"
-                          recordTime={opened?.trace.duration}
-                          recordMarks={
-                            record ? (
-                              <RecordMarks
-                                trace={withChain(record.trace, chains.counts?.get(record.trace.id))}
-                                pending={recordPending(record)}
-                              />
-                            ) : undefined
-                          }
-                          waiting={
-                            opened ? (
-                              <>
-                                <RecordRow
-                                  row={opened}
-                                  fresh={false}
-                                  onSelect={() => undefined}
-                                  live={Boolean(opened.open)}
-                                  current={true}
-                                />
-                                {callsUnder(rows, opened).map((call) => (
-                                  <RecordRow
-                                    key={call.key ?? call.trace.id}
-                                    row={call}
-                                    fresh={false}
-                                    depth={1}
-                                    live={Boolean(call.open)}
-                                    onSelect={(id) => go({ name: "trace", id })}
-                                  />
-                                ))}
-                                {detailsHost ? createPortal(<TraceLoading variant="waterfall" />, detailsHost) : null}
-                              </>
-                            ) : undefined
-                          }
-                          detailsHost={detailsHost}
-                          actionsHost={actionsHost}
-                          initialTab={trace ? tabOf(trace.tab) : undefined}
-                          initialUnder={trace?.under}
-                          initialSlice={sliced.slice}
-                          onSliceChange={sliced.onChange}
-                          onTabShown={view.onTabShown}
-                          initialMemory={view.initialMemory}
-                          onMemoryChange={view.onMemoryChange}
-                          links={PANEL_LINKS}
-                          explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
-                        />
-                      ) : null
-                    }
-                  />
-                  {letGo ? (
-                    <p className="panel-let-go">
-                      Older requests of this tab are no longer in the local store: newer traces took their place.
-                    </p>
-                  ) : null}
-                  {nothingElse ? (
-                    <p className="panel-no-match">
-                      {filter.trim()
-                        ? `No other requests match “${filter.trim()}”.`
-                        : "No other requests have these kinds."}
-                      <button
-                        type="button"
-                        className="tp-link-button"
-                        onClick={() => {
-                          setFilter("");
-                          setKinds([]);
-                        }}
-                      >
-                        Show all
-                      </button>
-                    </p>
-                  ) : null}
-                </RowKinds.Provider>
-              </RowFilter.Provider>
-            )}
-          </section>
-        </div>
-        <DetailsSplitter {...details.handle} />
-        <aside ref={setDetailsHost} className="panel-wf-details" aria-label="Details" />
       </div>
-      <ClearDialog
-        mode="panel"
-        open={clearing}
-        onOpenChange={setClearing}
-        source={source}
-        onCleared={(permanent) => {
-          tellWidget("tracepanel:clear", { all: permanent });
-          go({ name: "home" });
-        }}
-      />
-    </div>
+      <div className="bar-actions">{actions}</div>
+    </header>
+  );
+}
+
+/** The open record, in its place in the list: its trace's waterfall, its own row and calls until that loads. */
+function OpenRecord({
+  route,
+  open,
+  shown,
+  rows,
+  stored,
+  chains,
+  hosts,
+  sliced,
+  view,
+}: {
+  route: Route;
+  open: ReturnType<typeof useOpenRecord>;
+  shown: ReturnType<typeof useShownRecords>;
+  rows: readonly TraceRow[];
+  stored: ReadonlySet<string>;
+  chains: ListChains;
+  hosts: { details: HTMLElement | null; actions: HTMLElement | null };
+  sliced: ReturnType<typeof usePanelSlice>;
+  view: ReturnType<typeof usePanelView>;
+}) {
+  const { rootId } = open;
+  if (!rootId) return null;
+  const trace = route.name === "trace" ? route : null;
+  return (
+    <TraceScreen
+      key={trace ? `${trace.tab ?? ""}|${trace.under ?? ""}` : ""}
+      id={rootId}
+      source={source}
+      arriving={arrivingIn(rows, stored, rootId)}
+      running={runningIn(rows, rootId)}
+      variant="waterfall"
+      waiting={shown.opened ? <Waiting opened={shown.opened} rows={rows} host={hosts.details} /> : undefined}
+      beside={{
+        focusTrace: open.focusTrace,
+        onOutsideChain: open.setOutside,
+        detailsHost: hosts.details,
+        actionsHost: hosts.actions,
+        recordTime: shown.opened?.trace.duration,
+        recordMarks: recordMarksOf(shown.record, chains),
+      }}
+      initialTab={trace ? tabOf(trace.tab) : undefined}
+      initialUnder={trace?.under}
+      initialSlice={sliced.slice}
+      onSliceChange={sliced.onChange}
+      onTabShown={view.onTabShown}
+      initialMemory={view.initialMemory}
+      onMemoryChange={view.onMemoryChange}
+      links={PANEL_LINKS}
+      explore={(loaded) => exploreFor(loaded, (to) => `${base}${href(to)}`)}
+    />
+  );
+}
+
+/** The open record's marks as its closed row says them, from what the list counted of its chain. */
+function recordMarksOf(record: TraceRow | undefined, chains: ListChains): ReactNode {
+  if (!record) return undefined;
+  return (
+    <RecordMarks trace={withChain(record.trace, chains.counts?.get(record.trace.id))} pending={recordPending(record)} />
+  );
+}
+
+/** Before its trace loads: the record's own row and its calls', its details loading beside them. */
+function Waiting({ opened, rows, host }: { opened: TraceRow; rows: readonly TraceRow[]; host: HTMLElement | null }) {
+  return (
+    <>
+      <RecordRow row={opened} fresh={false} onSelect={() => undefined} live={Boolean(opened.open)} current={true} />
+      {callsUnder(rows, opened).map((call) => (
+        <RecordRow
+          key={call.key ?? call.trace.id}
+          row={call}
+          fresh={false}
+          depth={1}
+          live={Boolean(call.open)}
+          onSelect={(id) => go({ name: "trace", id })}
+        />
+      ))}
+      {host ? createPortal(<TraceLoading variant="waterfall" />, host) : null}
+    </>
+  );
+}
+
+/** Under the list: that older records left the store, and that the filter or the kinds left nothing else. */
+function ListNotes({
+  letGo,
+  narrowedTo,
+  onShowAll,
+}: {
+  letGo: boolean;
+  /** Narrowed to nothing but the open record: the filter's words, or "" for the kinds alone. */
+  narrowedTo: string | null;
+  onShowAll: () => void;
+}) {
+  return (
+    <>
+      {letGo ? (
+        <p className="panel-let-go">
+          Older requests of this tab are no longer in the local store: newer traces took their place.
+        </p>
+      ) : null}
+      {narrowedTo === null ? null : (
+        <p className="panel-no-match">
+          {narrowedTo ? `No other requests match “${narrowedTo}”.` : "No other requests have these kinds."}
+          <button type="button" className="tp-link-button" onClick={onShowAll}>
+            Show all
+          </button>
+        </p>
+      )}
+    </>
   );
 }
 
@@ -633,37 +789,35 @@ function PanelApp({ route }: { route: Route }) {
   const tabCount = `${records} ${records === 1 ? "request" : "requests"}`;
   return (
     <PanelWaterfall
-      route={route}
-      selectedId={selectedId}
-      rows={rows}
-      listRows={recordsOf(inOrder(true, shown.rows), selectedId)
-        .reverse()
-        .map((row) => {
-          const arriving = arrivingIn(rows, stored, row.trace.id) === true;
-          const awaiting = !row.awaiting && callsArriving(rows, row, stored);
-          return arriving || awaiting ? { ...row, arriving, awaiting: row.awaiting || awaiting } : row;
-        })}
-      onMore={more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined}
-      stored={stored}
-      chains={chains}
-      listTools={
-        <ListTools
-          follow={follow}
-          onFollow={onFollow}
-          onClear={() => setClearing(true)}
-          clearLabel={`Clear ${tabCount}`}
-        />
-      }
-      toolbar={<BackTo view={back} rows={listed} bare={false} />}
-      actions={(explore) => (
-        <PanelActions user={switchUser} consoleAt={consoleAt} explore={explore} traceId={selectedId} dock={dock} />
-      )}
-      dock={dock}
-      empty={history !== null && tabRows.length === 0}
-      sliced={sliced}
-      view={view}
-      clearing={clearing}
-      setClearing={setClearing}
+      tab={{
+        rows,
+        listRows: recordsOf(inOrder(true, shown.rows), selectedId)
+          .reverse()
+          .map((row) => {
+            const arriving = arrivingIn(rows, stored, row.trace.id) === true;
+            const awaiting = !row.awaiting && callsArriving(rows, row, stored);
+            return arriving || awaiting ? { ...row, arriving, awaiting: row.awaiting || awaiting } : row;
+          }),
+        stored,
+        chains,
+        onMore: more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined,
+      }}
+      place={{ route, selectedId, dock, empty: history !== null && tabRows.length === 0, sliced, view }}
+      bar={{
+        listTools: (
+          <ListTools
+            follow={follow}
+            onFollow={onFollow}
+            onClear={() => setClearing(true)}
+            clearLabel={`Clear ${tabCount}`}
+          />
+        ),
+        toolbar: <BackTo view={back} rows={listed} bare={false} />,
+        actions: (explore) => (
+          <PanelActions user={switchUser} consoleAt={consoleAt} explore={explore} traceId={selectedId} dock={dock} />
+        ),
+      }}
+      clear={{ open: clearing, onOpenChange: setClearing }}
     />
   );
 }

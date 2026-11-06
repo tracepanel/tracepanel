@@ -1,17 +1,7 @@
 import { ClockIcon, CodeIcon, LayersIcon, MemoryStickIcon } from "lucide-react";
-import {
-  type MouseEvent,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBeside } from "./beside";
-import { HiddenColumns } from "./DataTable";
 import { bytes, duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import {
@@ -1435,15 +1425,17 @@ function ChainTime({
   onTab: (app: string) => void;
 }) {
   const views = useMemo(() => new Map(apps.map((app) => [app.app, appView(app)])), [apps]);
-  const beside = useContext(HiddenColumns) !== null;
+  const beside = useBeside();
   if (apps.length === 0) return <p className="tp-note">Nothing profiled under this.</p>;
   if (beside) {
-    const app = apps.find((each) => each.app === tab) ?? apps[0];
-    const view = app && views.get(app.app);
     return (
-      <OneApp apps={apps} app={app} onTab={onTab}>
-        {app && view ? <AppProfileSection key={app.app} app={app} view={view} /> : null}
-      </OneApp>
+      <OneAppOf
+        apps={apps}
+        tab={tab}
+        onTab={onTab}
+        of={views}
+        section={(app, view) => <AppProfileSection key={app.app} app={app} view={view} />}
+      />
     );
   }
   return (
@@ -1454,6 +1446,29 @@ function ChainTime({
         return view ? <AppProfileSection key={app.app} app={app} view={view} /> : null;
       })}
     </>
+  );
+}
+
+/** Beside the waterfall: one app's section at a time, the app picked (the first at first), its switch over it. */
+function OneAppOf<T>({
+  apps,
+  tab,
+  onTab,
+  of,
+  section,
+}: {
+  apps: readonly AppProfile[];
+  tab: string | null;
+  onTab: (app: string) => void;
+  of: ReadonlyMap<string, T>;
+  section: (app: AppProfile, value: T) => ReactNode;
+}) {
+  const app = apps.find((each) => each.app === tab) ?? apps[0];
+  const value = app && of.get(app.app);
+  return (
+    <OneApp apps={apps} app={app} onTab={onTab}>
+      {app && value ? section(app, value) : null}
+    </OneApp>
   );
 }
 
@@ -1469,15 +1484,17 @@ function ChainMemory({
   tab: string | null;
   onTab: (app: string) => void;
 }) {
-  const beside = useContext(HiddenColumns) !== null;
+  const beside = useBeside();
   if (apps.length === 0) return <p className="tp-note">No memory measured under this.</p>;
   if (beside) {
-    const app = apps.find((each) => each.app === tab) ?? apps[0];
-    const measured = app && memories.get(app.app);
     return (
-      <OneApp apps={apps} app={app} onTab={onTab}>
-        {app && measured ? <AppMemorySection key={app.app} app={app} measured={measured} /> : null}
-      </OneApp>
+      <OneAppOf
+        apps={apps}
+        tab={tab}
+        onTab={onTab}
+        of={memories}
+        section={(app, measured) => <AppMemorySection key={app.app} app={app} measured={measured} />}
+      />
     );
   }
   return (

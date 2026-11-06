@@ -1,4 +1,5 @@
 import {
+  type ComponentProps,
   type CSSProperties,
   createContext,
   type ReactNode,
@@ -562,6 +563,128 @@ export const RowFilter = createContext("");
  */
 export const RowKinds = createContext<readonly string[]>([]);
 
+/**
+ * The rows the time's legend or the kinds shown keep: the kinds' anywhere in the tree (the whole tree where none is
+ * loaded yet), a share's under the row it was picked on.
+ */
+function useRowMarks(
+  tree: Node[],
+  {
+    current,
+    trace,
+    categories,
+    kinds,
+    selected,
+  }: {
+    current: Slice;
+    trace: Trace;
+    categories: ReturnType<typeof useSpansTime>["categories"];
+    kinds: readonly string[];
+    selected: string | null;
+  },
+) {
+  return useMemo(
+    () =>
+      kinds.length > 0
+        ? kindMarks(tree, pickedOf({ ...current, parts: kinds, range: null }, trace, categories))
+        : scopedMarks(tree, pickedOf(current, trace, categories), selected),
+    [tree, current, trace, categories, selected, kinds],
+  );
+}
+
+/** Rows folded by hand on the way to the rows shown; another pick of what is shown opens the way again. */
+function usePathFolds(marks: Map<string, Mark> | undefined, toggle: (key: string) => void) {
+  const [pathFolded, setPathFolded] = useState<ReadonlySet<string>>(() => new Set());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new set of rows shown, not each render's map.
+  useEffect(() => setPathFolded(new Set()), [marks]);
+  const toggleRow = (key: string) => {
+    if (marks?.get(key) !== "path") return toggle(key);
+    const next = new Set(pathFolded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setPathFolded(next);
+  };
+  return { pathFolded, toggleRow };
+}
+
+/** A share picked is of the row it was picked on: another row picked lets it go. */
+function useShareLetGo(external: boolean, selected: string | null, current: Slice, change: (slice: Slice) => void) {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not the slice it changes.
+  useEffect(() => {
+    if (external && current.parts.length > 0) change({ ...current, parts: [] });
+  }, [external, selected]);
+}
+
+/**
+ * What is picked in the tree and where it shows: a code row's stretch, the row selected (always one, beside the
+ * panel's details), the map and whether its details sit at its side, the rows scrolled to a link's, the folds.
+ */
+function useMapPicks(
+  tree: Node[],
+  trace: Trace,
+  initialSpan: string | undefined,
+  wiring: { detailsHost?: HTMLElement | null | undefined; onPicked?: PickedHandler | undefined },
+) {
+  const [codeRow, setCodeRow] = useState<{ row: string; info: CodeInfo; at: CodeStretch } | null>(null);
+  const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring, codeRow);
+  const map = useRef<HTMLDivElement>(null);
+  const side = useSidePane(map);
+  const rows = useScrolledToInitial(initialSpan);
+  const [collapsed, toggle] = useFolded(tree, initialSpan);
+  return { codeRow, setCodeRow, selected, select, close, external, map, side, rows, collapsed, toggle };
+}
+
+/**
+ * The rows the time's legend or the kinds shown keep, the folds on the way to them, and a share let go as another
+ * row is picked; the trace's time by kind the rows are coloured and quietened by.
+ */
+function useMapMarks(
+  tree: Node[],
+  trace: Trace,
+  {
+    current,
+    change,
+    selected,
+    toggle,
+  }: { current: Slice; change: (slice: Slice) => void; selected: string | null; toggle: (key: string) => void },
+) {
+  const { categories, quiet } = useSpansTime(trace);
+  const kinds = useContext(RowKinds);
+  const marks = useRowMarks(tree, { current, trace, categories, kinds, selected });
+  const { pathFolded, toggleRow } = usePathFolds(marks, toggle);
+  useShareLetGo(selected !== null, selected, current, change);
+  return { categories, quiet, kinds, marks, pathFolded, toggleRow };
+}
+
+/**
+ * The tree the map draws: the trace's rows and its chain's, loaded on their own clocks, with the records that show
+ * (how many don't, by span), as the filter keeps them; the issues of the calls' traces with the trace's own.
+ */
+function useMapTree(
+  trace: Trace,
+  related: Related | undefined,
+  issueBySpan: ReadonlyMap<string, IssueKind>,
+  logs: boolean,
+  wiring: {
+    loadRelated?: ((traceId: string) => Promise<Related>) | undefined;
+    expected?: CatchUp["expected"];
+    reloadRelated?: (() => void) | undefined;
+  },
+) {
+  const chain = useChain(trace.id, wiring.loadRelated, related, {
+    expected: wiring.expected,
+    reloadRoot: wiring.reloadRelated,
+  });
+  const { tree: whole, hidden } = useShownLogs(trace, related, logs, chain.loaded);
+  const query = useContext(RowFilter);
+  const tree = useMemo(() => filteredTree(whole, query), [whole, query]);
+  const issues = useMemo(
+    () => withCallIssues(issueBySpan, related, chain.loaded),
+    [issueBySpan, related, chain.loaded],
+  );
+  return { chain, tree, hidden, issues };
+}
+
 export function CallMap({
   trace,
   issueBySpan,
@@ -613,23 +736,13 @@ export function CallMap({
 }) {
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
-  const chain = useChain(trace.id, wiring.loadRelated, related, {
-    expected: wiring.expected,
-    reloadRoot: wiring.reloadRelated,
-  });
-  const { tree: whole, hidden } = useShownLogs(trace, related, current.logs, chain.loaded);
-  const query = useContext(RowFilter);
-  const tree = useMemo(() => filteredTree(whole, query), [whole, query]);
-  const issues = useMemo(
-    () => withCallIssues(issueBySpan, related, chain.loaded),
-    [issueBySpan, related, chain.loaded],
+  const { chain, tree, hidden, issues } = useMapTree(trace, related, issueBySpan, current.logs, wiring);
+  const { codeRow, setCodeRow, selected, select, close, external, map, side, rows, collapsed, toggle } = useMapPicks(
+    tree,
+    trace,
+    initialSpan,
+    wiring,
   );
-  const [codeRow, setCodeRow] = useState<{ row: string; info: CodeInfo; at: CodeStretch } | null>(null);
-  const { selected, select, close, external } = useRowPicked(tree, trace, initialSpan, wiring, codeRow);
-  const map = useRef<HTMLDivElement>(null);
-  const side = useSidePane(map);
-  const rows = useScrolledToInitial(initialSpan);
-  const [collapsed, toggle] = useFolded(tree, initialSpan);
   const details = codeRow ? (
     <CodeDetails info={codeRow.info} onProfile={wiring.onProfileTab} />
   ) : (
@@ -640,31 +753,12 @@ export function CallMap({
       under: wiring.under,
     })
   );
-  const { categories, quiet } = useSpansTime(trace);
-  const kinds = useContext(RowKinds);
-  const marks = useMemo(
-    () =>
-      kinds.length > 0
-        ? kindMarks(tree, pickedOf({ ...current, parts: kinds, range: null }, trace, categories))
-        : scopedMarks(tree, pickedOf(current, trace, categories), external ? selected : null),
-    [tree, current, trace, categories, external, selected, kinds],
-  );
-  // Folded by hand on the way to the rows shown; another pick of what is shown opens the way again.
-  const [pathFolded, setPathFolded] = useState<ReadonlySet<string>>(() => new Set());
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new set of rows shown, not each render's map.
-  useEffect(() => setPathFolded(new Set()), [marks]);
-  const toggleRow = (key: string) => {
-    if (marks?.get(key) !== "path") return toggle(key);
-    const next = new Set(pathFolded);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setPathFolded(next);
-  };
-  // A share picked is of the row it was picked on: another row picked lets it go.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not the slice it changes.
-  useEffect(() => {
-    if (external && current.parts.length > 0) change({ ...current, parts: [] });
-  }, [external, selected]);
+  const { categories, quiet, kinds, marks, pathFolded, toggleRow } = useMapMarks(tree, trace, {
+    current,
+    change,
+    selected: external ? selected : null,
+    toggle,
+  });
   const inline = side || external ? null : details;
 
   return (
@@ -682,51 +776,130 @@ export function CallMap({
             <Rows
               nodes={tree}
               depth={0}
-              ctx={{
+              ctx={rowContext({
                 trace,
-                issueBySpan: issues,
+                issues,
                 selected,
-                onSelect: (key) => {
-                  setCodeRow(null);
-                  select(key);
-                },
-                opensOnly: external,
-                codeRow: codeRow?.row,
-                onCodeRow: external
-                  ? (row, span, info, at) => {
-                      select(span);
-                      setCodeRow({ row, info, at });
-                    }
-                  : undefined,
-                issuesIn: wiring.issuesIn,
-                onIssues: wiring.onIssues,
-                rootMark: wiring.rootMark,
-                rootTime: wiring.rootTime,
+                select,
+                external,
+                codeRow,
+                setCodeRow,
+                wiring,
                 collapsed,
                 pathFolded,
-                onToggle: toggleRow,
+                toggleRow,
                 marks,
-                details: inline,
-                hiddenLogs: hidden,
-                logsShown: current.logs,
-                code: {
-                  trace,
-                  quiet,
-                  onProfile: profileOpener(wiring.onProfile, trace, profileAt),
-                  profiles: wiring.profilesIn?.(trace) === true,
-                },
+                inline,
+                hidden,
+                current,
+                change,
+                quiet,
+                profileAt,
                 categories,
-                // The kinds shown pick the code rows too: none of them is SQL.
-                slice: kinds.length > 0 ? { ...current, parts: kinds, range: null } : current,
-                onTraceProfile: wiring.onTraceProfile,
-                profilesIn: wiring.profilesIn,
-                onShowLogs: () => change({ ...current, logs: !current.logs }),
-                onChain: chain.want,
-              }}
+                kinds,
+                want: chain.want,
+              })}
             />
           </div>
         </TimedRows>
       </MapBody>
     </div>
   );
+}
+
+/** What every row of the tree is drawn with: the trace, what is picked and folded, and the ways out of a row. */
+function rowContext({
+  trace,
+  issues,
+  selected,
+  select,
+  external,
+  codeRow,
+  setCodeRow,
+  wiring,
+  collapsed,
+  pathFolded,
+  toggleRow,
+  marks,
+  inline,
+  hidden,
+  current,
+  change,
+  quiet,
+  profileAt,
+  categories,
+  kinds,
+  want,
+}: {
+  trace: Trace;
+  issues: ReadonlyMap<string, IssueKind>;
+  selected: string | null;
+  select: (key: string) => void;
+  external: boolean;
+  codeRow: { row: string } | null;
+  setCodeRow: (row: { row: string; info: CodeInfo; at: CodeStretch } | null) => void;
+  wiring: Pick<
+    ComponentProps<typeof CallMap>,
+    "issuesIn" | "onIssues" | "rootMark" | "rootTime" | "onProfile" | "profilesIn" | "onTraceProfile"
+  >;
+  collapsed: ReadonlySet<string>;
+  pathFolded: ReadonlySet<string>;
+  toggleRow: (key: string) => void;
+  marks: Map<string, Mark> | undefined;
+  inline: ReactNode;
+  hidden: ReadonlyMap<string, number>;
+  current: Slice;
+  change: (slice: Slice) => void;
+  quiet: ReturnType<typeof useSpansTime>["quiet"];
+  profileAt: ReturnType<typeof useHeldSlice>["profileAt"];
+  categories: ReturnType<typeof useSpansTime>["categories"];
+  kinds: readonly string[];
+  want: RowContext["onChain"];
+}): RowContext {
+  return {
+    trace,
+    issueBySpan: issues,
+    selected,
+    onSelect: (key) => {
+      setCodeRow(null);
+      select(key);
+    },
+    opensOnly: external,
+    codeRow: codeRow?.row,
+    onCodeRow: external ? (row, span, info, at) => pickCodeRow(select, setCodeRow, { row, span, info, at }) : undefined,
+    issuesIn: wiring.issuesIn,
+    onIssues: wiring.onIssues,
+    rootMark: wiring.rootMark,
+    rootTime: wiring.rootTime,
+    collapsed,
+    pathFolded,
+    onToggle: toggleRow,
+    marks,
+    details: inline,
+    hiddenLogs: hidden,
+    logsShown: current.logs,
+    code: {
+      trace,
+      quiet,
+      onProfile: profileOpener(wiring.onProfile, trace, profileAt),
+      profiles: wiring.profilesIn?.(trace) === true,
+    },
+    categories,
+    // The kinds shown pick the code rows too: none of them is SQL.
+    slice: kinds.length > 0 ? { ...current, parts: kinds, range: null } : current,
+    onTraceProfile: wiring.onTraceProfile,
+    profilesIn: wiring.profilesIn,
+    onShowLogs: () => change({ ...current, logs: !current.logs }),
+    onChain: want,
+  };
+}
+
+/** A code or wait row picked: its span's details, as the row names it, at its stretches. */
+function pickCodeRow(
+  select: (key: string) => void,
+  setCodeRow: (row: { row: string; info: CodeInfo; at: CodeStretch }) => void,
+  { row, span, info, at }: { row: string; span: string; info: CodeInfo; at: CodeStretch },
+): void {
+  select(span);
+  setCodeRow({ row, info, at });
 }

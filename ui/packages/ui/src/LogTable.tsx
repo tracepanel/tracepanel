@@ -668,6 +668,53 @@ function useLogLines<R extends LogLike>(
   return { offered, lines, body, view };
 }
 
+/** A table's columns: the time as picked (beside the tree, since the trace began), the attributes pinned. */
+function useLogColumns<R extends LogLike>(
+  table: string,
+  extra: readonly LogColumn<R>[],
+  start: number | undefined,
+  highlight: readonly string[],
+) {
+  const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
+  const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
+  // Beside the tree: compact, the time since the trace began and the level as its dot.
+  const hidden = useContext(HiddenColumns);
+  const beside = hidden !== null;
+  const all = [
+    ...leading<R>(beside ? "relative" : mode, start, highlight, beside),
+    ...extra,
+    ...attributeColumns<R>(picked),
+    ...trailing<R>(),
+  ].filter((column) => !hidden?.has(column.id));
+  return { all, mode, setMode, picked, setPicked };
+}
+
+/** The lines in view, with the room of those above and below them. */
+function LogLines<R extends LogLike>({
+  lines,
+  view,
+  context,
+  span,
+}: {
+  lines: ReturnType<typeof useLogLines<R>>["lines"];
+  view: ReturnType<typeof useLogLines<R>>["view"];
+  context: RowContext<R>;
+  span: number;
+}) {
+  return (
+    <>
+      <Spacer height={view.before} span={span} />
+      {view.indexes.map((index) => {
+        const line = lines[index];
+        return line ? (
+          <LineRow key={line.key} line={line} context={context} placed={{ index, measure: view.measure }} />
+        ) : null;
+      })}
+      <Spacer height={view.after} span={span} />
+    </>
+  );
+}
+
 /**
  * Records, newest or oldest first as given, one line each. `table` names where the reader's column choices are kept;
  * `columns` adds the place's own columns after Logger; `start` (a trace's) makes relative times "+12 ms" instead of
@@ -703,17 +750,7 @@ export function LogTable<R extends LogLike>({
   /** Draws only the rows in view of the page's scrolling section (`[data-scroll]`): for lists that grow long. */
   windowed?: boolean;
 }) {
-  const [mode, setMode] = useStored(`tracepanel:columns:${table}:time`, readTime);
-  const [picked, setPicked] = useStored(`tracepanel:columns:${table}:attributes`, readKeys);
-  // Beside the tree: compact, the time since the trace began and the level as its dot.
-  const hidden = useContext(HiddenColumns);
-  const beside = hidden !== null;
-  const all = [
-    ...leading<R>(beside ? "relative" : mode, start, highlight, beside),
-    ...extra,
-    ...attributeColumns<R>(picked),
-    ...trailing<R>(),
-  ].filter((column) => !hidden?.has(column.id));
+  const { all, mode, setMode, picked, setPicked } = useLogColumns(table, extra, start, highlight);
   // The columns menu has a column of its own.
   const { ref, columns, widths } = useColumnWidths(useColumns(table, all), MENU_REM);
   const shown = columns.shown;
@@ -745,14 +782,7 @@ export function LogTable<R extends LogLike>({
           onRemoveAttribute={(key) => setPicked(picked.filter((each) => each !== key))}
         />
         <TableBody ref={body}>
-          <Spacer height={view.before} span={span} />
-          {view.indexes.map((index) => {
-            const line = lines[index];
-            return line ? (
-              <LineRow key={line.key} line={line} context={context} placed={{ index, measure: view.measure }} />
-            ) : null;
-          })}
-          <Spacer height={view.after} span={span} />
+          <LogLines lines={lines} view={view} context={context} span={span} />
         </TableBody>
       </Table>
     </AttributeColumnsContext.Provider>
