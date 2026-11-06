@@ -23,7 +23,14 @@ import {
   withChain,
 } from "@tracepanel/ui";
 import { TooltipProvider } from "@tracepanel/ui/components/ui/tooltip";
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
@@ -382,6 +389,7 @@ function PanelWaterfall({
             ref={list}
             // Closed details open again with a row picked (not with a fold opened or closed).
             onClickCapture={(event) => layout.onRowClick(event.target as Element)}
+            onKeyDown={onRowsKey}
           >
             {empty ? (
               <Empty title="No requests yet">Requests from this browser tab will appear here.</Empty>
@@ -456,6 +464,32 @@ function usePanelState(tab: PanelTab, place: PanelPlace) {
   const open = useOpenRecord(tab.listRows, place.selectedId);
   const shown = useShownRecords({ ...tab, rootId: open.rootId, filter, kinds });
   return { list, anchor, hosts, setHosts, layout, filter, setFilter, kinds, setKinds, open, shown };
+}
+
+/** Where the keys move among the list's rows: the next or previous one, the first or the last. */
+const ROW_STEPS = new Map<string, (at: number, count: number) => number>([
+  ["ArrowDown", (at, count) => Math.min(at + 1, count - 1)],
+  ["ArrowUp", (at) => Math.max(at - 1, 0)],
+  ["Home", () => 0],
+  ["End", (_at, count) => count - 1],
+]);
+
+/**
+ * The keys over the list, as a tree in devtools: up and down to the next row, Home and End to the ends. A row of the
+ * open record's tree is picked as it is reached, its details beside it; a closed record only takes the focus, Enter
+ * opens it (no record opens on its own as the keys pass it).
+ */
+function onRowsKey(event: ReactKeyboardEvent<HTMLElement>): void {
+  const step = ROW_STEPS.get(event.key);
+  const from = (event.target as Element).closest(".tp-map-row");
+  if (!step || !from || event.altKey || event.metaKey || event.ctrlKey) return;
+  const rows = [...event.currentTarget.querySelectorAll<HTMLElement>(".tp-map-row")];
+  const to = rows[step(rows.indexOf(from as HTMLElement), rows.length)];
+  if (!to || to === from) return;
+  event.preventDefault();
+  to.focus();
+  to.scrollIntoView({ block: "nearest" });
+  if (!to.classList.contains("tp-record")) to.click();
 }
 
 /** Where the open record's details and its Explore go: the panel's details pane, and a slot among its buttons. */

@@ -708,3 +708,37 @@ test("the hover card says where the time went as the strip's legend does: GC its
   // percent are each rounded, one sentence can't say both.
   await expect(card.locator(".card-most")).toHaveText(`Most time: ${top.replace(/ \d+%$/, "")} of the server's 42 ms`);
 });
+
+test("in the panel, the keys walk the rows: down picks the next row of the tree, a closed record waits for Enter", async ({
+  page,
+}) => {
+  await openApp(page, { posts: await posts(), boom: await broken() });
+  await page.getByRole("button", { name: "Load posts" }).click();
+  await page.getByRole("button", { name: "Load boom" }).click();
+  await pill(page).click();
+  const rows = panelRows(page);
+  const root = panelList(page).locator(".tp-map-row[data-root]");
+  const details = panel(page).getByRole("complementary", { name: "Details" });
+  await expect(root).toHaveText(/GET\s*\/api\/error/);
+  await root.focus();
+
+  await page.keyboard.press("ArrowDown");
+
+  // The tree's next row: focused and picked, its details beside it.
+  const next = rows.nth(1);
+  await expect(next).toBeFocused();
+  await expect(next).toHaveAttribute("aria-current", "true");
+  await expect(details.locator(".tp-details-title")).toBeVisible();
+
+  await page.keyboard.press("End");
+
+  // The last row, a closed record: focused, not opened.
+  const last = records(page).last();
+  await expect(last).toBeFocused();
+  await expect(last).toHaveText(/GET\s*\/api\/posts/);
+  await expect(root).toHaveText(/GET\s*\/api\/error/);
+
+  await page.keyboard.press("Enter");
+
+  await expect(root).toHaveText(/GET\s*\/api\/posts/);
+});
