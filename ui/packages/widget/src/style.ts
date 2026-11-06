@@ -73,8 +73,8 @@ export const STYLE = `
   .status[data-tone="redirect"] { background: var(--tint-info); color: var(--tp-info); }
   .status[data-tone="client"] { background: var(--tint-warn); color: var(--tp-warn); }
   .status[data-tone="server"] { background: var(--tint-error); color: var(--tp-error); }
-  /* In the light theme a status is a dot of its tone before the code, as in the console's lists and the panel. */
-  :host([data-theme="light"]) .status { display: inline-flex; align-items: center; gap: 5px; padding: 0; background: none; font-weight: 500; }
+  /* In the light theme a status is a dot of its tone before the code, on its tone's tint: the panel's pill. */
+  :host([data-theme="light"]) .status { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
   :host([data-theme="light"]) .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .seg[data-speed="slow"] b { color: var(--tp-warn); }
   .seg[data-speed="very-slow"] b { color: var(--tp-error); }
