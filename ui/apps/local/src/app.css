@@ -2077,23 +2077,6 @@ body {
 .panel-wf-details .tp-scope-summary {
   justify-content: flex-end;
 }
-/* A row's hidden records, short beside the marks: the log's icon and how many. */
-.panel-wf .tp-map-row .tp-map-logs {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1875rem;
-  color: var(--tp-text-3);
-  font-size: var(--tp-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-/* Pressed: the records show in the tree; the mark hides them again. */
-.panel-wf .tp-map-row .tp-map-logs[data-shown] {
-  color: var(--tp-accent);
-}
-.panel-wf .tp-map-row .tp-map-logs svg {
-  width: 0.75rem;
-  height: 0.75rem;
-}
 
 /* The line between the rows and the details moves too: across docked at the bottom, down docked at the right. */
 .panel-wf-details-split {

@@ -2514,11 +2514,26 @@ details[data-focused] > .tp-sql-group {
   cursor: pointer;
 }
 /* A span's info and debug records, while only warnings show: how many, a click away. */
+/* Short beside the marks, in the console's tree and the panel's alike: the log's icon and how many. */
 .tp-map-logs {
+  display: inline-flex;
   position: relative;
   flex: none;
+  align-items: center;
+  gap: 0.1875rem;
+  color: var(--tp-text-3);
   font-family: var(--tp-font);
+  font-size: var(--tp-size-xs);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
+}
+.tp-map-logs svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+/* Pressed: the records show in the tree; the mark hides them again. */
+.tp-map-logs[data-shown] {
+  color: var(--tp-accent);
 }
 /* Its target at least 24px each way (WCAG 2.5.8) around the small mark: a miss beside it doesn't pick the row. */
 .tp-map-logs::after {
