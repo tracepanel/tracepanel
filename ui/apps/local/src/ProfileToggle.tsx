@@ -145,7 +145,6 @@ function ProfileButton({
           )}
           aria-label={NAMES[mode]}
           aria-disabled={fixed || undefined}
-          data-labelled={mode === "off" ? undefined : ""}
           onClick={(event) => {
             if (fixed) return;
             // The app's settings profile the floor themselves: no cookie for it.
@@ -155,7 +154,6 @@ function ProfileButton({
           }}
         >
           <Flame mode={mode} />
-          {mode === "off" ? null : <span aria-hidden="true">Profiling</span>}
         </button>
       </Hint>
       <span className="sr-only" aria-live="polite">

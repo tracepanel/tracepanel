@@ -36,11 +36,9 @@ function FollowToggle({ follow, onFollow }: { follow: boolean; onFollow: (value:
         className={cn("icon-button", follow && "text-brand hover:text-brand")}
         aria-label="Follow new"
         aria-pressed={follow}
-        data-labelled={follow ? "" : undefined}
         onClick={() => onFollow(!follow)}
       >
         <LocateFixedIcon className="size-4" />
-        {follow ? <span aria-hidden="true">Following</span> : null}
       </button>
     </Hint>
   );
@@ -299,12 +297,6 @@ export function offeredKinds(spanKinds: readonly (readonly string[] | undefined)
 /** The kinds offered first: what a request's calls mostly are. The rest follow. */
 const FIRST: readonly string[] = ["sql", "http", "graphql", "function", "cache", "redis", "messaging", "task"];
 
-/** The kinds picked, as the bar says them: one or two by name, more by the first and how many else. */
-function pickedNames(offered: readonly Shown[], kinds: readonly string[]): string {
-  const names = offered.filter((filter) => kinds.includes(filter.id)).map((filter) => filter.label);
-  return names.length > 2 ? `${names[0]} +${names.length - 1}` : names.join(", ");
-}
-
 /**
  * Beside the filter: which kinds of calls the tree shows, every record's (only SQL, only GraphQL…). Its icon is
  * raised while some are picked.
@@ -334,10 +326,8 @@ export function KindsMenu({
             className={cn("icon-button", kinds.length > 0 && "text-brand hover:text-brand")}
             aria-label={label}
             aria-pressed={kinds.length > 0}
-            data-labelled={kinds.length > 0 ? "" : undefined}
           >
             <ListFilterIcon size={16} />
-            {kinds.length > 0 ? <span aria-hidden="true">{pickedNames(offered, kinds)}</span> : null}
           </button>
         </PopoverTrigger>
       </Hint>
