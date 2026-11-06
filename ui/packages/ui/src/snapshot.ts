@@ -1,6 +1,6 @@
 import type { components } from "./api.gen";
 import { shifted } from "./lib/scope";
-import { type DataSource, NO_CAPABILITIES, NO_COUNTS, NO_LIVE_TASKS } from "./source";
+import { type DataSource, NO_CAPABILITIES, NO_COUNTS, NO_KNOWN, NO_LIVE_TASKS } from "./source";
 import type { Chain, ChainTrace, ExplainPlan, Related, Trace } from "./types";
 
 /**
@@ -89,27 +89,7 @@ const EMPTY: Omit<DataSource, "getTrace" | "related" | "explain"> = {
     slowest: [],
     failing: [],
   }),
-  knownValues: async () => ({
-    route: [],
-    logger: [],
-    db: [],
-    targets: {},
-    ops: {},
-    task: [],
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    task_system: [],
-    queue: [],
-    job: [],
-    rpc: [],
-    page: [],
-    in: [],
-    // biome-ignore lint/style/useNamingConvention: wire format.
-    log_route: [],
-    apps: {},
-    slow: {},
-    span: [],
-    extra: [],
-  }),
+  knownValues: async () => NO_KNOWN,
   // A snapshot is a file: nothing behind it runs EXPLAIN.
   capabilities: async () => NO_CAPABILITIES,
   counts: async () => NO_COUNTS,

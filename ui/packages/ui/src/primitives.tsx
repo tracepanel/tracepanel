@@ -471,7 +471,7 @@ export interface AppChipPick {
  * count, pressed while the list shows only that app.
  */
 /** An app's own colour: one of six (`--tp-app-*`) by its name, the same app the same everywhere. */
-export function appColour(name: string): string {
+function appColour(name: string): string {
   // FNV-1a: names alike but for their end (library-api, library-bff) land apart.
   let hash = 0x811c9dc5;
   for (const char of name) hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 0x01000193);
