@@ -5,6 +5,7 @@ import { hopTimes, Inside, RUN_WORDS, runRows, type TraceProfileOpener } from ".
 import { appName, type Linked, OpenRun } from "./CallRows";
 import { type Explain, QueryPlan } from "./CallTable";
 import type { Node, Remote, ServedRun } from "./callTree";
+import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
 import { GraphqlCode } from "./GraphqlCode";
 import { LlmConversation, withoutMessages } from "./LlmConversation";
@@ -112,13 +113,11 @@ function LogDetails({ node }: DetailsProps<"log">) {
   return <LogRecordDetails log={node.log} titled={true} />;
 }
 
-function ErrorDetails({ node }: DetailsProps<"error">) {
+/** An error's row: the error as its trace's Error tab shows it, its frames and where it was raised from. */
+function ErrorDetails({ node, links }: DetailsProps<"error">) {
   return (
     <div className="grid gap-3 p-4">
-      <p className="tp-map-details-title">Error</p>
-      <p className="tp-error-message">
-        <b>{node.error.type.replace(/^builtins\./, "")}</b>: {node.error.message}
-      </p>
+      <ErrorView errors={[node.error]} links={links} />
     </div>
   );
 }
