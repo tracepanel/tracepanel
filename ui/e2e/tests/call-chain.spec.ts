@@ -310,7 +310,7 @@ test("calls side by side show the time they ran from first to last; what they to
   await group.click();
 
   await expect(page.getByRole("complementary", { name: "Details" })).toContainText(
-    "36 similar calls · took 4 ms · 115 ms total",
+    "36 similar calls in 4 ms · 115 ms added up",
   );
 });
 

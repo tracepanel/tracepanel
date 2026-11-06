@@ -145,8 +145,10 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   return (
     <div className="grid gap-3 p-4">
       <p className="tp-map-details-title">
-        {node.spans.length} similar {groupNoun(first)} · took {duration(node.end - node.start)} ·{" "}
-        {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} total
+        {/* In how long, from the first's start to the last's end, as its row's time and bar; then what they add up
+            to, as the Queries tab's sum. */}
+        {node.spans.length} similar {groupNoun(first)} in {duration(node.end - node.start)} ·{" "}
+        {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} added up
       </p>
       <Inside />
       {first ? (
