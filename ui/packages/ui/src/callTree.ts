@@ -564,6 +564,21 @@ export function findNode(nodes: Node[], key: string, trace: Trace): Found | unde
 type Found = { node: Node; trace: Trace };
 
 /** The rows on the way to a row, outermost first, the row last; undefined when the tree hasn't got it. */
+/**
+ * The deepest row with every one of these spans under it (or it): where a finding on many spans shows, an N+1's group
+ * rather than one of its calls. Undefined while one of them isn't in the tree yet.
+ */
+export function coverOf(nodes: readonly Node[], keys: readonly string[]): string | undefined {
+  const [first, ...rest] = keys;
+  const path = first ? pathTo(nodes, first) : undefined;
+  if (!path) return undefined;
+  for (let at = path.length - 1; at >= 0; at--) {
+    const node = path[at];
+    if (node && rest.every((key) => pathFrom(node, key))) return node.key;
+  }
+  return undefined;
+}
+
 export function pathTo(nodes: readonly Node[], key: string): Node[] | undefined {
   for (const node of nodes) {
     const path = pathFrom(node, key);

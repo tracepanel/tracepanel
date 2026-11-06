@@ -339,11 +339,12 @@ function issueCount(shown: number, all: number): string {
 export function ScopedIssues({
   chain,
   links,
-  onShowRow,
+  onShowRows,
 }: {
   chain: TraceScope;
   links: TraceLinks | undefined;
-  onShowRow: (row: string) => void;
+  /** An issue's rows in the call tree: the row they are all under. */
+  onShowRows: (ids: readonly string[]) => void;
 }) {
   const issues = useMemo(
     () => scopedIssues(chain.members, chain.scope, chain.chainIssues).filter((issue) => issue.kind !== "error"),
@@ -370,7 +371,7 @@ export function ScopedIssues({
         <IssueList
           issues={shown}
           reach={(issue) => <IssueReach issue={issue as ScopedIssue} runtimes={runtimes} />}
-          onShowSpans={(ids) => ids[0] && onShowRow(ids[0])}
+          onShowSpans={onShowRows}
           showLabel={() => "In the call tree"}
           links={links}
         />

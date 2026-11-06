@@ -142,13 +142,6 @@ function LibraryCaller({ caller, className }: { caller: string; className?: stri
   );
 }
 
-/** What a query's line says when its heading has said where it ran: what it was run with, the rows it returned. */
-function rowsOf(span: Span): string | null {
-  const rows = span.attrs["db.response.returned_rows"];
-  const returned = rows === undefined ? null : `${rows} ${rows === 1 ? "row" : "rows"}`;
-  return [paramsOf(span), returned].filter(Boolean).join(" · ") || null;
-}
-
 /** "pk_1 = 12": the values a query ran with, by name where the driver says them; none where they stay local. */
 function paramsOf(span: Span): string | null {
   const values = valuesOf(span);
@@ -166,22 +159,35 @@ function namesOf(span: Span): unknown[] | undefined {
   return Array.isArray(names) ? names : undefined;
 }
 
-/** Where each query of a group was made, one line each, with its time. */
+/**
+ * Where each query of a group was made, one line each, with its time and its bar (the slow ones stand out). From one
+ * place, a line is what it ran with (`author_id = 1`); rows said once when every run returned as many.
+ */
 function CalledFromList({ spans, focus }: { spans: readonly Span[]; focus: ReadonlySet<string> | undefined }) {
   const beside = useContext(HiddenColumns) !== null;
   const oneOrigin = beside ? sameOrigin(spans) : null;
+  const rows = new Set(spans.map(returnedOf));
+  const sameRows = spans.length > 1 && rows.size === 1 ? [...rows][0] : null;
   const heading = oneOrigin
-    ? calledFrom(spans.length, oneOrigin)
+    ? [calledFrom(spans.length, oneOrigin), sameRows ? `${sameRows} each` : null].filter(Boolean).join(" · ")
     : spans.length === 1
       ? "Called from"
       : `Called ${spans.length} times from`;
   const bare = beside && spans.length === 1;
+  const longest = spans.length > 1 ? Math.max(...spans.map((span) => span.duration)) : undefined;
   return (
     <CallLines heading={<SectionHeading>{heading}</SectionHeading>}>
       {spans.map((span, index) => (
-        <CallLine key={span.id} index={index} focused={focus?.has(span.id) ?? false} time={span.duration} bare={bare}>
+        <CallLine
+          key={span.id}
+          index={index}
+          focused={focus?.has(span.id) ?? false}
+          time={span.duration}
+          longest={longest}
+          bare={bare}
+        >
           {oneOrigin ? (
-            <span className="text-muted-foreground">{rowsOf(span)}</span>
+            <RanWith span={span} rows={sameRows ? null : returnedOf(span)} />
           ) : (
             <CalledFrom span={span} className="truncate" />
           )}
@@ -189,6 +195,27 @@ function CalledFromList({ spans, focus }: { spans: readonly Span[]; focus: Reado
       ))}
     </CallLines>
   );
+}
+
+/** What one run of a query ran with, by name where the driver says them, and what it returned. */
+function RanWith({ span, rows }: { span: Span; rows: string | null }) {
+  const values = valuesOf(span);
+  const names = namesOf(span);
+  const ran = values
+    ?.map((value, at) => (names?.[at] ? `${String(names[at])} = ${sqlLiteral(value)}` : sqlLiteral(value)))
+    .join(", ");
+  return (
+    <span className="flex min-w-0 items-baseline gap-2">
+      {ran ? <code className="truncate font-mono text-xs">{ran}</code> : null}
+      {rows ? <span className="shrink-0 text-muted-foreground">{rows}</span> : null}
+    </span>
+  );
+}
+
+/** How many rows a run returned, in words; null where the driver doesn't say. */
+function returnedOf(span: Span): string | null {
+  const rows = span.attrs["db.response.returned_rows"];
+  return rows === undefined ? null : `${rows} ${rows === 1 ? "row" : "rows"}`;
 }
 
 /** A query's fields in words, as the call tree's details list them: its database, engine, rows, server. */

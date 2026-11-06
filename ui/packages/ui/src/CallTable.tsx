@@ -241,12 +241,15 @@ export function CallLine({
   index,
   focused,
   time,
+  longest,
   bare = false,
   children,
 }: {
   index: number;
   focused: boolean;
   time: number;
+  /** The longest of the lines: each time's bar is its share of it, so the slow ones stand out. */
+  longest?: number | undefined;
   /** The only line of its row, whose time the row says: no number, no time. */
   bare?: boolean | undefined;
   children: ReactNode;
@@ -255,13 +258,20 @@ export function CallLine({
   return (
     <li
       className={cn(
-        "grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3 border-b py-2 text-sm",
+        "grid grid-cols-[2rem_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border/60 py-1 text-sm",
         focused && "bg-brand-soft",
       )}
     >
       <span className="text-right text-muted-foreground tabular-nums">{index + 1}</span>
       {children}
-      <span className="tabular-nums">{duration(time)}</span>
+      {longest ? (
+        <span className="tp-call-share" aria-hidden="true">
+          <span style={{ width: `${Math.max((time / longest) * 100, 2)}%` }} />
+        </span>
+      ) : (
+        <span />
+      )}
+      <span className="w-14 text-right tabular-nums">{duration(time)}</span>
     </li>
   );
 }

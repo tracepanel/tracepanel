@@ -22,6 +22,7 @@ import {
   callSpans,
   callTraces,
   childrenOf,
+  coverOf,
   filteredTree,
   findNode,
   hiddenLogsOf,
@@ -251,6 +252,18 @@ function openedTo(keys: ReadonlySet<string>, path: readonly Node[]): Set<string>
     else next.delete(node.key);
   }
   return next;
+}
+
+/** The row asked for: the one under which an issue's spans all are, once the tree has them, else the span asked. */
+function useCovered(
+  tree: readonly Node[],
+  initialSpan: string | undefined,
+  initialCover: readonly string[] | undefined,
+): string | undefined {
+  return useMemo(
+    () => (initialCover && initialCover.length > 1 ? coverOf(tree, initialCover) : initialSpan),
+    [tree, initialSpan, initialCover],
+  );
 }
 
 /**
@@ -699,6 +712,7 @@ export function CallMap({
   related,
   links,
   initialSpan,
+  initialCover,
   head,
   ...wiring
 }: {
@@ -723,6 +737,8 @@ export function CallMap({
   links?: TraceLinks | undefined;
   /** A span to open with its details, as a link to it asks (a log line's span). */
   initialSpan?: string | undefined;
+  /** An issue's spans asked for: the row they are all under is shown, over `initialSpan` (one of them). */
+  initialCover?: readonly string[] | undefined;
   /**
    * Loads another trace's links: a call's trace opened in the tree then has the traces its own calls reached under
    * them, down the chain (the browser's view, the BFF, each service). Without it the tree opens one level.
@@ -745,10 +761,11 @@ export function CallMap({
   // The part of the time picked: the kinds of calls and the stretch of time the rows are kept for.
   const { slice: current, change, profileAt } = useHeldSlice();
   const { chain, tree, hidden, issues } = useMapTree(trace, related, issueBySpan, current.logs, wiring);
+  const asked = useCovered(tree, initialSpan, initialCover);
   const { codeRow, setCodeRow, selected, select, close, external, map, side, rows, collapsed, toggle } = useMapPicks(
     tree,
     trace,
-    initialSpan,
+    asked,
     wiring,
   );
   const details = codeRow ? (

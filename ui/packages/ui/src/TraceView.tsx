@@ -175,7 +175,7 @@ function IssuesPane({
   findings,
   links,
   onShowSpans,
-  onShowRow,
+  onShowRows,
   spansNoun,
 }: {
   open: boolean;
@@ -183,14 +183,14 @@ function IssuesPane({
   findings: readonly Issue[];
   links: TraceLinks | undefined;
   onShowSpans: (ids: readonly string[]) => void;
-  onShowRow: (row: string) => void;
+  onShowRows: (ids: readonly string[]) => void;
   spansNoun: (issue: Issue) => string;
 }) {
   if (!open) return null;
   if (isAlone(chain)) {
     return <IssueList issues={findings} onShowSpans={onShowSpans} spansNoun={spansNoun} links={links} />;
   }
-  return <ScopedIssues chain={chain} links={links} onShowRow={onShowRow} />;
+  return <ScopedIssues chain={chain} links={links} onShowRows={onShowRows} />;
 }
 
 /** A trace with no traces down its calls, and nothing under a row asked for: its tabs list its own. */
@@ -1247,9 +1247,19 @@ export function TraceView({
   const asked = useAskedTab(initialTab, tabs, setActive);
 
   const askedRow = useLastAsked(focusRow, treeSpan);
+  // An issue's spans: the row they are all under (an N+1's group, not one of its calls), until the list picks another.
+  const [treeCover, setTreeCover] = useState<readonly string[] | undefined>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a record picked in the list asks for its own row.
+  useEffect(() => setTreeCover(undefined), [focusRow]);
   // A record's or an issue's row in the call tree.
   const showRow = (row: string) => {
+    setTreeCover(undefined);
     setTreeSpan(row);
+    setActive("tree");
+  };
+  const showRows = (ids: readonly string[]) => {
+    setTreeCover(ids);
+    setTreeSpan(ids[0]);
     setActive("tree");
   };
   // A lane or a tile opens the tab with what it drew (the call tree at its span).
@@ -1280,6 +1290,7 @@ export function TraceView({
       loadRelated={loadRelated}
       links={links}
       initialSpan={askedRow}
+      initialCover={treeCover}
       explainOf={explainOf}
       onTraceProfile={onTraceProfile}
       profilesIn={held.profilesIn}
@@ -1301,10 +1312,12 @@ export function TraceView({
       findings={findings}
       onShowSpans={(ids) => {
         setFocus(new Set(ids));
+        setTreeCover(ids);
         setTreeSpan(ids[0]);
         setActive(tabOfSpans(trace, ids));
       }}
       onShowRow={showRow}
+      onShowRows={showRows}
       spansNoun={spansNoun}
       issueBySpan={tabbed.issueBySpan}
       focus={focus}
@@ -1396,6 +1409,7 @@ function TracePanes({
   chain,
   findings,
   onShowSpans,
+  onShowRows,
   onShowRow,
   spansNoun,
   issueBySpan,
@@ -1413,6 +1427,7 @@ function TracePanes({
   chain: TraceScope;
   findings: readonly Issue[];
   onShowSpans: (ids: readonly string[]) => void;
+  onShowRows: (ids: readonly string[]) => void;
   onShowRow: (row: string) => void;
   spansNoun: ReturnType<typeof nounsOf>;
   issueBySpan: ReadonlyMap<string, IssueKind>;
@@ -1439,7 +1454,7 @@ function TracePanes({
           findings={findings}
           links={links}
           onShowSpans={onShowSpans}
-          onShowRow={onShowRow}
+          onShowRows={onShowRows}
           spansNoun={spansNoun}
         />
         <LogsPane open={active === "logs"} chain={chain} trace={trace} links={links} onShowRow={onShowRow} />

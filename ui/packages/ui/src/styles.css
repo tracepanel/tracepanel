@@ -3734,3 +3734,19 @@ div.tp-map-row[data-kind="code"] {
   color: var(--tp-warn-strong);
   font-weight: 600;
 }
+
+/* A call's time against the longest of its group's: the slow runs stand out. */
+.tp-call-share {
+  display: block;
+  width: 3.5rem;
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--tp-hover);
+}
+.tp-call-share > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--tp-k-sql) 55%, transparent);
+}
