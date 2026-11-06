@@ -241,10 +241,8 @@ function ListItem({
   if (trace.id === selectedId) {
     return (
       <li>
-        {/* On the list's scale: its bars as long as its closed row's, what it called within them. */}
-        <div className="tp-requests-open" style={{ "--record-share": share } as CSSProperties}>
-          {openContent}
-        </div>
+        {/* On its own scale, whatever the list's longest: its calls' bars read across the whole column. */}
+        <div className="tp-requests-open">{openContent}</div>
       </li>
     );
   }

@@ -3708,11 +3708,6 @@ div.tp-map-row[data-kind="code"] {
 .tp-record-marks::before {
   display: none;
 }
-/* The open record's bars on the list's scale (TraceList): its track as long as its closed bar was. */
-.tp-requests-open .tp-map-row > .tp-map-track {
-  justify-self: start;
-  width: calc(var(--record-share, 1) * 100%);
-}
 
 /* A record's queries' time, said only where there's room (the panel's details hidden). */
 .tp-request-queries-time {
