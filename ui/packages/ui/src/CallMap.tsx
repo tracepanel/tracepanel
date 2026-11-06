@@ -244,14 +244,25 @@ function useFolded(
   return [keys, toggle];
 }
 
-/** The rows folded or opened with those on the way to a row opened: a group's opened, a span's no longer folded. */
+/**
+ * The rows folded or opened with those on the way to a row opened: a group's opened; a row open from the start no
+ * longer folded; one folded from the start (a call's trace, one of many deeper down the chain) turned open.
+ */
 function openedTo(keys: ReadonlySet<string>, path: readonly Node[]): Set<string> {
   const next = new Set(keys);
   for (const node of path.slice(0, -1)) {
     if (node.type === "group") next.add(`open:${node.key}`);
-    else next.delete(node.key);
+    else if (startsOpen(node)) next.delete(node.key);
+    else next.add(node.key);
   }
   return next;
+}
+
+/** Whether a row starts open: its key in the folded set turns it the other way (a click on its fold). */
+function startsOpen(node: Node): boolean {
+  if (node.type === "span") return node.served?.opened ?? true;
+  if (node.type === "task") return node.opened;
+  return true;
 }
 
 /** The row asked for: the one under which an issue's spans all are, once the tree has them, else the span asked. */
