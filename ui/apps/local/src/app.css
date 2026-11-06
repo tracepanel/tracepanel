@@ -1867,11 +1867,19 @@ body {
   margin-left: auto;
 }
 
+/* The details' width across, docked at the bottom: their share, yet never so wide that the rows keep less than room
+   for a call's name, its app and its status (a narrow window, a share dragged wide on a wider one). The line between
+   them and the top's actions over the details follow it. */
+.panel-wf,
+.panel-top {
+  --wf-across: min(var(--wf-details, 38%), max(20%, calc(100% - 44rem)));
+}
+
 .panel-wf {
   display: grid;
   flex: 1;
   position: relative;
-  grid-template-columns: minmax(0, 1fr) var(--wf-details, 38%);
+  grid-template-columns: minmax(0, 1fr) var(--wf-across);
   min-height: 0;
 }
 
@@ -1999,7 +2007,7 @@ body {
 .panel-top > .bar-actions {
   flex: none;
   justify-content: flex-end;
-  width: var(--wf-details, 38%);
+  width: var(--wf-across);
   min-width: max-content;
   margin-left: 0;
   padding: 0 0.5rem 0 0.625rem;
@@ -2080,7 +2088,7 @@ body {
   z-index: 4;
   top: 0;
   bottom: 0;
-  left: calc(100% - var(--wf-details, 38%));
+  left: calc(100% - var(--wf-across));
   width: 0.5625rem;
   transform: translateX(-50%);
   cursor: col-resize;
