@@ -157,11 +157,14 @@ function TraceApp({ service }: { service: string }) {
 function traceColumns(items: readonly TraceSummary[]): DataColumn<TraceSummary>[] {
   const times = items.map((trace) => trace.duration).sort((a, b) => a - b);
   const longest = Math.max(1, times[Math.floor((times.length - 1) * 0.9)] ?? 1);
-  const columns = TRACE_COLUMNS.map((column) =>
-    column.id === "duration"
-      ? { ...column, width: 10, cell: (trace: TraceSummary) => <TraceTime trace={trace} longest={longest} /> }
-      : column,
-  );
+  // A task's state ("● failure") is longer than a request's status ("● 200"): its column as wide as it takes.
+  const states = items.some((trace) => trace.task_state);
+  const columns = TRACE_COLUMNS.map((column) => {
+    if (column.id === "duration") {
+      return { ...column, width: 8.5, cell: (trace: TraceSummary) => <TraceTime trace={trace} longest={longest} /> };
+    }
+    return column.id === "status" && states ? { ...column, width: 8 } : column;
+  });
   if (new Set(items.map((trace) => trace.service)).size < 2) return columns;
   const [trace, ...rest] = columns;
   return trace ? [trace, APP_COLUMN, ...rest] : columns;
