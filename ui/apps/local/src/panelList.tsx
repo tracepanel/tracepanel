@@ -158,15 +158,6 @@ function tabName(tab: TabId | undefined, trace: TraceSummary | undefined): strin
   return tab ? TAB_NAMES[tab] : "Trace";
 }
 
-/** What a trace's row says it opens on, in its tooltip: the tab last picked (NAVIGATION.md, rule 3). */
-type OpensOn = ((trace: TraceSummary) => string | undefined) | undefined;
-
-/** The tab last picked, said on the rows a click opens fresh; nothing to say for the call tree, where they open anyway. */
-export function opensOnTab(tab: TabId | undefined): OpensOn {
-  if (!tab || tab === "tree") return undefined;
-  return (trace) => `Opens on ${tabName(tab, trace)}, the tab you used last (the call tree where it has none)`;
-}
-
 /**
  * The way back to the view a linked trace was opened from, named for where it goes: that trace's tab and the trace,
  * as the list names it ("← Call tree · GQL query Books"). Esc goes there too. `bare` (docked right, the tabs need the

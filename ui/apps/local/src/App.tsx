@@ -29,7 +29,6 @@ import { ClearDialog } from "./ClearDialog";
 import { Console } from "./Console";
 import { exploreFor } from "./explore";
 import { useTabHistory } from "./hooks";
-import { readLastTab } from "./lastTab";
 import { forgetUnless, restoringFor, setCurrentView, useBackStep } from "./panelBack";
 import { useChainOpen, useKnownApps, useRowChains, useTabRows } from "./panelChains";
 import { type Dock, tellWidget, useDock, useSplit } from "./panelLayout";
@@ -39,7 +38,6 @@ import {
   KindsMenu,
   ListTools,
   offeredKinds,
-  opensOnTab,
   PANEL_LINKS,
   PanelProfile,
   readFollow,
@@ -48,7 +46,7 @@ import {
   useShownKinds,
   writeFollow,
 } from "./panelList";
-import { arrivingIn, followTarget, inOrder, manyApps, pageScope, runningIn, withRuns } from "./panelRows";
+import { arrivingIn, followTarget, inOrder, pageScope, runningIn, withRuns } from "./panelRows";
 import { base, source } from "./panelSource";
 import {
   DetailsSplitter,
@@ -326,8 +324,6 @@ function PanelWaterfall({
   listRows,
   stored,
   chains,
-  opensOn,
-  currentId,
   toolbar,
   actions,
   dock,
@@ -349,8 +345,6 @@ function PanelWaterfall({
   listRows: readonly TraceRow[];
   stored: ReadonlySet<string>;
   chains: ListChains;
-  opensOn: ReturnType<typeof opensOnTab>;
-  currentId: string | null;
   toolbar: ReactNode;
   actions: (explore: ReactNode) => ReactNode;
   dock: Dock;
@@ -465,13 +459,10 @@ function PanelWaterfall({
                 <RowKinds.Provider value={kinds}>
                   <TraceList
                     compact={true}
-                    services={manyApps(rows)}
                     rows={records}
                     onMore={letGo ? undefined : onMore}
                     selectedId={rootId}
-                    currentId={currentId}
                     chains={chains}
-                    opensOn={opensOn}
                     onSelect={(id) => {
                       clicked.current = rowTop(id);
                       go({ name: "trace", id });
@@ -607,7 +598,6 @@ function PanelApp({ route }: { route: Route }) {
   const dock = useDock();
   const split = useSplit(dock);
   const [follow, setFollow] = useState(readFollow);
-  const [tab] = useState(readLastTab);
   const sliced = usePanelSlice(selectedId, route);
   const view = usePanelView(route, selectedId, sliced.params);
   const [clearing, setClearing] = useState(false);
@@ -626,7 +616,6 @@ function PanelApp({ route }: { route: Route }) {
     // An app's row is that app's part of the chain: the call tree, at the row where its part starts (NAVIGATION.md).
     onApp: (id, app) => go({ name: "trace", id, under: app, tab: "tree" }),
   };
-  const opensOn = opensOnTab(tab);
   const tabRows = inOrder(split, rows);
   const followRows = split ? tabRows : pageRows;
   const latestChild = followTarget(followRows);
@@ -656,8 +645,6 @@ function PanelApp({ route }: { route: Route }) {
       onMore={more ? () => setRoots((shown) => shown + LIST_PAGE) : undefined}
       stored={stored}
       chains={chains}
-      opensOn={opensOn}
-      currentId={currentId}
       listTools={
         <ListTools
           follow={follow}
