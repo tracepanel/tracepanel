@@ -1117,7 +1117,8 @@ tr[data-new] {
 .tp-trace-strip {
   position: sticky;
   top: 0;
-  z-index: 2;
+  /* A sticky head is over all that scrolls under it (a lit segment, a hovered mark, a switch laid over a head). */
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -1500,7 +1501,8 @@ tr[data-new] {
   backdrop-filter: var(--tp-blur);
   position: sticky;
   top: 0;
-  z-index: 1;
+  /* Over all that scrolls under it (a lit segment, a hovered mark, Time and Memory laid over a tab's head). */
+  z-index: 5;
   display: flex;
   gap: 2px;
   margin-top: 0.5rem;

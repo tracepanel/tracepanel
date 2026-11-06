@@ -71,23 +71,6 @@ a {
   }
 }
 
-/* ---------- Panel (inside the widget) ---------- */
-
-.bar {
-  position: relative;
-  top: 0;
-  /* Above the trace's sticky tab strip, so the request list opens over it. */
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: 3.125rem;
-  padding: 0 0.5rem 0 0.75rem;
-  border-bottom: 1px solid var(--tp-border);
-  background: var(--tp-chrome);
-  backdrop-filter: var(--tp-blur);
-}
-
 .logo {
   display: grid;
   place-items: center;
@@ -134,10 +117,6 @@ a {
   height: 100vh;
   overflow: hidden;
   background: radial-gradient(600px 300px at 100% 0%, rgb(124 58 237 / 0.1), transparent 70%), var(--tp-panel);
-}
-
-.panel > .bar {
-  flex: none;
 }
 
 .panel-body {
@@ -699,44 +678,9 @@ a {
   backdrop-filter: var(--tp-blur);
 }
 
-.detail-resize {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  float: left;
-  width: 0.5rem;
-  height: 100%;
-  margin: 0 -0.5rem 0 -0.25rem;
-  cursor: ew-resize;
-}
-
-.detail-resize::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 2px;
-  width: 0.25rem;
-  height: 2.5rem;
-  margin-top: -1.25rem;
-  border-radius: 2px;
-  transition: background 120ms;
-}
-
-.detail-resize:hover::after,
-html[data-resizing] .detail-resize::after {
-  background: rgb(167 139 250 / 0.7);
-}
-
 html[data-resizing] {
   cursor: ew-resize;
   user-select: none;
-}
-
-.detail-bar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  padding: 0.625rem 1rem 0;
 }
 
 .load-more {
@@ -757,7 +701,8 @@ html[data-resizing] {
 .table th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  /* Over the rows' lit share bars as they scroll under it. */
+  z-index: 5;
   padding: 0.75rem 1.125rem;
   border-bottom: 1px solid var(--tp-border);
   background: var(--tp-chrome-strong);
@@ -967,16 +912,6 @@ html[data-resizing] {
 
 .full-body .tp-trace-title h2 {
   font-size: var(--tp-size-xl);
-}
-
-.detail-bar {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.875rem;
-  z-index: 2;
-  display: flex;
-  gap: 0.25rem;
-  padding: 0;
 }
 
 .detail .tp-trace-head {
@@ -2059,8 +1994,6 @@ body {
 /* The details' tabs are the bar's second floor over them, in its colour (as the devtools' panes): not a header of
    their own beside the rows, which start under the bar. */
 .panel-wf-details .tp-tabs {
-  /* Over what scrolls under it, the switches laid over a tab's head too (Time and Memory, Your code). */
-  z-index: 2;
   margin-top: 0;
   padding-top: 0;
   background: var(--tp-chrome, var(--tp-bg));
@@ -2073,7 +2006,8 @@ body {
 /* The line between the rows and the details moves too: across docked at the bottom, down docked at the right. */
 .panel-wf-details-split {
   position: absolute;
-  z-index: 4;
+  /* Over the details' sticky tabs too: the whole line can be taken. */
+  z-index: 6;
   top: 0;
   bottom: 0;
   left: calc(100% - var(--wf-across));
