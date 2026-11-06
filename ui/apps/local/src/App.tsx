@@ -309,15 +309,30 @@ function filteredRecords(rows: readonly TraceRow[], filter: string, selectedId: 
   return rows.filter((row) => row.trace.id === selectedId || row.trace.name.toLowerCase().includes(wanted));
 }
 
-/** The tab's records, the caller puts the newest first: a view's calls are in its tree, so only the one a link opened stays a row of its own. */
-function recordsOf(rows: readonly TraceRow[], selectedId: string | null): TraceRow[] {
+/**
+ * The tab's records, the caller puts the newest first: a view's calls are in its tree, never rows of their own, the
+ * one picked or a link opened too (its view opens at it, useOpenRecord).
+ */
+function recordsOf(rows: readonly TraceRow[]): TraceRow[] {
   let view = -1;
   return rows.filter((row) => {
     const depth = row.depth ?? 0;
-    if (view >= 0 && depth > view) return row.trace.id === selectedId;
+    if (view >= 0 && depth > view) return false;
     view = row.trace.kind === "page" ? depth : -1;
     return true;
   });
+}
+
+/** The record a row is in: its view's, the row above it at the top of the tab's list; a record, itself. */
+function recordOf(rows: readonly TraceRow[], records: readonly TraceRow[], id: string | null): string | null {
+  const at = rows.findIndex((row) => row.trace.id === id);
+  if (at === -1) return null;
+  const listed = new Set(records.map((row) => row.trace.id));
+  for (let index = at; index >= 0; index--) {
+    const row = rows[index];
+    if (row && !row.depth && listed.has(row.trace.id)) return row.trace.id;
+  }
+  return null;
 }
 
 /** The panel: the tab's records over their bars, the open one as its call tree, the picked row's details beside. */
@@ -458,7 +473,7 @@ function usePanelState(tab: PanelTab, place: PanelPlace) {
   const layout = usePanelLayout(place.dock, place.empty);
   const [filter, setFilter] = useState("");
   const [kinds, setKinds] = useShownKinds();
-  const open = useOpenRecord(tab.listRows, place.selectedId);
+  const open = useOpenRecord(tab.rows, tab.listRows, place.selectedId);
   const shown = useShownRecords({ ...tab, rootId: open.rootId, filter, kinds });
   return { list, anchor, hosts, setHosts, layout, filter, setFilter, kinds, setKinds, open, shown };
 }
@@ -555,12 +570,15 @@ function usePanelLayout(dock: Dock, empty: boolean) {
  * The record open, and the trace picked in its tree: the waterfall stays put, so a link to a trace in the open
  * record's chain picks its row there; only a trace outside the chain opens on its own.
  */
-function useOpenRecord(listRows: readonly TraceRow[], selectedId: string | null) {
+function useOpenRecord(rows: readonly TraceRow[], listRows: readonly TraceRow[], selectedId: string | null) {
   const shownRecord = useRef<string | null>(null);
   const [outside, setOutside] = useState<string | null>(null);
   const isRecord = listRows.some((row) => row.trace.id === selectedId);
   if (isRecord) shownRecord.current = selectedId;
-  const rootId = isRecord || outside === selectedId ? selectedId : (shownRecord.current ?? selectedId);
+  // A view's call, picked or opened by a link (the pill's latest): its view's record, open at it.
+  const within = isRecord ? null : recordOf(rows, listRows, selectedId);
+  if (within) shownRecord.current = within;
+  const rootId = isRecord || outside === selectedId ? selectedId : (within ?? shownRecord.current ?? selectedId);
   const focusTrace = rootId !== selectedId ? (selectedId ?? undefined) : undefined;
   return { rootId, focusTrace, setOutside };
 }
@@ -826,7 +844,7 @@ function PanelApp({ route }: { route: Route }) {
     <PanelWaterfall
       tab={{
         rows,
-        listRows: recordsOf(inOrder(true, shown.rows), selectedId)
+        listRows: recordsOf(inOrder(true, shown.rows))
           .reverse()
           .map((row) => {
             const arriving = arrivingIn(rows, stored, row.trace.id) === true;
