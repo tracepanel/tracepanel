@@ -16,7 +16,8 @@ stay in your project.
 
 40-second demos: [Django](https://tracepanel.dev/video/demo.mp4),
 [Next.js](https://tracepanel.dev/video/demo-js.mp4),
-[Spring Boot](https://tracepanel.dev/video/demo-java.mp4).
+[Spring Boot](https://tracepanel.dev/video/demo-java.mp4),
+[Gin](https://tracepanel.dev/video/demo-go.mp4).
 
 This repository holds the agent, the console and the panel. Your app records
 traces through an SDK, and the SDK starts the agent.
