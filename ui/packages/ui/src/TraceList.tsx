@@ -21,7 +21,7 @@ import {
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
 import { cutNote, NO_ANSWER } from "./lib/live";
-import { pageParts, redirectNote } from "./lib/page";
+import { pageName, pageParts, redirectNote } from "./lib/page";
 import { plural } from "./lib/plural";
 import { traceRuntime } from "./lib/runtime";
 import { cn } from "./lib/utils";
@@ -412,7 +412,7 @@ function RecordLead({
         muted={true}
         className="tp-map-kind"
       />
-      <span className="tp-map-text">{page ? [page.label, page.page].filter(Boolean).join(" ") : trace.name}</span>
+      <span className="tp-map-text">{page ? pageName(trace.name) : trace.name}</span>
       {/* On hover its moment: records alike ("VIEW / 4m ago") still part by when each was. */}
       {when ? (
         <span className="tp-record-ago" title={dayTime(trace.start)}>

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { duration } from "./format";
+import { pageName, pageParts } from "./lib/page";
 import { type TraceLinks, traceLinkProps } from "./links";
 import type { PropRow } from "./PropTable";
 import { KindBadge, StateBadge, StatusBadge, TaskName } from "./primitives";
@@ -17,7 +18,9 @@ export interface Group {
 const LINK_KINDS: Record<string, string> = { http: "request", command: "job" };
 
 function LinkBadge({ trace }: { trace: TraceSummary }) {
-  return <KindBadge kind={LINK_KINDS[trace.kind] ?? trace.kind} muted={true} />;
+  // A page's view or action by what it is (VIEW, CLICK), as its record in the list says it.
+  const kind = trace.kind === "page" ? pageParts(trace.name).badge.toLowerCase() : trace.kind;
+  return <KindBadge kind={LINK_KINDS[kind] ?? kind} muted={true} />;
 }
 
 /** One alone: how it ended, as its own rows say it: a request's status, a task run's state, or that it failed. */
@@ -52,6 +55,7 @@ function Tally({ group: { first, count, failed } }: { group: Group }) {
  */
 function LinkedName({ trace }: { trace: TraceSummary }) {
   if (trace.kind === "task") return <TaskName name={trace.name} className="font-mono text-sm" />;
+  if (trace.kind === "page") return <span className="truncate font-mono text-sm">{pageName(trace.name)}</span>;
   return <span className="truncate font-mono text-sm">{requestName(trace) ?? trace.name}</span>;
 }
 

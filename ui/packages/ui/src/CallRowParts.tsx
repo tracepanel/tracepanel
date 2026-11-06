@@ -11,7 +11,7 @@ import { callText } from "./lib/calls";
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
 import { cutNote, isCut } from "./lib/live";
-import { pageParts } from "./lib/page";
+import { pageName, pageParts } from "./lib/page";
 import { plural } from "./lib/plural";
 import { WAITING } from "./lib/profile";
 import { type Quiet, quietSpans } from "./lib/quiet";
@@ -215,6 +215,8 @@ export function SpanName({ span }: { span: Span }) {
     );
   }
   if (TASK_SPANS.has(span.kind)) return <TaskName name={span.name} className="tp-map-text" />;
+  // A view or an action as the list names its record: its badge says which, its name what and where.
+  if (span.kind === "page") return <span className="tp-map-text">{pageName(span.name)}</span>;
   return <OpText text={callText(span)} kind={span.kind} />;
 }
 
