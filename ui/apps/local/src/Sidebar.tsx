@@ -20,6 +20,7 @@ import {
   BracesIcon,
   BugIcon,
   CableIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsUpDownIcon,
@@ -620,27 +621,36 @@ function OtlpNotice({ otlp }: { otlp: Otlp }) {
     : otlp.taken_by_agent
       ? "an older Tracepanel agent"
       : "another program";
+  // One line, its how-to a click away: a project that sends no OTLP doesn't need it on every page.
   return (
-    <div role="note" aria-label="OTLP" className="flex gap-2 rounded-md border bg-muted/40 p-2.5 leading-relaxed">
-      <UnplugIcon className="mt-1 size-3.5 shrink-0 text-warn" aria-hidden={true} />
-      {otlp.taken ? (
-        <p className="min-w-0 break-words">
-          OTLP: <code className="font-mono text-foreground">{otlp.address}</code> is taken by {by}. Set{" "}
-          {/* Where it doesn't fit on the line, broken after the = only. */}
-          <code className="font-mono text-foreground select-all">
-            <span className="whitespace-nowrap">TRACEPANEL_OTLP=</span>
-            <wbr />
-            <span className="whitespace-nowrap">{otlp.free ?? "HOST:PORT"}</span>
-          </code>{" "}
-          for this project's apps and point its OTLP exporters there.
-        </p>
-      ) : (
-        <p className="min-w-0 break-words">
-          OTLP: not served on <code className="font-mono text-foreground">{otlp.address}</code>
-          {otlp.error ? `: ${otlp.error}` : ""}.
-        </p>
-      )}
-    </div>
+    <details role="note" aria-label="OTLP" className="group rounded-md border bg-muted/40 leading-relaxed">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-1.5 [&::-webkit-details-marker]:hidden">
+        <UnplugIcon className="size-3.5 shrink-0 text-warn" aria-hidden={true} />
+        <span className="min-w-0 truncate">
+          OTLP: <code className="font-mono text-foreground">{otlp.address}</code> {otlp.taken ? "taken" : "not served"}
+        </span>
+        <ChevronDownIcon className="ml-auto size-3.5 shrink-0 transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="flex gap-2 px-2.5 pb-2.5">
+        {otlp.taken ? (
+          <p className="min-w-0 break-words">
+            OTLP: <code className="font-mono text-foreground">{otlp.address}</code> is taken by {by}. Set{" "}
+            {/* Where it doesn't fit on the line, broken after the = only. */}
+            <code className="font-mono text-foreground select-all">
+              <span className="whitespace-nowrap">TRACEPANEL_OTLP=</span>
+              <wbr />
+              <span className="whitespace-nowrap">{otlp.free ?? "HOST:PORT"}</span>
+            </code>{" "}
+            for this project's apps and point its OTLP exporters there.
+          </p>
+        ) : (
+          <p className="min-w-0 break-words">
+            OTLP: not served on <code className="font-mono text-foreground">{otlp.address}</code>
+            {otlp.error ? `: ${otlp.error}` : ""}.
+          </p>
+        )}
+      </div>
+    </details>
   );
 }
 
