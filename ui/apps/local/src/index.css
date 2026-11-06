@@ -80,6 +80,15 @@
   );
 }
 
+/* A row of a tree or a list, walked with the keys: a stronger tint than a control's, so it shows over a row already
+   tinted (the one selected, the open record's). Still no ring. */
+.tp-map-row:focus-visible {
+  background-image: linear-gradient(
+    color-mix(in oklab, currentColor 18%, transparent),
+    color-mix(in oklab, currentColor 18%, transparent)
+  );
+}
+
 /* A trace's call tree with its details beside it runs to the page's bottom: scrolled to the end, the line between
    the tree and the details reaches the view's bottom edge, not the page's padding short of it. */
 .tp-trace-page:has(.tp-map-body[data-side]) {

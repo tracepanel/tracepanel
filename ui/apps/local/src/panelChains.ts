@@ -31,12 +31,27 @@ const NO_TRACES: TabTraces = { traces: [], runs: NO_RUNS };
  */
 const IDS_PER_ASK = 100;
 
-/** The tab's traces as the agent has them, and the task runs each led to (none where the source can't say). */
+/** How often a part of older rows, all of them stored, is asked again: once in so many polls (its numbers may grow). */
+const SETTLED_EVERY = 10;
+
+/** Each part's last answer, by its ids, and the poll it was asked on. */
+const PARTS = new Map<string, { answer: TabTraces; poll: number }>();
+let polls = 0;
+
+/**
+ * The tab's traces as the agent has them, and the task runs each led to (none where the source can't say). The tab's
+ * history runs oldest first: its last part, the newest rows, is asked each poll; an older one again where the agent
+ * lacked a row of it, else once in a while.
+ */
 async function loadTab(ids: readonly string[]): Promise<TabTraces> {
   if (ids.length === 0) return NO_TRACES;
+  polls += 1;
   const parts: string[][] = [];
   for (let at = 0; at < ids.length; at += IDS_PER_ASK) parts.push(ids.slice(at, at + IDS_PER_ASK));
-  const answers = await Promise.all(parts.map(loadPart));
+  const answers = await Promise.all(parts.map((part, at) => partAnswer(part, at === parts.length - 1)));
+  // Only the parts of this list are kept: a list that moved on leaves its old parts behind.
+  const current = new Set(parts.map((part) => part.join(",")));
+  for (const key of PARTS.keys()) if (!current.has(key)) PARTS.delete(key);
   return {
     traces: answers.flatMap((answer) => answer.traces),
     runs: Object.assign({}, ...answers.map((answer) => answer.runs)),
@@ -44,6 +59,17 @@ async function loadTab(ids: readonly string[]): Promise<TabTraces> {
       ? Object.assign({}, ...answers.map((answer) => answer.counts ?? {}))
       : undefined,
   };
+}
+
+/** A part's answer: asked again when it is the newest, lacked a row, or was asked long enough ago. */
+async function partAnswer(ids: readonly string[], newest: boolean): Promise<TabTraces> {
+  const key = ids.join(",");
+  const known = PARTS.get(key);
+  const whole = known && ids.every((id) => known.answer.traces.some((trace) => trace.id === id));
+  if (!newest && known && whole && polls - known.poll < SETTLED_EVERY) return known.answer;
+  const answer = await loadPart(ids);
+  PARTS.set(key, { answer, poll: polls });
+  return answer;
 }
 
 function loadPart(ids: readonly string[]): Promise<TabTraces> {
