@@ -35,6 +35,8 @@ export interface SpanScope {
   only: boolean;
   /** A code or wait row's: its trace's stretches (µs since that trace started), what its profile is of. */
   at?: CodeStretch | undefined;
+  /** A log record's or an error's row: when it was (µs), and when its trace started, its row's "+210 ms". */
+  moment?: { time: number; start: number } | undefined;
 }
 
 /** A record of a scope, with its trace and the app that logged it. */

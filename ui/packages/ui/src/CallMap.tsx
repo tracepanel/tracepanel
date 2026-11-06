@@ -279,7 +279,7 @@ function useOpenedTo(
 }
 
 /** What is under a row, as the trace's tabs take it: a span's, a group's spans', a call's trace. */
-function scopeOfNode(node: Node): SpanScope | undefined {
+function scopeOfNode(node: Node, trace?: Trace): SpanScope | undefined {
   if (node.type === "span") return spanScope(node);
   if (node.type === "group") {
     return {
@@ -292,8 +292,13 @@ function scopeOfNode(node: Node): SpanScope | undefined {
     return { targets: [node.run.id], label: appName(node) ?? node.run.name, only: false };
   }
   // A log record or an error: a row of its own, nothing under it: its details, not the record's.
-  if (node.type === "log") return { targets: [], label: node.log.message, only: true };
-  if (node.type === "error") return { targets: [], label: node.error.type, only: true };
+  const start = trace?.start ?? 0;
+  if (node.type === "log") {
+    return { targets: [], label: node.log.message, only: true, moment: { time: node.log.time, start } };
+  }
+  if (node.type === "error") {
+    return { targets: [], label: node.error.type, only: true, moment: { time: node.error.time, start } };
+  }
   return undefined;
 }
 
@@ -529,7 +534,7 @@ function useRowPicked(
   const codeKey = code ? `${code.at.trace}:${code.at.windows.join(";")}` : "";
   // biome-ignore lint/correctness/useExhaustiveDependencies: the row picked, not each new tree it is found in.
   useEffect(() => {
-    const scope = node ? scopeOfNode(node) : undefined;
+    const scope = node ? scopeOfNode(node, trace) : undefined;
     const coded = scope && code ? { ...scope, label: code.info.name, only: true, at: code.at } : scope;
     if (external) onPicked?.(coded ?? null);
   }, [external, picked, codeKey]);

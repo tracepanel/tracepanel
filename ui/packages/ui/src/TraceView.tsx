@@ -33,7 +33,7 @@ import {
 } from "./components/ui/dropdown-menu";
 import { HiddenColumns } from "./DataTable";
 import { ErrorView } from "./ErrorView";
-import { duration } from "./format";
+import { duration, since } from "./format";
 import { HeadFacts } from "./HeadFacts";
 import { Hint } from "./Hint";
 import { useMenuOpen } from "./hooks/useCloseOnBlur";
@@ -525,10 +525,17 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
         </KindWords.Provider>
       ) : null}
       <span className="tp-details-name">{scope.label}</span>
-      <span className="tp-details-took">
-        <ClockIcon />
-        {duration(took)}
-      </span>
+      {scope.moment ? (
+        // A record or an error is a moment, not a stretch: when, as its row says it.
+        <span className="tp-details-took" title={`Logged ${since(scope.moment.time, scope.moment.start)}`}>
+          <ClockIcon />+{duration(Math.max(scope.moment.time - scope.moment.start, 0))}
+        </span>
+      ) : (
+        <span className="tp-details-took">
+          <ClockIcon />
+          {duration(took)}
+        </span>
+      )}
     </h3>
   );
 }
