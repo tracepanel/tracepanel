@@ -475,15 +475,6 @@ function RecordTrack({ live, share }: { live: boolean; share: number | undefined
   );
 }
 
-/** A call no trace answered and none will, as the call tree says it: muted, its reason in the tooltip. */
-function NotTracedMark({ host }: { host: string }) {
-  return (
-    <span className="tp-not-traced" data-state="untraced" title={untracedNote(host)}>
-      not traced
-    </span>
-  );
-}
-
 /**
  * A row's time: ticking while it runs, else its time. A trace that went out with a call unanswered says "no answer"
  * beside its name, never here: its time is where it was cut, and the column keeps a time's width for every row.
@@ -543,7 +534,7 @@ function ChainRows({ rowId, apps, level, chains, selectedId, onSelect }: ChainRo
 function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number }) {
   const summary = waitingSummary(call);
   const name = rowName(summary);
-  // Once no trace will come: the same row, "not traced", as the call tree says it; no numbers to wait for.
+  // Once no trace will come: the same row, its hourglass gone and why in its tooltip; no numbers to wait for.
   const untraced = call.untraced;
   return (
     <div
@@ -557,7 +548,6 @@ function ChainWaitingRow({ call, level }: { call: ChainWaiting; level: number })
         <span className="tp-map-caret" />
         <RowName trace={summary} />
         {call.cut === null ? null : <NoAnswer at={call.cut} />}
-        {untraced === undefined ? null : <NotTracedMark host={untraced} />}
       </span>
       {/* As the row of its trace will be: its status and time, its numbers pending until that trace comes. */}
       <span className="tp-request-meta">

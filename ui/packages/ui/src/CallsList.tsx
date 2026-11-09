@@ -21,7 +21,7 @@ import { callTemplate, groupNoun } from "./lib/calls";
 import { cn } from "./lib/utils";
 import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
 import type { IssueKind, Span } from "./types";
-import { GroupNotTraced, NotTraced } from "./Untraced";
+import { untracedNote, useGroupUntraced, useUntraced } from "./Untraced";
 
 export interface CallsListProps {
   /** The request's calls to one system: HTTP calls, Redis commands, MongoDB commands… */
@@ -151,8 +151,7 @@ function Call({
         </span>
         <span className="grid min-w-0">
           <span className="flex min-w-0 items-center gap-2">
-            <code className="truncate font-mono">{url}</code>
-            <NotTraced spanId={span.id} />
+            <UntracedUrl spanId={span.id} url={url} />
           </span>
           {/* Where it was made, where that is known: no line of a dash. */}
           {saidOrigin || !origin ? null : <code className="truncate font-mono text-muted-foreground">{origin}</code>}
@@ -162,16 +161,34 @@ function Call({
   );
 }
 
+/** A call's URL; one no trace answered says why in its tooltip. */
+function UntracedUrl({ spanId, url }: { spanId: string; url: string }) {
+  const host = useUntraced(spanId);
+  return (
+    <code
+      className="truncate font-mono"
+      data-untraced={host === undefined ? undefined : ""}
+      title={host === undefined ? undefined : untracedNote(host)}
+    >
+      {url}
+    </code>
+  );
+}
+
 /** A group's name in its row: what its calls repeat, how many, how they went, its issue. */
 function GroupName({ group }: { group: Group }) {
   // How many right after what, as the tree says it: ×36.
   const issue = group.issue;
+  const untraced = useGroupUntraced(group.spans);
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span
+      className="flex min-w-0 items-center gap-2"
+      data-untraced={untraced === undefined ? undefined : ""}
+      title={untraced === undefined ? undefined : untracedNote(untraced)}
+    >
       <Template template={group.template} />
       <Times count={group.spans.length} />
       {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
-      <GroupNotTraced spans={group.spans} />
       {issue ? <IssueChip kind={issue} /> : null}
     </span>
   );

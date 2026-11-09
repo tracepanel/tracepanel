@@ -3604,15 +3604,6 @@ div.tp-map-row[data-kind="code"] {
   /* Its line a line of text's height, the hourglass in its middle, with its words or without. */
   margin-block: calc((1lh - 0.75rem) / 2);
 }
-/* A call no trace answered and none will (Untraced): muted, as a call's other notes; its reason in the tooltip. */
-.tp-not-traced {
-  flex: none;
-  padding-inline-end: 0.2em;
-  color: var(--tp-text-3);
-  font-size: var(--tp-size-xs);
-  font-style: italic;
-  white-space: nowrap;
-}
 .tp-not-traced-note {
   margin: 0;
   color: var(--tp-text-2);

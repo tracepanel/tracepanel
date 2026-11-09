@@ -17,7 +17,7 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
     await expect(hops).toHaveCount(4);
     const untraced = page
       .locator('.tp-map-row[data-kind="http.client"]')
-      .filter({ has: page.locator(".tp-not-traced"), hasText: "openapi.json" });
+      .filter({ has: page.locator("[data-untraced]"), hasText: "openapi.json" });
     await expect(untraced).toHaveCount(1);
     await laidOut(page);
     const clipped = await hops.evaluateAll((rows) =>
@@ -38,8 +38,8 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
       width,
       clipped: Array.from({ length: 4 }, () => ({ status: "200", whole: true, past: 0 })),
     });
-    // A call no trace answered keeps its status and "not traced" whole the same way; what is before them gives way,
-    // cut with an ellipsis: its kind, its name.
+    // A call no trace answered keeps its status whole the same way; what is before it gives way, cut with an
+    // ellipsis: its kind, its name.
     const kept = await untraced.evaluate((row) => {
       const name = row.querySelector(":scope > .tp-map-name");
       const box = name?.getBoundingClientRect();
@@ -55,13 +55,12 @@ test("in a narrow call tree a call's status is never cut, nested rows too: its n
       const cut = [...(name?.querySelectorAll(".tp-map-lead *") ?? [])]
         .filter((part) => part.children.length === 0 && part.scrollWidth > part.clientWidth)
         .map((part) => getComputedStyle(part).textOverflow);
-      return { status: whole(".tp-status"), mark: whole(".tp-not-traced"), cut: [...new Set(cut)] };
+      return { status: whole(".tp-status"), cut: [...new Set(cut)] };
     });
     expect({ width, kept }).toEqual({
       width,
       kept: {
         status: { text: "200", whole: true, past: 0 },
-        mark: { text: "not traced", whole: true, past: 0 },
         cut: kept.cut.length ? ["ellipsis"] : [],
       },
     });

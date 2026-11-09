@@ -148,7 +148,7 @@ test("while an opened call trace's links load, the note says nothing of traces t
   await expect(note).toHaveCount(0, { timeout: 2_000 });
   await expect(booksRow).toHaveCount(0);
   await expect(toBooksRow.locator(".tp-status")).toHaveText("200");
-  await expect(toBooksRow.locator('[data-state="untraced"]')).toHaveCount(0);
+  await expect(toBooksRow.locator("[data-untraced]")).toHaveCount(0);
 
   await expect(booksRow).toHaveCount(1, { timeout: 5_000 });
   await expect(note).toHaveCount(0);
