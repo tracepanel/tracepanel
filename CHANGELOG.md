@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- A call no trace answered has no "not traced" label on its row: its
+  tooltip and its details say why.
+
 ### Fixed
 
 - A flame graph keeps its zoom, and Show all its whole graph, while the

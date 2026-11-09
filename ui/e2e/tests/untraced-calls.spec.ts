@@ -1,11 +1,9 @@
-// A call to a host that records no traces (a gateway's remote subgraph) says so: "not traced", muted, on its row in the
-// call tree and the HTTP calls tab, and why in its details. A call another app answered is that app's row instead,
+// A call to a host that records no traces (a gateway's remote subgraph) says so in its row's tooltip, in the call tree
+// and the HTTP calls tab, and in its details; its row has no label for it. A call another app answered is that app's row instead,
 // and a call still waited for isn't said untraced yet.
 
-import type { Locator } from "@playwright/test";
 import { expect as pollExpect } from "@playwright/test";
 import { CONSOLE } from "../agent.ts";
-import { laidOut } from "../app.ts";
 import { expect, test } from "../fixtures.ts";
 
 type Doc = Record<string, unknown>;
@@ -74,34 +72,7 @@ async function storeRouter(): Promise<void> {
     .toHaveLength(2);
 }
 
-/**
- * Whether a label's letters are all shown: its last one's ink (an italic "d" leans past its advance) inside every box
- * that clips it, its own and its rows'.
- */
-function inkShown(label: Locator): Promise<boolean> {
-  return label.evaluate((element) => {
-    const style = getComputedStyle(element);
-    const context = document.createElement("canvas").getContext("2d");
-    if (!context) return false;
-    context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const ink =
-      range.getBoundingClientRect().left + context.measureText(element.textContent ?? "").actualBoundingBoxRight;
-    let edge = Number.POSITIVE_INFINITY;
-    for (let box: Element | null = element; box; box = box.parentElement) {
-      const clips = getComputedStyle(box).overflowX !== "visible";
-      if (clips)
-        edge = Math.min(
-          edge,
-          box.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(box).borderRightWidth),
-        );
-    }
-    return ink <= edge + 0.25;
-  });
-}
-
-test("a call to a host that sends no traces says not traced, on its row and in its details; the traced one doesn't", async ({
+test("a call to a host that sends no traces says not traced, in its row's tooltip and its details; the traced one doesn't", async ({
   page,
 }) => {
   await storeRouter();
@@ -109,13 +80,10 @@ test("a call to a host that sends no traces says not traced, on its row and in i
   const untraced = page.locator(".tp-map-row").filter({ hasText: "reviews.example.test" });
   const traced = page.locator(".tp-map-row").filter({ hasText: "books" });
 
-  await expect(untraced.locator('[data-state="untraced"]')).toHaveText("not traced");
-  await expect(untraced.locator('[data-state="untraced"]')).toHaveAttribute("title", new RegExp(`^${NOTE}`));
-  // Its italic letters whole, its last one too.
-  await laidOut(page);
-  expect(await inkShown(untraced.locator('[data-state="untraced"]'))).toBe(true);
+  await expect(untraced.locator("[data-untraced]")).toHaveAttribute("title", new RegExp(`^${NOTE}`));
+  await expect(untraced).not.toContainText("not traced");
   await expect(traced).toHaveCount(1);
-  await expect(traced.locator('[data-state="untraced"]')).toHaveCount(0);
+  await expect(traced.locator("[data-untraced]")).toHaveCount(0);
 
   await untraced.click();
 
@@ -123,11 +91,10 @@ test("a call to a host that sends no traces says not traced, on its row and in i
 
   await page.getByRole("tab", { name: /^HTTP calls/ }).click();
 
-  const untracedCall = page.getByRole("tabpanel").getByText("not traced");
+  const untracedCall = page.getByRole("tabpanel").locator("[data-untraced]");
   await expect(untracedCall).toHaveCount(1);
   await expect(untracedCall).toHaveAttribute("title", new RegExp(`^${NOTE}`));
-  await laidOut(page);
-  expect(await inkShown(untracedCall)).toBe(true);
+  await expect(page.getByRole("tabpanel")).not.toContainText("not traced");
 });
 
 test("a call that just ended is waited for first: not traced only once no trace came in time", async ({ page }) => {
@@ -146,9 +113,9 @@ test("a call that just ended is waited for first: not traced only once no trace 
   const row = page.locator(".tp-map-row").filter({ hasText: "reviews.example.test" });
 
   await expect(page.locator(".tp-on-its-way")).toBeVisible();
-  await expect(row.locator('[data-state="untraced"]')).toHaveCount(0);
+  await expect(row.locator("[data-untraced]")).toHaveCount(0);
 
   // Waited for 10 s after it ended: no trace came.
-  await expect(row.locator('[data-state="untraced"]')).toHaveText("not traced", { timeout: 15_000 });
+  await expect(row.locator("[data-untraced]")).toHaveCount(1, { timeout: 15_000 });
   await expect(page.locator(".tp-on-its-way")).toHaveCount(0);
 });

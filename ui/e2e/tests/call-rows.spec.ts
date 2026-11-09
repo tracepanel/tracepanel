@@ -347,11 +347,12 @@ test("calls no trace answered say so with nothing on their way, and the page's d
   await expect(calls).toHaveCount(2);
   await expect(list.locator(".tp-map-row").filter({ hasText: "/rows/" })).toHaveCount(1);
 
-  // Stored long enough ago that no trace will come for them: not traced, nothing left to wait for.
+  // Stored long enough ago that no trace will come for them: not traced (said in the tooltip), nothing to wait for.
   await storeView(page, tag, { shift: -14_000_000 });
-  const untraced = calls.locator('[data-state="untraced"]');
+  const untraced = calls.locator("[data-untraced]");
   await expect(untraced).toHaveCount(2);
-  await expect(untraced.first()).toHaveText("not traced");
+  await expect(untraced.first()).toHaveAttribute("title", /^Not traced: /);
+  await expect(calls.first()).not.toContainText("not traced");
   await expect(list.locator(".tp-pending")).toHaveCount(0);
 });
 
@@ -570,7 +571,7 @@ test("a call that got no answer stays its row, failed as the call tree says it, 
   // And of the one its trace answered, stored before the view's: answered, by the gateway.
   await expect(books.locator(".tp-status")).toHaveText("200");
   await expect(books.locator(".tp-app-chip")).toHaveText("gateway");
-  await expect(books.locator('[data-state="untraced"]')).toHaveCount(0);
+  await expect(books.locator("[data-untraced]")).toHaveCount(0);
 });
 
 test("the pill counts a page's calls no trace answered, as its panel does: its own load and its view's calls", async ({
@@ -592,7 +593,7 @@ test("the pill counts a page's calls no trace answered, as its panel does: its o
 
   // Its view's trace stored: the calls are its call tree's rows, the count the same.
   await storeView(page, tag, { shift: -14_000_000 });
-  await expect(calls.locator('[data-state="untraced"]')).toHaveCount(2);
+  await expect(calls.locator("[data-untraced]")).toHaveCount(2);
   await expect(count).toHaveText("3");
 });
 
@@ -673,15 +674,16 @@ test("the hover card lists the page's calls no trace answered, as the pill count
   await expect(card.locator(".card-caption")).toHaveText("Other requests on this page · 3");
   const rows = card.locator(".card-row");
   await expect(rows).toHaveCount(3);
-  // The one that got no answer first, "failed" in red where its status would be; the others "not traced".
+  // The one that got no answer first, "failed" in red where its status would be; the others their status, not traced
+  // said in the tooltip.
   await expect(rows.nth(0)).toHaveAttribute("data-call", "failed");
   await expect(rows.nth(0).locator(".status")).toHaveText("failed");
   await expect(rows.nth(0).locator(".status")).toHaveAttribute("data-tone", "server");
-  await expect(rows.nth(0).locator(".card-not-traced")).toHaveCount(0);
   for (const n of [1, 2]) {
     await expect(rows.nth(n)).toHaveAttribute("data-call", "untraced");
     await expect(rows.nth(n).locator(".status")).toHaveText("200");
-    await expect(rows.nth(n).locator(".card-not-traced")).toHaveText("not traced");
+    await expect(rows.nth(n)).toHaveAttribute("title", /: not traced, its server sent no trace for this call\n/);
+    await expect(rows.nth(n)).not.toContainText("not traced");
     await expect(rows.nth(n).locator(".card-path")).toContainText("GraphQL query Spec");
   }
 
