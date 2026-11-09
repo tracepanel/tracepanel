@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A flame graph keeps its zoom, and Show all its whole graph, while the
+  trace's chain reloads.
+
 ## 0.15.0 (2026-11-06)
 
 ### Added
