@@ -2110,7 +2110,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-@tanstack/react-virtual 3.14.24 (MIT)
+@tanstack/react-virtual 3.14.26 (MIT)
 
 MIT License
 
@@ -2135,7 +2135,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-@tanstack/virtual-core 3.19.9 (MIT)
+@tanstack/virtual-core 3.19.11 (MIT)
 
 MIT License
 
@@ -2776,7 +2776,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-graphql 17.0.2 (MIT)
+graphql 17.1.0 (MIT)
 
 MIT License
 
@@ -2801,7 +2801,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-lucide-react 1.65.0 (ISC)
+lucide-react 1.70.0 (ISC)
 
 ISC License
 
@@ -3100,7 +3100,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-rolldown 1.2.15 (MIT)
+rolldown 1.2.16 (MIT)
 
 MIT License
 
@@ -3206,7 +3206,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-tailwindcss 4.3.3 (MIT)
+tailwindcss 4.3.5 (MIT)
 
 MIT License
 
@@ -3322,7 +3322,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-vite 8.3.5 (MIT)
+vite 8.3.6 (MIT)
 
 # Vite core license
 Vite is released under the MIT license:
