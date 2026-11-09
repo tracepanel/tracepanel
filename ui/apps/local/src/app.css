@@ -1805,11 +1805,12 @@ body {
 }
 
 /* The details' width across, docked at the bottom: their share, yet never so wide that the rows keep less than room
-   for a call's name, its app and its status (a narrow window, a share dragged wide on a wider one). The line between
-   them and the top's actions over the details follow it. */
+   for a call's name, its app and its status (a narrow window, a share dragged wide on a wider one), and never so
+   narrow that the top's actions over them, the time strip's scale or a field's value no longer fit (24rem, half the
+   panel on a narrower one). The line between them and the top's actions over the details follow it. */
 .panel-wf,
 .panel-top {
-  --wf-across: min(var(--wf-details, 38%), max(20%, calc(100% - 44rem)));
+  --wf-across: max(min(24rem, 50%), min(var(--wf-details, 38%), max(20%, calc(100% - 44rem))));
 }
 
 .panel-wf {
