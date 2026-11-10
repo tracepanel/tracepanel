@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.0 (2026-11-10)
 
 ### Changed
 
@@ -11,6 +11,8 @@
 
 - A flame graph keeps its zoom, and Show all its whole graph, while the
   trace's chain reloads.
+- The panel's details are never narrower than 24rem, so the top's actions,
+  the time strip's scale and a field's value fit.
 
 ## 0.15.0 (2026-11-06)
 
