@@ -147,7 +147,8 @@ jobs:
           - { name: alpine x86_64, platform: linux/amd64, image: "python:3.13-alpine", wheel: x86_64-unknown-linux-musl }
           - { name: alpine arm64, runner: ubuntu-24.04-arm, platform: linux/arm64, image: "python:3.13-alpine", wheel: aarch64-unknown-linux-musl }
           - { name: linux armv7 (QEMU), platform: linux/arm/v7, image: "python:3.13-slim", wheel: armv7-unknown-linux-gnueabihf }
-          - { name: linux x86 (QEMU), platform: linux/386, image: "python:3.13-slim", wheel: i686-unknown-linux-gnu }
+          # On ubuntu-26.04, QEMU's i386 emulation fails tokio's signal setup (a panic before main): 24.04 runs it.
+          - { name: linux x86 (QEMU), runner: ubuntu-24.04, platform: linux/386, image: "python:3.13-slim", wheel: i686-unknown-linux-gnu }
           - { name: linux ppc64le (QEMU), platform: linux/ppc64le, image: "python:3.13-slim", wheel: powerpc64le-unknown-linux-gnu }
           - { name: linux s390x (QEMU), platform: linux/s390x, image: "python:3.13-slim", wheel: s390x-unknown-linux-gnu }
           - { name: linux riscv64 (QEMU), platform: linux/riscv64, image: "python:3.13-slim", wheel: riscv64gc-unknown-linux-gnu }
