@@ -1,6 +1,7 @@
 import TOKENS from "virtual:tracepanel-tokens";
 import type { ChainCounts } from "@tracepanel/ui/lib/chainCounts";
 import { clockOf, runningLabel, TICK_MS } from "@tracepanel/ui/lib/live";
+import { pageParts } from "@tracepanel/ui/lib/page";
 import { plural } from "@tracepanel/ui/lib/plural";
 import {
   BROWSER_ICON_SVG,
@@ -12,7 +13,7 @@ import {
 } from "@tracepanel/ui/lib/runtime";
 import { readItem, writeItem } from "@tracepanel/ui/lib/storage";
 import type { EntrySummary, HtmxInfo, TabEntry } from "@tracepanel/ui/lib/tabEntry";
-import { CARD_STYLE, mountCard } from "./card";
+import { CARD_STYLE, mountCard, recordTitle } from "./card";
 import { createDock } from "./dock";
 import {
   countedBy,
@@ -40,6 +41,7 @@ import {
 import { learnedRuntime, learnRuntime, loadPanel, loadTab, savePanel, saveTab, withRedirects } from "./persist";
 import {
   addCalls,
+  addFailed,
   addFlight,
   addIssues,
   addName,
@@ -111,19 +113,22 @@ function followPages(onPage: (announced: PageAnnouncement) => void): void {
 }
 
 /**
- * Before the page's first request: its own view, as the browser recording timed it (the SPA's counterpart of a
- * server page's load). While it is open, its time so far, ticking, by the ring every running thing turns (lib/live);
- * its numbers pending until its chain is counted; cut with a call unanswered, "no answer yet".
+ * A view or an action, as the browser recording timed it (an SPA's counterpart of a server page's load): VIEW /books,
+ * CLICK "Save". While it is open, its time so far, ticking, by the ring every running thing turns (lib/live); then its
+ * time and what its calls did down its chain, pending until counted; cut with a call unanswered, "no answer yet";
+ * "failed" when it or a call of it did.
  */
-function addView(
+function addRecord(
   parent: HTMLElement,
-  view: PageAnnouncement,
+  shown: PageAnnouncement,
   facts: ChainFacts | null,
   until: number | undefined,
+  failed: boolean,
 ): void {
-  addName(parent, { name: `VIEW ${view.name}` }, false);
-  if (view.open) addRunning(parent, view.start / 1000, until);
-  else addEnded(parent, view, facts);
+  addName(parent, { name: recordTitle(shown.name) }, false);
+  if (failed) addFailed(parent);
+  if (shown.open) addRunning(parent, shown.start / 1000, until);
+  else addEnded(parent, shown, facts);
 }
 
 /** An ended view: its time (where it was cut, "no answer yet", if it was), then what its calls did. */
@@ -154,16 +159,29 @@ function addWaiting(parent: HTMLElement): void {
   segment(parent).append(idle);
 }
 
-function idleLabel(
-  view: PageAnnouncement | null,
+/** The pill read aloud on a recorded page: its view or action, how it went, what its calls did; the runtime. */
+function recordLabel(
+  shown: PageAnnouncement | null,
   runtime: string | undefined,
   counts: ChainCounts | null,
-  until: number | undefined,
+  { until, failed }: { until: number | undefined; failed: boolean },
 ): string {
-  const shown = view
-    ? `view of ${view.name}${view.open ? `, ${runningLabel(view.start, clockOf(until))}` : countsLine(counts)}`
+  const said = shown
+    ? `${recordSaid(shown.name)}${failed ? ", failed" : ""}${shown.open ? `, ${runningLabel(shown.start, clockOf(until))}` : countsLine(counts)}`
     : "no requests yet";
-  return `tracepanel: ${shown}${runtime ? `. Served by ${runtime}` : ""}`;
+  return `tracepanel: ${said}${runtime ? `. Served by ${runtime}` : ""}`;
+}
+
+/** "view of /books", or "click "Save" on /books". */
+function recordSaid(name: string): string {
+  const { badge, label, page } = pageParts(name);
+  return page === null ? `view of ${label}` : `${badge.toLowerCase()} ${label} on ${page}`;
+}
+
+/** An action the user did (a click, a submit), not the page's calls in the background: it heads the pill. */
+function isUserAction(name: string): boolean {
+  const { badge, page } = pageParts(name);
+  return page !== null && badge !== "BG";
 }
 
 /** ": 3 queries, 19 HTTP calls, 8 issues down its calls", or ", no requests yet" before its chain is known. */
@@ -301,31 +319,31 @@ function stored(summary: EntrySummary, row: ListedTrace): EntrySummary {
 }
 
 /**
- * What served the page, as the console's RuntimeIcon draws it: its owner's logo where allowed, the globe for the
- * browser, else our monogram; and its name. An unknown runtime keeps its language's first word.
+ * What served the page, by its name: Angular, Django, Java. Its owner's logo where allowed, or the globe for the
+ * browser, goes before it, as the console's RuntimeIcon draws them; a monogram doesn't, its letters would only say
+ * the name beside them again. An unknown runtime keeps its language's first word.
  */
 function showRuntime(element: HTMLElement, label: string | undefined): void {
+  element.textContent = "";
   if (!label) return;
   const kind = runtimeKind(label);
   if (kind === null) {
     element.textContent = label.split(" · ")[0]?.split(" ")[0] ?? "";
     return;
   }
-  element.append(runtimeElement(runtimeMark(kind)), runtimeName(kind));
+  const mark = runtimeMark(kind);
+  if (mark.type !== "monogram") element.append(runtimeElement(mark));
+  element.append(runtimeName(kind));
 }
 
 let logoIds = 0;
 
-/** A runtime's mark as an element, the shapes RuntimeIcon renders. */
-function runtimeElement(mark: RuntimeMark): Element {
-  if (mark.type === "browser") return svgOf(BROWSER_ICON_SVG);
-  if (mark.type === "monogram") {
-    // The console's .tp-monogram: CSS draws the letters.
-    const monogram = document.createElement("span");
-    monogram.className = "monogram";
-    monogram.dataset["mark"] = "monogram";
-    monogram.dataset["letters"] = mark.letters;
-    return monogram;
+/** A runtime's logo or the browser's globe as an element, the shapes RuntimeIcon renders. */
+function runtimeElement(mark: Exclude<RuntimeMark, { type: "monogram" }>): Element {
+  if (mark.type === "browser") {
+    const globe = svgOf(BROWSER_ICON_SVG);
+    globe.setAttribute("data-mark", "browser");
+    return globe;
   }
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("aria-hidden", "true");
@@ -385,6 +403,8 @@ export function mount(options: WidgetOptions = {}): Widget {
   showRuntime(runtimeChip, runtime);
   // This page's latest view, from the browser recording: what the pill shows before the page's first request.
   let view: PageAnnouncement | null = null;
+  // The latest action the user did on this page (a click, a submit): what the pill heads with, over its view.
+  let action: PageAnnouncement | null = null;
   // The recording's first view on this page: the browser's side of its load.
   let loadView: string | null = null;
   // What each view's or request's chain says (its counts, where it was cut), once the console answered: by its id.
@@ -574,9 +594,30 @@ export function mount(options: WidgetOptions = {}): Widget {
   let heldDraw = false;
 
   /**
-   * The pill describes one request, named, and every number on it is that request's: the newest still in flight,
-   * else the latest done (the page when it loads, then each AJAX call), as the panel's Follow new shows it. On the
-   * right, the rest of this page: how many requests, how many failed; the ring is the worst of them all.
+   * The record the pill heads with on a page the browser recording records and its server didn't trace (an SPA, or
+   * a server's page after a route change): the latest action done on it, else its view. Its requests are its calls,
+   * in its numbers, listed under it in the panel. None on a page its server traced: its own request heads it then.
+   */
+  function shownRecord(): PageAnnouncement | null {
+    if (!view || ownPage()) return null;
+    return action ?? view;
+  }
+
+  /** Whether a view or an action failed: as the recording says, or a call it made failed or got no answer. */
+  function recordFailed(shown: PageAnnouncement): boolean {
+    if (shown.status === "error") return true;
+    const failedCall = later.some((info) => info.page === shown.id && (info.status ?? 200) >= 500);
+    return (
+      failedCall ||
+      untraced.some((call) => call.parent === shown.id && (call.status === undefined || call.status >= 500))
+    );
+  }
+
+  /**
+   * The pill describes one thing, named, and every number on it is that thing's. On a recorded page (shownRecord) its
+   * view or latest action, its numbers its whole chain's. Else one request: the newest still in flight, else the
+   * latest done (the page when it loads, then each AJAX call), as the panel's Follow new shows it; on the right, the
+   * rest of this page: how many requests, how many failed; the ring is the worst of them all.
    */
   function render(): void {
     // Pressed: drawn once the press ends (pressing() below).
@@ -586,7 +627,8 @@ export function mount(options: WidgetOptions = {}): Widget {
     }
     const all = requests();
     const flying = flights();
-    if (all.length === 0 && flying.length === 0) renderIdle();
+    const shown = shownRecord();
+    if (shown || (all.length === 0 && flying.length === 0)) renderRecord(shown);
     else renderPill(all, flying);
     card.refresh();
     keepTicking();
@@ -608,24 +650,25 @@ export function mount(options: WidgetOptions = {}): Widget {
     badge.setAttribute("aria-label", pillLabel(all, flying, count, runtime, counted));
   }
 
-  /** What the view's chain says, once the console answered. */
-  function viewFacts(): ChainFacts | null {
-    const facts = view ? chained.get(view.id) : undefined;
+  /** What a view's or an action's chain says, once the console answered. */
+  function recordFacts(id: string): ChainFacts | null {
+    const facts = chained.get(id);
     return facts && facts !== "own" ? facts : null;
   }
 
   /**
-   * Nothing traced on this page yet: its server didn't trace it (an SPA's dev server served it) and it made no calls.
-   * The pill says so: its view (running while open), or that it waits.
+   * A recorded page: its view or its latest action (running while open), how it went and what its calls did. With
+   * none, nothing traced on this page yet: the pill says it waits.
    */
-  function renderIdle(): void {
+  function renderRecord(shown: PageAnnouncement | null): void {
     stats.textContent = "";
-    const facts = viewFacts();
-    const until = view?.open ? quietSince(view.id) : undefined;
-    if (view) addView(stats, view, facts, until);
+    const facts = shown ? recordFacts(shown.id) : null;
+    const until = shown?.open ? quietSince(shown.id) : undefined;
+    const failed = shown ? recordFailed(shown) : false;
+    if (shown) addRecord(stats, shown, facts, until, failed);
     else addWaiting(stats);
-    badge.dataset["verdict"] = view?.status === "error" ? "error" : facts?.counts?.issues ? "warn" : "ok";
-    badge.setAttribute("aria-label", idleLabel(view, runtime, facts?.counts ?? null, until));
+    badge.dataset["verdict"] = failed ? "error" : facts?.counts?.issues ? "warn" : "ok";
+    badge.setAttribute("aria-label", recordLabel(shown, runtime, facts?.counts ?? null, { until, failed }));
   }
 
   // While something runs (a request in flight, a view open), the pill and the card draw again every TICK_MS: its
@@ -644,7 +687,7 @@ export function mount(options: WidgetOptions = {}): Widget {
 
   /** A request in flight, or a view still open. */
   function somethingRuns(): boolean {
-    return inFlight.length > 0 || view?.open === true;
+    return inFlight.length > 0 || view?.open === true || action?.open === true;
   }
 
   /** The pill and the card drawn again; a request in flight shows up in the panel's list once it is past its moment. */
@@ -683,9 +726,10 @@ export function mount(options: WidgetOptions = {}): Widget {
     );
   }
 
-  /** Once a view ends: its chain, while the pill shows it (its own, no request of its own on the pill yet). */
-  function followView(ended: PageAnnouncement): void {
-    if (!ended.open) followFacts(ended.id, () => view?.id === ended.id, true);
+  /** Once a view or an action ends: its chain, while the pill shows it (its view's, or the page's own request). */
+  function followRecord(ended: PageAnnouncement): void {
+    const shown = () => (shownRecord() ?? view)?.id === ended.id;
+    if (!ended.open) followFacts(ended.id, shown, true);
   }
 
   /** A request just answered: its chain, while it is the pill's. */
@@ -829,9 +873,15 @@ export function mount(options: WidgetOptions = {}): Widget {
     sendTab();
   }
 
-  /** An action done on this page: its requests count on it. */
+  /** An action done on this page: its requests count on it; one the user did heads the pill. */
   function takeAction(announced: PageAnnouncement): void {
-    if (view && announced.start >= view.start) scope.add(announced.id);
+    if (!(view && announced.start >= view.start)) return;
+    scope.add(announced.id);
+    if (!isUserAction(announced.name)) return;
+    if (action && action.id !== announced.id && announced.start < action.start) return;
+    action = announced;
+    render();
+    followRecord(announced);
   }
 
   /** A view of the page: the pill's while it has no request; another route starts a new page (pill, count, list). */
@@ -840,12 +890,13 @@ export function mount(options: WidgetOptions = {}): Widget {
     if (view?.id !== announced.id) newPage(announced.id);
     view = announced;
     render();
-    followView(announced);
+    followRecord(announced);
   }
 
   /** Another route (or the same again): this page's scope starts over, the last view's requests no longer its own. */
   function newPage(id: string): void {
     scope.clear();
+    action = null;
     if (id !== loadView) {
       later.length = 0;
       untraced = [];
@@ -960,7 +1011,12 @@ export function mount(options: WidgetOptions = {}): Widget {
     requests,
     untraced: () => untraced.map(untracedCall),
     flights,
-    view: () => (view ? { view, facts: viewFacts(), until: view.open ? quietSince(view.id) : undefined } : null),
+    record: () => {
+      const shown = shownRecord();
+      if (!shown) return null;
+      const until = shown.open ? quietSince(shown.id) : undefined;
+      return { record: shown, facts: recordFacts(shown.id), until, failed: recordFailed(shown) };
+    },
     counted,
     page: ownPage,
     api: panelUrl,
@@ -982,9 +1038,9 @@ export function mount(options: WidgetOptions = {}): Widget {
   };
   for (const type of ["pointerup", "pointercancel", "blur"]) window.addEventListener(type, released, true);
 
-  // The panel opens on the request the pill shows.
+  // The panel opens on the request the pill shows; on its view or action, at the tab's list, which follows them.
   badge.addEventListener("click", () => {
-    const shown = requests().at(-1);
+    const shown = shownRecord() ? undefined : requests().at(-1);
     if (panel.hasAttribute("data-open")) close();
     else open(shown?.trace ? `#/t/${shown.trace}` : "#/");
   });

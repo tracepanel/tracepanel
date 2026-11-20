@@ -500,9 +500,11 @@ test("a call's time is the time the page waited for it, while it runs, once answ
     for (const [n, each] of shown.entries())
       expect(each, `${key} sample ${n} of ${shown.join(", ")}`).toBeGreaterThanOrEqual(shown[n - 1] ?? 0);
   }
-  // Answered and stored, the call says the time the page waited: well over its server's 200 ms; the pill too.
+  // Answered and stored, the call says the time the page waited: well over its server's 200 ms. The pill heads with
+  // its view, which waited for it: seconds too.
   expect(times.at(-1)?.call).toBeGreaterThan(1_200_000);
-  await expect(pill(page)).toHaveAttribute("aria-label", /GraphQL query Slow → 200 · 1\.\d s/);
+  await expect(pill(page)).toHaveAttribute("aria-label", /^tracepanel: view of \/rows/);
+  await expect(pill(page).locator(".seg").nth(1)).toHaveText(/^\d+(\.\d)?\s*s$/);
 });
 
 test("a view's time stops at its last call's answer, also once that call's longer trace is stored", async ({
