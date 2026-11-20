@@ -19,6 +19,8 @@
   repository too, not only on Spring Data's.
 - In the panel, a view's calls look as they will once its trace loads: no
   REQ badge or empty caret, a blank app chip and their bars breathing.
+- The console's request list loads in milliseconds on a big store, not a
+  second: a chain's numbers read only its own calls, not the whole table.
 
 ## 0.16.0 (2026-11-10)
 
