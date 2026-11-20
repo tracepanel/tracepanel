@@ -7,6 +7,9 @@
 - A trace's DB, Cache and HTTP tabs: share bars of the time on the clock, a
   group's time per call, a total line, a section per call across a chain, and
   an N+1's chip that opens at its fix. Rows fold open as the call tree's.
+- On an SPA the pill heads with its view or latest click and their chain's
+  numbers, and names the page's runtime (Angular), not its API's: by name
+  alone where a monogram would repeat it. Micronaut is named.
 
 ### Fixed
 

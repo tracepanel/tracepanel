@@ -77,6 +77,15 @@ export function segment(parent: HTMLElement): HTMLSpanElement {
   return span;
 }
 
+/** A view or an action that failed, or a call of it did: "failed" where a request's status would be, in red. */
+export function addFailed(parent: HTMLElement): void {
+  const chip = document.createElement("span");
+  chip.className = "status";
+  chip.dataset["tone"] = "server";
+  chip.textContent = "failed";
+  segment(parent).append(chip);
+}
+
 function addStatus(parent: HTMLElement, status: number | null | undefined): void {
   if (status === null || status === undefined) return;
   const chip = document.createElement("span");
