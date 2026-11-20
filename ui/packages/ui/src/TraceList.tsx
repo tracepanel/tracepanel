@@ -6,7 +6,7 @@ import { barPlace, OpText } from "./CallRowParts";
 import { Badge } from "./components/ui/badge";
 import { ago, dayTime, duration, isSlow } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
-import { NoAnswer, Pending, Running } from "./LiveMarks";
+import { NoAnswer, Pending, Running, RunningMark } from "./LiveMarks";
 import { ISSUE_LABELS } from "./labels";
 import { type RowCounts, withChain } from "./lib/chainCounts";
 import {
@@ -510,7 +510,10 @@ export function PendingCallRow({
     >
       <span className="tp-map-name" style={indentOf(1)}>
         <span className="tp-map-lead" data-http="">
-          <span className="tp-map-caret" />
+          {/* Where its caret will be once its trace's rows are here: the ring of a thing on its way till then. */}
+          <span className="tp-map-caret">
+            {served ? <RunningMark title={waitingTitle(name, row.cut ?? null)} /> : null}
+          </span>
           <OpText text={trace.name} kind="http.client" className="tp-map-hop-path" />
           {served ? <ServedBy trace={trace} runtime={row.runtime} /> : null}
         </span>
