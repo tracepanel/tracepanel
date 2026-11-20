@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The N+1 hint for Hibernate names `@EntityGraph` on a Micronaut Data
+  repository too, not only on Spring Data's.
+
 ## 0.16.0 (2026-11-10)
 
 ### Changed
