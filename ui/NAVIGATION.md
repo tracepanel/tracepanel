@@ -44,6 +44,7 @@ back keeps its state there, under its own key.
 
 A trace opened fresh (from a list, a search, the panel's list, Follow new)
 opens, in the panel and in the console alike, on:
+
 1. the tab its link names, if any;
 2. else Error, when it failed;
 3. else the tab you last picked in a trace's tab bar, when it has it;
