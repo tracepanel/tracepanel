@@ -26,6 +26,39 @@ test("a framework of two words is named whole; Spring alone stays Spring", () =>
   expect(names).toEqual(["Spring Boot", "Spring", "Ktor", "Django", "Next.js", "Go"]);
 });
 
+test("Micronaut names a Java app; a page's framework in the browser names the page, said with Browser or alone", () => {
+  const labels = [
+    "Java 25 · Micronaut 5.2.23",
+    "Browser · Angular 22.0.1",
+    "Angular 22.0.1",
+    "Browser · React 19.2.0",
+    "Browser · Vue 3.6.0",
+    "Browser · Svelte 5.40.0",
+    "Browser · Solid 1.9.9",
+    "Browser · Preact 10.27.0",
+    "Browser",
+  ];
+
+  const marks = labels.map((label) => {
+    const kind = runtimeKind(label);
+    if (kind === null) return null;
+    const mark = runtimeMark(kind);
+    return [runtimeName(kind), mark.type === "monogram" ? mark.letters : mark.type];
+  });
+
+  expect(marks).toEqual([
+    ["Micronaut", "Mn"],
+    ["Angular", "Ng"],
+    ["Angular", "Ng"],
+    ["React", "Re"],
+    ["Vue", "Vu"],
+    ["Svelte", "Sv"],
+    ["Solid", "So"],
+    ["Preact", "Pr"],
+    ["Browser", "browser"],
+  ]);
+});
+
 test("a service's runtime is the one that names its framework, whatever order its roles come in", () => {
   const web = "Python 3.12 · Django 6.0";
   const worker = "Python 3.12";
