@@ -172,7 +172,8 @@ test("a statement run under two calls is a row in each section, its count and ti
     /^GET \/books\s*→\s*served by\s*shop\s*1 query$/,
     /^SELECT 1$/,
     /^GET \/authors\/\{id\}\s*→\s*served by\s*shop\s*3 queries$/,
-    /^SELECT 1\s*×3$/,
+    // Once the chain is in: in 3 traces served for the BFF's 3 calls, the N+1 across apps.
+    /^SELECT 1\s*×3\s*N\+1$/,
   ]);
   // A section's time on its header, in the Time column; its row's the same.
   await expect(lines.nth(0).locator("td").nth(1)).toHaveText("0.2 ms");

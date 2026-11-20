@@ -729,7 +729,8 @@ test("the hover card lists the page's calls no trace answered, as the pill count
   // A click opens the call tree of the view that made them, once its trace is stored.
   await storeView(page, tag, { shift: -14_000_000 });
   await rows.nth(1).click();
-  await expect(panel(page).locator('.tp-map-row[data-kind="http.client"]')).toContainText("×3");
+  // Its three calls fold into one row once its stored trace is in: before, the page's own calls are a row each.
+  await expect(panel(page).locator('.tp-map-row[data-kind="http.client"]')).toHaveText([/×3/]);
 });
 
 test("the selected view stays in sight at the list's top as its calls fill the list docked right", async ({ page }) => {
