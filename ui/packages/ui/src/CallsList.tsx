@@ -225,6 +225,7 @@ function columns(
       id: "call",
       label: "Call",
       required: true,
+      min: 18,
       cell: (group) => <GroupName group={group} sourceOf={sourceOf} />,
     },
     ...timeColumns<Group>((group) => group.time, groups, scope, noun),

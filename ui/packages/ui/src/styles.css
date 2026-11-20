@@ -3733,12 +3733,19 @@ div.tp-map-row[data-kind="code"] {
 
 /* ---------- A trace's calls tabs (CallTable) ---------- */
 
-/* A row's share: its bar, then its percent. */
+/* A row's share: its bar, then its percent. The cell is the container: squeezed (a narrow panel), the bar goes
+   whole, never cut to a sliver at its edge, and the percent says it alone. */
 .tp-row-share {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
+  container: tp-row-share / inline-size;
+}
+@container tp-row-share (max-width: 6.5rem) {
+  .tp-row-share-bar {
+    display: none;
+  }
 }
 /* Solid, as the tree's bars: a share is read at a glance. */
 .tp-row-share-bar {

@@ -339,6 +339,7 @@ function groupColumns(groups: readonly Group[], scope: ListTime, sourceOf: Sourc
       id: "query",
       label: "Query",
       required: true,
+      min: 18,
       cell: (group) => (
         <QueryName
           name={group.name}
@@ -381,6 +382,7 @@ function orderColumns(
       id: "query",
       label: "Query",
       required: true,
+      min: 18,
       cell: ({ span }) => {
         // What it ran with: one query run again and again tells its runs apart by their values.
         const params = paramsOf(span);
