@@ -3759,33 +3759,32 @@ div.tp-map-row[data-kind="code"] {
   min-width: 2.25rem;
 }
 
-/* A row's name: its line, then, where the table's calls come from more than one call, where its calls were made,
-   under the name past its fold. Each line cut on its own. */
-.tp-call-cell {
-  display: grid;
-  min-width: 0;
-}
-.tp-call-source {
+/* A section's header, where a table's calls come from more than one call: the call and its app as the tree's row
+   says them (HopName), how many calls after. Short of room the app's name gives way first (down to a few letters, its
+   chip's title says it whole), then the path: the path is what tells a table's sections apart. The count stays. */
+.tp-call-section-name {
   display: flex;
   align-items: center;
   gap: 0.375rem;
   min-width: 0;
-  padding-left: 1.375rem;
-  color: var(--tp-text-3);
-  font-size: var(--tp-size-xs);
-  line-height: 1.25rem;
+  color: var(--tp-text-2);
 }
-.tp-call-source > .truncate {
-  flex: 0 10000 auto;
+.tp-call-section-name > .truncate {
+  flex: 0 1 auto;
   min-width: 2.5rem;
+  font: var(--tp-size-sm) var(--tp-mono);
 }
-.tp-call-source > .tp-app-chip {
+/* As the tree's row's (.tp-map-hop + .sr-only + .tp-app-chip), but giving way before the path. */
+.tp-call-section-name > .tp-map-hop + .sr-only + .tp-app-chip,
+.tp-call-section-name > .tp-app-chip {
   flex: 0 1000 auto;
   min-width: 4rem;
   overflow: hidden;
 }
-.tp-call-source-more {
+.tp-call-section-count {
   flex: none;
+  color: var(--tp-text-3);
+  font-size: var(--tp-size-xs);
 }
 
 /* A row's fold, as the tree's: the chevron turns as the row opens; a row under the pointer shows it stronger. */

@@ -193,6 +193,7 @@ test("calls side by side: the tab, the list and the head say their time on the c
   await expect(summary.locator(`[title="${sum}"]`)).toHaveText("· 30 ms added up");
   await expect(page.locator(".tp-trace-facts")).toContainText("3 HTTP calls 10 ms");
   await expect(page.locator(".tp-trace-facts")).toHaveAttribute("title", `3 HTTP calls: ${sum}`);
-  // Its Share column is of their sum, said so: each a third, adding up to 100%.
-  await expect(page.getByRole("columnheader", { name: "Share of sum" })).toBeVisible();
+  // Its Share column is of their time on the clock, as Time says it: the one row all of it.
+  await expect(page.getByRole("columnheader", { name: "Share", exact: true })).toBeVisible();
+  await expect(page.locator("tbody .tp-row-share")).toHaveText("100%");
 });

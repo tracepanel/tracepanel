@@ -2,7 +2,7 @@
 // BFF's Book.author steps, adds up as one statement ×3 in 3 traces, and as one N+1 across apps on the BFF's calls.
 // A row of the call tree opens what is under it in each.
 import type { Page } from "@playwright/test";
-import { chain } from "../chain.ts";
+import { chain, fanout } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
 
 const sums = (page: Page) => page.locator(".tp-scope-summary-text");
@@ -122,24 +122,76 @@ test("an N+1 over the calls is a filter in the UI's words: its badge, what it is
   expect(font).not.toMatch(/mono/i);
 });
 
-test("the chain's calls from more than one call say where each row's came from, the call and its app", async ({
+test("the chain's calls from more than one call in sections, each under its call and app; from one, no header", async ({
   page,
 }) => {
   const view = await chain();
   await page.goto(`/#/t/${view}?tab=sql`);
   const panel = page.getByRole("tabpanel");
-  const source = panel.locator("tr[aria-expanded]").first().locator(".tp-call-source");
+  const sections = panel.locator("tr[data-section]");
 
-  // The service's three traces, one per call: their template once, the arrow, the app's chip, as the tree's row.
-  await expect(source).toHaveText(/^GET \/authors\/\{id\}\s*→\s*served by\s*shop$/);
-  await expect(source.locator(".tp-app-chip")).toHaveCount(1);
+  // The service's three traces, one call each, the same: one source, the table as one trace's.
+  await expect(panel.locator("tr[aria-expanded]")).toHaveCount(1);
+  await expect(sections).toHaveCount(0);
   await expect(panel.locator(".tp-calls-total")).toHaveText(
     /^3 queries · \d+(\.\d+)? ms in the database · \d+% of the request$/,
   );
 
-  // The view's call and the BFF's: each row the call it was made in.
+  // The view's call and the BFF's: a section each, in the order they started, as the call tree's rows say them.
   await page.getByRole("tab", { name: /^HTTP calls/ }).click();
 
-  await expect(panel.locator(".tp-call-source")).toHaveCount(2);
+  await expect(sections).toHaveCount(2);
+  await expect(sections.nth(0).locator("td").first()).toHaveText(/^GET \/view\s*shop-web\s*1 HTTP call$/);
+  await expect(sections.nth(1).locator("td").first()).toHaveText(
+    /^POST \/graphql\s*→\s*served by\s*shop\s*3 HTTP calls$/,
+  );
+  await expect(sections.nth(1).locator(".tp-app-chip")).toHaveCount(1);
+  // Each row one line, under its section: the view's POST, then the BFF's three as one.
+  await expect(panel.locator("tbody > tr").locator("td:first-child")).toHaveText([
+    /^GET \/view/,
+    /^POST\s*\/graphql$/,
+    /^POST \/graphql/,
+    /GET \/authors\/\{id\}\s*×3/,
+  ]);
   await expect(panel.locator(".tp-calls-total")).toHaveText(/^4 HTTP calls · \d+(\.\d+)? ms · \d+% of the request$/);
+});
+
+test("a statement run under two calls is a row in each section, its count and time each call's", async ({ page }) => {
+  // The BFF's /books, then three /authors: each served trace runs SELECT 1 (0.2 ms).
+  const { bff } = await fanout(12, [
+    { route: "/books", path: "/books", at: 0 },
+    { route: "/authors/{author_id}", path: "/authors/1", at: 1_000 },
+    { route: "/authors/{author_id}", path: "/authors/2", at: 2_000 },
+    { route: "/authors/{author_id}", path: "/authors/3", at: 3_000 },
+  ]);
+  await page.goto(`/#/t/${bff}?tab=sql`);
+  const panel = page.getByRole("tabpanel");
+  const lines = panel.locator("tbody > tr");
+
+  await expect(lines.locator("td:first-child")).toHaveText([
+    /^GET \/books\s*→\s*served by\s*shop\s*1 query$/,
+    /^SELECT 1$/,
+    /^GET \/authors\/\{id\}\s*→\s*served by\s*shop\s*3 queries$/,
+    /^SELECT 1\s*×3$/,
+  ]);
+  // A section's time on its header, in the Time column; its row's the same.
+  await expect(lines.nth(0).locator("td").nth(1)).toHaveText("0.2 ms");
+  await expect(lines.nth(2).locator("td").nth(1)).toHaveText("0.6 ms");
+  await expect(lines.nth(3).locator("td").nth(1)).toHaveText("0.6 ms");
+  // Shares of the whole table's 0.8 ms: 25% and 75%.
+  await expect(lines.nth(1).locator(".tp-row-share")).toHaveText("25%");
+  await expect(lines.nth(3).locator(".tp-row-share")).toHaveText("75%");
+
+  // In order: the sections stay, each call's queries as they ran, numbered across them.
+  await panel.getByRole("tab", { name: "In order" }).click();
+
+  await expect(lines.locator("td:nth-child(2)")).toHaveText([
+    /^GET \/books/,
+    /^SELECT 1/,
+    /^GET \/authors/,
+    /^SELECT 1/,
+    /^SELECT 1/,
+    /^SELECT 1/,
+  ]);
+  await expect(panel.locator("tr[aria-expanded] td:first-child")).toHaveText(["1", "2", "3", "4"]);
 });
