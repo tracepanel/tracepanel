@@ -23,7 +23,7 @@ import {
 import type { DataColumn } from "./DataTable";
 import { HiddenColumns } from "./DataTable";
 import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
-import { callTemplate, groupNoun } from "./lib/calls";
+import { callTemplate, groupNoun, groupNouns } from "./lib/calls";
 import { cn } from "./lib/utils";
 import type { TraceLinks } from "./links";
 import { GroupStatus, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
@@ -225,11 +225,6 @@ function columns(groups: readonly Group[], scope: ListTime, noun: readonly [stri
   ];
 }
 
-/** What the system's calls are called, one and many: "HTTP call", "HTTP calls". */
-function nounOf(span: Span | undefined): [string, string] {
-  return [groupNoun(span, 1), groupNoun(span)];
-}
-
 /** An open group: what it is, as the call tree's details say it, then each of its calls. */
 function GroupDetails({
   group,
@@ -244,7 +239,7 @@ function GroupDetails({
 }) {
   const [first] = group.spans;
   const count = group.spans.length;
-  const title = groupTitle(group.time, nounOf(first), groupNoun(first));
+  const title = groupTitle(group.time, groupNouns(first), groupNoun(first));
   // Beside the tree the open row has just said how many and how long.
   const beside = useContext(HiddenColumns) !== null;
   const bare = beside && count === 1;
@@ -288,7 +283,7 @@ export function CallsList({
   );
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   if (spans.length === 0) return <p className="tp-note">No calls of this kind in this request.</p>;
-  const noun = nounOf(spans[0]);
+  const noun = groupNouns(spans[0]);
   return (
     <CallTable
       table={table}
