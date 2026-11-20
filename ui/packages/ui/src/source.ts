@@ -149,8 +149,14 @@ async function getJson<T>(url: URL): Promise<T | null> {
     const body = (await response.json()) as { error?: string };
     throw new SearchError(body.error ?? "Invalid search");
   }
-  if (!response.ok) throw new Error(`tracepanel API ${url.pathname}: HTTP ${response.status}`);
+  if (!response.ok) throw new Error(await failure(response, url));
   return (await response.json()) as T;
+}
+
+/** Why a call failed, as the answer says it (an SDK's proxy with no console: its 503's `error`), else its status. */
+async function failure(response: Response, url: URL): Promise<string> {
+  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  return typeof body?.error === "string" ? body.error : `tracepanel API ${url.pathname}: HTTP ${response.status}`;
 }
 
 /** A backend that adds nothing to the store: no EXPLAIN, no users, nothing in flight. */
