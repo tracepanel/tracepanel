@@ -13,6 +13,8 @@
 
 ### Fixed
 
+- A load the console fails says why as the answer gives it (an SDK's proxy
+  with no console behind it names the reason and the fix), not "HTTP 503".
 - The N+1 hint for Hibernate names `@EntityGraph` on a Micronaut Data
   repository too, not only on Spring Data's.
 - In the panel, a view's calls look as they will once its trace loads: no
