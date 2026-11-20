@@ -3,7 +3,7 @@ import { AsReceived } from "./AsReceived";
 import { useBeside } from "./beside";
 import { hopTimes, Inside, RUN_WORDS, runRows, type TraceProfileOpener } from "./CallRowParts";
 import { appName, type Linked, OpenRun } from "./CallRows";
-import { type Explain, QueryPlan } from "./CallTable";
+import { type Explain, groupTitle, QueryPlan, rowTime } from "./CallTable";
 import type { Node, Remote, ServedRun } from "./callTree";
 import { ErrorView } from "./ErrorView";
 import { duration } from "./format";
@@ -11,7 +11,7 @@ import { GraphqlCode } from "./GraphqlCode";
 import { LlmConversation, withoutMessages } from "./LlmConversation";
 import { AllAttributes, LogRecordDetails } from "./LogRecordDetails";
 import { callFields } from "./lib/callFields";
-import { groupNoun } from "./lib/calls";
+import { groupNoun, groupNouns } from "./lib/calls";
 import { callDocument } from "./lib/graphql";
 import { spanKindLabel } from "./lib/handler";
 import { traceRuntime } from "./lib/runtime";
@@ -145,10 +145,8 @@ function GroupDetails({ node, onExplain }: DetailsProps<"group">) {
   return (
     <div className="grid gap-3 p-4">
       <p className="tp-map-details-title">
-        {/* In how long, from the first's start to the last's end, as its row's time and bar; then what they add up
-            to, as the Queries tab's sum. */}
-        {node.spans.length} similar {groupNoun(first)} in {duration(node.end - node.start)} ·{" "}
-        {duration(node.spans.reduce((sum, span) => sum + span.duration, 0))} added up
+        {/* As its row's time says it, and as a calls table's open group: on the clock, then added up. */}
+        {groupTitle(rowTime(node.spans), groupNouns(first), groupNoun(first))}
       </p>
       <Inside />
       {first ? (

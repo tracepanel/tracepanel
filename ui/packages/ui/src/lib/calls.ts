@@ -14,6 +14,11 @@ export function groupNoun(span: Span | undefined, count = 2): string {
   return count === 1 ? nouns.one : nouns.many;
 }
 
+/** What a system's calls are called, one and many: "HTTP call", "HTTP calls". */
+export function groupNouns(span: Span | undefined): [string, string] {
+  return [groupNoun(span, 1), groupNoun(span)];
+}
+
 /** What a kind's spans are called that isn't a system's calls: a signal's sends, a migration's operations. */
 const OWN_NOUNS: Record<string, { one: string; many: string }> = {
   signal: { one: "send", many: "sends" },

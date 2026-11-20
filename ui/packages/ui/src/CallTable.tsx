@@ -224,27 +224,44 @@ export function CallTable<T>({
 
 /**
  * A row's time, as every time of calls is said since the header's: on the clock (calls that ran side by side counted
- * once), what they add up to, how many.
+ * once), what they add up to, how many, and from the first's start to the last's end (gaps between them in it). A
+ * group of repeats says the one on the clock wherever it shows: its row in the call tree and in a calls table alike.
  */
 export interface RowTime {
   clock: number;
   total: number;
   count: number;
+  span: number;
 }
 
-/** A row's calls' time: on the clock, added up, how many. */
+/** A row's calls' time: on the clock, added up, how many, first start to last end. */
 export function rowTime(spans: readonly Pick<Span, "start" | "duration">[]): RowTime {
+  const first = Math.min(...spans.map((span) => span.start));
+  const last = Math.max(...spans.map((span) => span.start + span.duration));
   return {
     clock: onTheClock(spans),
     total: spans.reduce((sum, span) => sum + span.duration, 0),
     count: spans.length,
+    span: spans.length === 0 ? 0 : last - first,
   };
 }
 
-/** What a row's time says on hover: what its calls add up to, when there are several. */
-function timeTitle(time: RowTime, noun: readonly [string, string]): string | undefined {
+/**
+ * What a row's time says on hover, where it stands for several calls: that it is their time on the clock, what they
+ * add up to, and how long from the first's start to the last's end where gaps between them make that longer. The
+ * call tree's group row says the same.
+ */
+export function timeTitle(time: RowTime, noun: readonly [string, string]): string | undefined {
   if (time.count < 2) return undefined;
-  return `${duration(time.total)} total, ${plural(time.count, ...noun)}`;
+  const clock = duration(time.clock);
+  const count = plural(time.count, ...noun);
+  // One after another, what they add up to is their time on the clock: said once.
+  const head =
+    duration(time.total) === clock
+      ? `${clock} on the clock, ${count}`
+      : `${clock} on the clock · ${duration(time.total)} total, ${count}`;
+  const span = duration(time.span);
+  return span === clock ? head : `${head} · ${span} from the first's start to the last's end`;
 }
 
 /** What a table's calls take, the whole its Share column is of: their time on the clock, as the header says it. */

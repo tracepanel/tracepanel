@@ -19,6 +19,8 @@
   repository too, not only on Spring Data's.
 - In the panel, a view's calls look as they will once its trace loads: no
   REQ badge or empty caret, a blank app chip and their bars breathing.
+- An N+1 group's time in the call tree is its time on the clock, as in the
+  DB, Cache and HTTP tabs: first start to last end is on hover in both.
 - The console's request list loads in milliseconds on a big store, not a
   second: a chain's numbers read only its own calls, not the whole table.
 - On an SPA a click on the pill opens the panel on the view or click it

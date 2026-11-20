@@ -296,21 +296,22 @@ test("a resolver run per item groups as one row; open, each runs its call, and t
   await expect(page.getByRole("button", { name: /^sql SELECT author\.name/i })).toHaveCount(1);
 });
 
-test("calls side by side show the time they ran from first to last; what they took added up is on hover", async ({
+test("calls side by side show their time on the clock, as a calls table does; what they took added up is on hover", async ({
   page,
 }) => {
   await resolvers(page);
   const group = page.getByRole("button", { name: /^fn Book\.author/i }).first();
   const time = group.locator(".tp-map-time");
 
-  // 36 resolvers of 3.2 ms each, 20 µs apart: 3.9 ms from the first's start to the last's end, 115 ms added up.
+  // 36 resolvers of 3.2 ms each, 20 µs apart: 3.9 ms on the clock (and from the first's start to the last's end), 115
+  // ms added up.
   await expect(time).toHaveText("4 ms");
-  await expect(time).toHaveAttribute("title", "36 calls · 115 ms total, 4 ms from the first's start to the last's end");
+  await expect(time).toHaveAttribute("title", "4 ms on the clock · 115 ms total, 36 calls");
 
   await group.click();
 
   await expect(page.getByRole("complementary", { name: "Details" })).toContainText(
-    "36 similar calls in 4 ms · 115 ms added up",
+    "36 similar calls · 4 ms on the clock · 115 ms total",
   );
 });
 

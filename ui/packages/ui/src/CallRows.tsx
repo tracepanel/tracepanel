@@ -30,7 +30,7 @@ import {
   TaskState,
   type Within,
 } from "./CallRowParts";
-import { issueOfRepeats } from "./CallTable";
+import { issueOfRepeats, rowTime, timeTitle } from "./CallTable";
 import {
   CHAIN_LEVELS,
   childrenOf,
@@ -47,7 +47,7 @@ import { duration, since } from "./format";
 import { withoutAnsi } from "./lib/ansi";
 import { answers, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
 import { templatePlace } from "./lib/callFields";
-import { callTemplate, groupNoun } from "./lib/calls";
+import { callTemplate, groupNouns } from "./lib/calls";
 import { isDump } from "./lib/dump";
 import { spanKindLabel } from "./lib/handler";
 import { foldKeys } from "./lib/keys";
@@ -528,7 +528,7 @@ function RowChips({ children }: { children: ReactNode }) {
 /** Repeats of one call folded into one row (×N), its calls as ticks on the timeline; open, each call a row. */
 function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<"group">) {
   const open = ctx.collapsed.has(`open:${node.key}`);
-  const wall = node.end - node.start;
+  const time = useMemo(() => rowTime(node.spans), [node.spans]);
   const issueBySpan = useMemo(() => withoutGroupIssue(node, ctx.issueBySpan), [node, ctx.issueBySpan]);
   const answer = useMemo(() => groupAnswerOf(node), [node]);
   return (
@@ -552,7 +552,7 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
           <GroupName node={node} ctx={ctx} parent={parent} answer={answer} />
         </span>
         <GroupTicks spans={node.spans} trace={ctx.trace} within={ctx.within} />
-        <RowTime time={wall} title={groupTimes(node)} />
+        <RowTime time={time.clock} title={timeTitle(time, groupNouns(node.spans[0]))} />
       </button>
       <RowDetails id={node.key} ctx={ctx} />
       {open ? (
@@ -565,16 +565,6 @@ function GroupRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProp
 /** How a group's calls went, each with the trace served for it as its own row takes it (see rowStatus). */
 function groupAnswerOf(node: Extract<Node, { type: "group" }>): GroupAnswer {
   return groupAnswer(node.members.map((member) => ({ span: member.span, served: member.served?.run })));
-}
-
-/**
- * A group's time: from its first call's start to its last one's end, as long as the request waited for them (36
- * calls run side by side take about one call's time); what they took added up is the second figure.
- */
-function groupTimes(node: Extract<Node, { type: "group" }>): string {
-  const total = node.spans.reduce((sum, span) => sum + span.duration, 0);
-  const noun = groupNoun(node.spans[0], node.spans.length);
-  return `${node.spans.length} ${noun} · ${duration(total)} total, ${duration(node.end - node.start)} from the first's start to the last's end`;
 }
 
 /** Where each call of a group started, on the request's timeline. */

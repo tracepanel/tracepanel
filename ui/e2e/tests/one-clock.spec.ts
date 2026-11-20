@@ -31,7 +31,7 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
   );
 
   await expect(time(authors)).toHaveText("1 ms");
-  await expect(time(authors)).toHaveAttribute("title", "3 ms total, 3 HTTP calls");
+  await expect(time(authors)).toHaveAttribute("title", "1 ms on the clock · 3 ms total, 3 HTTP calls");
   // A group's time per call: fast calls, many of them.
   await expect(each(authors)).toHaveText("~0.9 ms");
   // A share of the time on the clock, as Time says it (1.1 of 2.0 ms): the rows apart, the percents add up to 100%.
@@ -55,6 +55,41 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
   await authors.click();
 
   await expect(page.getByText("3 similar HTTP calls · 1 ms on the clock · 3 ms total")).toBeVisible();
+});
+
+test("an N+1 with gaps between its calls: the call tree and the table say one time on the clock, the span on hover", async ({
+  page,
+}) => {
+  // Three authors one after another, 2.1 ms apart (1.0–1.9, 4.0–4.9, 7.0–7.9 ms): 2.7 ms on the clock and added up,
+  // 6.9 ms from the first's start to the last's end.
+  const { bff } = await fanout(14, [
+    { route: "/books", path: "/books", at: 0 },
+    { route: "/authors/{author_id}", path: "/authors/1", at: 1_000 },
+    { route: "/authors/{author_id}", path: "/authors/2", at: 4_000 },
+    { route: "/authors/{author_id}", path: "/authors/3", at: 7_000 },
+  ]);
+  const title = "3 ms on the clock, 3 HTTP calls · 7 ms from the first's start to the last's end";
+  await page.goto(`/#/t/${bff}?tab=tree`);
+  const group = page.locator('.tp-map-row[data-kind="http.client"]').filter({ hasText: "×3" });
+  const time = group.locator(".tp-map-time");
+
+  await expect(time).toHaveText("3 ms");
+  await expect(time).toHaveAttribute("title", title);
+
+  await group.click();
+
+  await expect(page.getByRole("complementary", { name: "Details" })).toContainText("3 similar HTTP calls · 3 ms total");
+
+  await page.getByRole("tab", { name: /^HTTP calls/ }).click();
+  const authors = page.getByRole("tabpanel").locator("tbody > tr").filter({ hasText: "/authors/{id}" });
+  const cell = authors.first().locator("td").nth(1).locator("span");
+
+  await expect(cell).toHaveText("3 ms");
+  await expect(cell).toHaveAttribute("title", title);
+
+  await authors.first().click();
+
+  await expect(page.getByText("3 similar HTTP calls · 3 ms total")).toBeVisible();
 });
 
 test("rows that ran side by side: each its share of the clock, rounded on its own, more than 100% in all", async ({
