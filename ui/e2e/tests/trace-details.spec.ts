@@ -48,7 +48,7 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
 
   await expect(panel).toContainText(/14 queries · 2 unique · \d+(\.\d+)? ms/);
   // A table as the console's: its head, a row per statement; a count beside the repeated one only.
-  await expect(panel.getByRole("columnheader")).toHaveText(["Query", "Time", "Share", ""]);
+  await expect(panel.getByRole("columnheader")).toHaveText(["Query", "Time", "Each", "Share", ""]);
   const queries = panel.locator("tr[aria-expanded]");
   await expect(queries).toHaveCount(2);
   await expect(queries.first()).toContainText(/SELECT author\s*×13/);
@@ -64,6 +64,40 @@ test("the Request tab lists the trace's attributes, the DB tab its queries group
   await expect(panel.getByRole("tab", { name: "In order" })).toHaveAttribute("aria-selected", "true");
   await expect(panel.locator("tr[aria-expanded]")).toHaveCount(14);
   await expect(panel.getByText("SELECT author").first()).toBeVisible();
+});
+
+test("the DB tab's rows fold open as the tree's, a repeat's chip opens at its fix, the list ends with what it adds up to", async ({
+  page,
+}) => {
+  await openPostsTrace(page);
+  await page.getByRole("tab", { name: /^DB/ }).click();
+  const panel = page.getByRole("tabpanel");
+  const authors = panel.locator("tr[aria-expanded]").first();
+
+  // The queries of one trace: no line under their names says where they came from.
+  await expect(panel.locator(".tp-call-source")).toHaveCount(0);
+  await expect(panel.locator(".tp-calls-total")).toHaveText(
+    /^14 queries · \d+(\.\d+)? ms in the database( · \d+% of the request)?$/,
+  );
+  await expect(authors.locator(".tp-row-caret")).toBeVisible();
+
+  const chip = authors.locator(".tp-row-issue");
+  await expect(chip).toHaveAttribute("title", /how to fix it$/);
+  await chip.click();
+
+  await expect(authors).toHaveAttribute("aria-expanded", "true");
+  await expect(authors.locator(".tp-row-caret .tp-icon")).toHaveCSS("transform", "matrix(0, 1, -1, 0, 0, 0)");
+  // The Issues tab's card, its hint the same, first in the row's details.
+  const hint = panel.locator(".tp-call-details .tp-issue-card .tp-issue-hint");
+  await expect(hint).toHaveCount(1);
+  const fix = await hint.innerText();
+
+  // Pressed again, the open row stays open at its hint.
+  await chip.click();
+  await expect(authors).toHaveAttribute("aria-expanded", "true");
+
+  await page.getByRole("tab", { name: /^Issues/ }).click();
+  await expect(panel.locator(".tp-issue-hint").filter({ hasText: fix })).toHaveCount(1);
 });
 
 test("a query a template made says so in the DB tab; in the call tree its template's row says it", async ({ page }) => {

@@ -533,6 +533,23 @@ export function AppChip({
 }
 
 /**
+ * A call merged with the trace another app served for it, as its row in the call tree says it: the call, the arrow,
+ * the app's chip (the call cut first). The details' title of such a row, the source of a calls tab's rows.
+ */
+export function HopName({ call, app, runtime }: { call: string; app: string; runtime: string | undefined }) {
+  return (
+    <>
+      <span className="truncate">{call}</span>
+      <span className="tp-map-hop" aria-hidden="true">
+        →
+      </span>
+      <span className="sr-only">served by</span>
+      <AppChip name={app} runtime={runtime} compact />
+    </>
+  );
+}
+
+/**
  * A task's name, cut at its start when it doesn't fit: what tells tasks apart is at its end (the function, the
  * consumer's handler), not the package they share. Whole segments go first ("…handlers.build_sales_report", then
  * "…build_sales_report"); where not even its last one fits, that one is cut at its end, so what is left still reads

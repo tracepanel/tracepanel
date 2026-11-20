@@ -159,7 +159,11 @@ const PAST_MIN = 6;
  * Where a bar sits on the request's timeline. One that runs past its end (a task runs longer than the request that
  * enqueued it, or starts after it answered) runs to the right edge and fades out there (`past`).
  */
-export function barPlace(trace: Trace, start: number, length: number): { style: CSSProperties; past: "" | undefined } {
+export function barPlace(
+  trace: Pick<Trace, "start" | "duration">,
+  start: number,
+  length: number,
+): { style: CSSProperties; past: "" | undefined } {
   const total = Math.max(trace.duration, 1);
   const left = Math.min(Math.max(((start - trace.start) / total) * 100, 0), 100 - PAST_MIN);
   const past = start + length > trace.start + total;

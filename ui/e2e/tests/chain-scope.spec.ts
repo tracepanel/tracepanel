@@ -121,3 +121,25 @@ test("an N+1 over the calls is a filter in the UI's words: its badge, what it is
   const font = await issue.locator(".tp-issue-pick-title").evaluate((title) => getComputedStyle(title).fontFamily);
   expect(font).not.toMatch(/mono/i);
 });
+
+test("the chain's calls from more than one call say where each row's came from, the call and its app", async ({
+  page,
+}) => {
+  const view = await chain();
+  await page.goto(`/#/t/${view}?tab=sql`);
+  const panel = page.getByRole("tabpanel");
+  const source = panel.locator("tr[aria-expanded]").first().locator(".tp-call-source");
+
+  // The service's three traces, one per call: their template once, the arrow, the app's chip, as the tree's row.
+  await expect(source).toHaveText(/^GET \/authors\/\{id\}\s*→\s*served by\s*shop$/);
+  await expect(source.locator(".tp-app-chip")).toHaveCount(1);
+  await expect(panel.locator(".tp-calls-total")).toHaveText(
+    /^3 queries · \d+(\.\d+)? ms in the database · \d+% of the request$/,
+  );
+
+  // The view's call and the BFF's: each row the call it was made in.
+  await page.getByRole("tab", { name: /^HTTP calls/ }).click();
+
+  await expect(panel.locator(".tp-call-source")).toHaveCount(2);
+  await expect(panel.locator(".tp-calls-total")).toHaveText(/^4 HTTP calls · \d+(\.\d+)? ms · \d+% of the request$/);
+});

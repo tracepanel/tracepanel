@@ -6,6 +6,11 @@ export interface ColumnSpec {
   label: string;
   /** The default width in rem; none for the one column that takes the width the others leave. */
   width?: number;
+  /**
+   * The column that takes the rest: the least it keeps, in rem, before the others drop (a query's name and where it
+   * came from say more than its share). None: the table's usual least.
+   */
+  min?: number;
   /** Hidden until the reader shows it from the columns menu. */
   hidden?: boolean;
   /** Always shown: the menu doesn't offer to hide it. */

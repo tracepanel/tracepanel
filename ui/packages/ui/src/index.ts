@@ -85,10 +85,13 @@ export { type Tab, Tabs } from "./Tabs";
 export { Timeline } from "./Timeline";
 export {
   type CallGroup,
+  callClock,
   isGone,
+  isTreeCall,
   type ListChains,
   OpenRecordMarks,
   PageName,
+  PendingCallRow,
   RecordRow,
   recordPending,
   TraceList,

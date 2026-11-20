@@ -2,10 +2,18 @@
 
 ## Unreleased
 
+### Changed
+
+- A trace's DB, Cache and HTTP tabs: share bars, a group's time per call, a
+  total line, each row's call and app across a chain, and an N+1's chip that
+  opens at its fix. Rows fold open with a caret, as the call tree's.
+
 ### Fixed
 
 - The N+1 hint for Hibernate names `@EntityGraph` on a Micronaut Data
   repository too, not only on Spring Data's.
+- In the panel, a view's calls look as they will once its trace loads: no
+  REQ badge or empty caret, a blank app chip and their bars breathing.
 
 ## 0.16.0 (2026-11-10)
 

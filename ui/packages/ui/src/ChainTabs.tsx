@@ -3,23 +3,25 @@
 // count a filter: the same row as the Logs tab's.
 
 import { type ReactNode, useMemo, useState } from "react";
+import { hopText, rowKind } from "./CallRowParts";
 import { CallsList } from "./CallsList";
-import type { Explain } from "./CallTable";
+import type { CallSource, Explain, SourceOf } from "./CallTable";
 import { duration } from "./format";
 import type { TraceScope } from "./hooks/useTraceChain";
 import { IssueList } from "./IssueList";
 import { addedUp, callTemplate, onTheClock } from "./lib/calls";
 import { CALL_TABS, callsOfTab } from "./lib/callTabs";
+import { percent } from "./lib/percent";
 import { plural } from "./lib/plural";
-import { type Member, type ScopedIssue, type ScopedSpan, scopedIssues, scopedSpans } from "./lib/scope";
-import { callsTime } from "./lib/split";
+import { type Member, type ScopedIssue, type ScopedSpan, scopedIssues, scopedSpans, scopeWindow } from "./lib/scope";
+import { callsShare, callsTime } from "./lib/split";
 import type { TraceLinks } from "./links";
 import { AppChip } from "./primitives";
 import { CountChip, countBy, IssuePick, ScopeHeader, useChainApps } from "./ScopeBar";
 import { Segmented } from "./Segmented";
 import { SQL_MODES, SqlList, type SqlMode, sqlKey } from "./SqlList";
 import { uncommented } from "./sql";
-import type { IssueKind, Span } from "./types";
+import type { Issue, IssueKind, Span } from "./types";
 
 /** The table a statement reads or writes first: what a query is about at a glance. */
 function tableOf(span: Span): string | undefined {
@@ -115,6 +117,83 @@ function clockText(spans: readonly ScopedSpan[], members: readonly Member[]): st
   const one = first && spans.every((span) => span.traceId === first.traceId);
   const member = one ? members.find((each) => each.id === first.traceId) : undefined;
   return member ? callsTime(member.trace, spans) : duration(onTheClock(spans));
+}
+
+/** The trace a member served for a call: the call as its row says it, its template's (`GET /authors/{id}`). */
+function sourceOf(member: Member, members: readonly Member[], runtime: string | undefined): CallSource {
+  const parent = members.find((each) => each.id === member.parent);
+  const via = parent?.trace.spans.find((span) => span.id === member.via);
+  if (via) return { call: hopText({ ...via, name: callTemplate(via) }), app: member.app, runtime, served: true };
+  const root = member.trace.spans.find((span) => span.parent_id === null);
+  return { call: root?.name ?? "", app: member.app, runtime, served: false };
+}
+
+/** Each call's source, where the shown calls come from more than one trace of the chain; none from one. */
+function useSources(
+  shown: readonly ScopedSpan[],
+  members: readonly Member[],
+  runtimes: ReadonlyMap<string, string | undefined>,
+): SourceOf | undefined {
+  return useMemo(() => {
+    if (new Set(shown.map((span) => span.traceId)).size < 2) return undefined;
+    const sources = new Map(members.map((member) => [member.id, sourceOf(member, members, runtimes.get(member.app))]));
+    return (span: Span) => sources.get((span as ScopedSpan).traceId);
+  }, [shown, members, runtimes]);
+}
+
+/**
+ * What a list's calls are of the time they are in, as a percent: of the record's, said by its kind ("31% of the
+ * view"), the strip's own where the calls are one of its shares; under a row, of that row's time. None where it says
+ * nothing (all of it).
+ */
+function shareOfTime(spans: readonly ScopedSpan[], chain: TraceScope): string | null {
+  const [root] = chain.members;
+  if (!root || spans.length === 0) return null;
+  const [from, to] = scopeWindow(chain.members, chain.scope);
+  const said = stripPercent(spans, chain, root) ?? percent(onTheClock(spans), to - from);
+  if (["0%", ">99%", "100%"].includes(said)) return null;
+  return chain.scope === null ? `${said} of the ${recordKind(root)}` : `${said} of ${duration(to - from)}`;
+}
+
+/** The strip's percent of the record's own calls, all of one of its shares (its Database): one fact, one value. */
+function stripPercent(spans: readonly ScopedSpan[], chain: TraceScope, root: Member): string | undefined {
+  if (chain.scope !== null || spans.some((span) => span.traceId !== root.id)) return undefined;
+  return callsShare(root.trace, spans)?.percent;
+}
+
+/** What the record is, as its row's badge says it: "view", "request", "task"; "trace" for a kind of no one word. */
+function recordKind(root: Member): string {
+  const span = root.trace.spans.find((each) => each.parent_id === null);
+  const kind = span ? rowKind(span, root.trace, undefined) : "";
+  return /^[a-z]+$/.test(kind) ? kind : "trace";
+}
+
+/**
+ * Under a calls tab's list, what it adds up to, read last: how many calls (not rows), their time on the clock, what
+ * that is of the record's time. "75 queries · 58 ms in the database · 31% of the view".
+ */
+function CallsTotal({
+  tab,
+  spans,
+  clock,
+  chain,
+  noun,
+}: {
+  tab: string;
+  spans: readonly ScopedSpan[];
+  clock: string;
+  chain: TraceScope;
+  noun: [string, string];
+}) {
+  if (spans.length === 0) return null;
+  const share = shareOfTime(spans, chain);
+  return (
+    <p className="tp-calls-total">
+      {plural(spans.length, ...noun)} · {clock}
+      {tab === "sql" ? " in the database" : ""}
+      {share ? ` · ${share}` : ""}
+    </p>
+  );
 }
 
 /**
@@ -277,20 +356,63 @@ export function ScopedCalls({
         }
       />
       <CallsOf spans={shown} empty={emptyCalls(of.empty, chain.scope !== null)}>
-        {sql ? (
-          <SqlList
-            spans={shown}
-            issueBySpan={issueBySpan}
-            focus={focus}
-            onExplain={onExplain}
-            links={links}
-            mode={oneQuery ? "timeline" : mode}
-            clock={clock}
-          />
-        ) : (
-          <CallsList spans={shown} issueBySpan={issueBySpan} focus={focus} table={`trace-${tab}`} clock={clock} />
-        )}
+        <CallsBody
+          tab={tab}
+          chain={chain}
+          shown={shown}
+          clock={clock}
+          mode={oneQuery ? "timeline" : mode}
+          issueBySpan={issueBySpan}
+          focus={focus}
+          onExplain={onExplain}
+          links={links}
+        />
       </CallsOf>
+    </>
+  );
+}
+
+/**
+ * A calls tab's list and, under it, what it adds up to: each open row starts with its issues' hints, each row says
+ * where its calls came from when they come from more than one call.
+ */
+function CallsBody({
+  tab,
+  chain,
+  shown,
+  clock,
+  mode,
+  issueBySpan,
+  focus,
+  onExplain,
+  links,
+}: {
+  tab: string;
+  chain: TraceScope;
+  shown: readonly ScopedSpan[];
+  clock: string;
+  mode: SqlMode;
+  issueBySpan: ReadonlyMap<string, IssueKind>;
+  focus: ReadonlySet<string> | undefined;
+  onExplain: Explain | undefined;
+  links: TraceLinks | undefined;
+}) {
+  const { runtimes } = useChainApps(chain.members);
+  const sources = useSources(shown, chain.members, runtimes);
+  const issues = useMemo(
+    (): readonly Issue[] =>
+      scopedIssues(chain.members, chain.scope, chain.chainIssues).filter((issue) => issue.kind !== "error"),
+    [chain.members, chain.scope, chain.chainIssues],
+  );
+  const lists = { spans: shown, issueBySpan, focus, links, clock, issues, sourceOf: sources };
+  return (
+    <>
+      {tab === "sql" ? (
+        <SqlList {...lists} onExplain={onExplain} mode={mode} />
+      ) : (
+        <CallsList {...lists} table={`trace-${tab}`} category={tab} />
+      )}
+      <CallsTotal tab={tab} spans={shown} clock={clock} chain={chain} noun={callTab(tab).noun} />
     </>
   );
 }

@@ -3613,6 +3613,28 @@ div.tp-map-row[data-kind="code"] {
 .tp-pending {
   color: var(--tp-text-3);
 }
+/* The open record before its tree loads: a blank chip where its call's app goes, and its bars and its "…" breathe
+   until the tree comes (still with reduced motion). */
+.tp-app-chip[data-awaiting] {
+  width: 3.5rem;
+  border-color: var(--tp-border);
+  background: color-mix(in srgb, var(--tp-text-3) 14%, transparent);
+}
+:is(.tp-app-chip, .tp-map-bar)[data-awaiting],
+.tp-record[data-awaiting] :is(.tp-record-share, .tp-pending) {
+  animation: tp-awaiting 1.4s ease-in-out infinite;
+}
+@keyframes tp-awaiting {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.tp-app-chip, .tp-map-bar)[data-awaiting],
+  .tp-record[data-awaiting] :is(.tp-record-share, .tp-pending) {
+    animation: none;
+  }
+}
 /* A code or wait row's details beside the tree: what it is, its facts, its profile or how to get one. */
 .tp-code-details {
   display: grid;
@@ -3691,7 +3713,9 @@ div.tp-map-row[data-kind="code"] {
   font-weight: 600;
 }
 
-/* A call's time against the longest of its group's: the slow runs stand out. */
+/* A call's time against the longest of its group's, a row's against what the table's calls add up to: the slow runs,
+   the rows that are most of the time stand out. In the calls' colour, as the call tree's bars (CallTable's
+   data-category), the SQL's where none is said. */
 .tp-call-share {
   display: block;
   width: 3.5rem;
@@ -3704,5 +3728,106 @@ div.tp-map-row[data-kind="code"] {
   display: block;
   height: 100%;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--tp-k-sql) 55%, transparent);
+  background: color-mix(in srgb, var(--tp-k, var(--tp-k-sql)) 55%, transparent);
+}
+
+/* ---------- A trace's calls tabs (CallTable) ---------- */
+
+/* A row's share: its bar, then its percent. The cell is the container: squeezed (a narrow panel), the bar goes
+   whole, never cut to a sliver at its edge, and the percent says it alone. */
+.tp-row-share {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  container: tp-row-share / inline-size;
+}
+@container tp-row-share (max-width: 6.5rem) {
+  .tp-row-share-bar {
+    display: none;
+  }
+}
+/* Solid, as the tree's bars: a share is read at a glance. */
+.tp-row-share-bar {
+  flex: none;
+}
+.tp-row-share-bar > span {
+  background: color-mix(in srgb, var(--tp-k, var(--tp-k-sql)) 85%, transparent);
+}
+/* The percents one width, so the bars line up whatever their row's. */
+.tp-row-share-text {
+  min-width: 2.25rem;
+}
+
+/* A row's name: its line, then, where the table's calls come from more than one call, where its calls were made,
+   under the name past its fold. Each line cut on its own. */
+.tp-call-cell {
+  display: grid;
+  min-width: 0;
+}
+.tp-call-source {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  padding-left: 1.375rem;
+  color: var(--tp-text-3);
+  font-size: var(--tp-size-xs);
+  line-height: 1.25rem;
+}
+.tp-call-source > .truncate {
+  flex: 0 10000 auto;
+  min-width: 2.5rem;
+}
+.tp-call-source > .tp-app-chip {
+  flex: 0 1000 auto;
+  min-width: 4rem;
+  overflow: hidden;
+}
+.tp-call-source-more {
+  flex: none;
+}
+
+/* A row's fold, as the tree's: the chevron turns as the row opens; a row under the pointer shows it stronger. */
+.tp-row-caret[data-open] > .tp-icon {
+  transform: rotate(90deg);
+}
+tr:hover .tp-row-caret {
+  color: var(--tp-text);
+}
+
+/* A row's issue: its chip, a button that opens the row at the issue's hint. */
+.tp-row-issue {
+  display: inline-flex;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0.375rem;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.tp-row-issue:hover [data-slot="badge"] {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* An open row's issues, first in its details: the Issues tab's cards, without the tab's margins. */
+.tp-call-details > .tp-issue-cards {
+  padding: 0;
+}
+
+/* Under the list, what it adds up to, read last. */
+.tp-calls-total {
+  margin: 0;
+  padding: 0.5rem 1.25rem 0.75rem 1.5rem;
+  border-top: 1px solid var(--tp-border);
+  color: var(--tp-text-3);
+  font-size: var(--tp-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-row-caret .tp-icon {
+    transition: none;
+  }
 }

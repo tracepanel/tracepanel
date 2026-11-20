@@ -9,8 +9,13 @@ import {
   issueOfRepeats,
   type ListTime,
   listTime,
+  RowCaret,
+  RowIssue,
+  RowIssues,
   type RowTime,
   rowTime,
+  SourceLine,
+  type SourceOf,
   sameOrigin,
   timeColumns,
 } from "./CallTable";
@@ -19,8 +24,9 @@ import { HiddenColumns } from "./DataTable";
 import { callAnswer, type GroupAnswer, groupAnswer } from "./lib/callAnswer";
 import { callTemplate, groupNoun } from "./lib/calls";
 import { cn } from "./lib/utils";
-import { GroupStatus, IssueChip, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
-import type { IssueKind, Span } from "./types";
+import type { TraceLinks } from "./links";
+import { GroupStatus, MethodBadge, SectionHeading, StatusBadge, Times } from "./primitives";
+import type { Issue, IssueKind, Span } from "./types";
 import { untracedNote, useGroupUntraced, useUntraced } from "./Untraced";
 
 export interface CallsListProps {
@@ -34,6 +40,13 @@ export interface CallsListProps {
   table?: string | undefined;
   /** The calls' time on the clock, as the header and the tab write it. */
   clock: string;
+  /** The issues of the calls' traces: an open row starts with its own, their hints. */
+  issues?: readonly Issue[] | undefined;
+  links?: TraceLinks | undefined;
+  /** Where each call was made, where the calls come from more than one call: a line under each row's name. */
+  sourceOf?: SourceOf | undefined;
+  /** The calls' colour on their bars, as the call tree's: `cache`, `http`. */
+  category?: string | undefined;
 }
 
 interface Group {
@@ -175,28 +188,46 @@ function UntracedUrl({ spanId, url }: { spanId: string; url: string }) {
   );
 }
 
-/** A group's name in its row: what its calls repeat, how many, how they went, its issue. */
-function GroupName({ group }: { group: Group }) {
+/**
+ * A group's name in its row, after its fold: what its calls repeat, how many, how they went, its issue (pressed, the
+ * row opens at its hint); under it, where its calls were made when the table's come from more than one call.
+ */
+function GroupName({ group, sourceOf }: { group: Group; sourceOf: SourceOf | undefined }) {
   // How many right after what, as the tree says it: ×36.
   const issue = group.issue;
   const untraced = useGroupUntraced(group.spans);
   return (
-    <span
-      className="flex min-w-0 items-center gap-2"
-      data-untraced={untraced === undefined ? undefined : ""}
-      title={untraced === undefined ? undefined : untracedNote(untraced)}
-    >
-      <Template template={group.template} />
-      <Times count={group.spans.length} />
-      {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
-      {issue ? <IssueChip kind={issue} /> : null}
+    <span className="tp-call-cell">
+      <span
+        className="flex min-w-0 items-center gap-2"
+        data-untraced={untraced === undefined ? undefined : ""}
+        title={untraced === undefined ? undefined : untracedNote(untraced)}
+      >
+        <RowCaret />
+        <Template template={group.template} />
+        <Times count={group.spans.length} />
+        {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
+        {issue ? <RowIssue kind={issue} /> : null}
+      </span>
+      <SourceLine spans={group.spans} sourceOf={sourceOf} />
     </span>
   );
 }
 
-function columns(groups: readonly Group[], scope: ListTime, noun: readonly [string, string]): DataColumn<Group>[] {
+function columns(
+  groups: readonly Group[],
+  scope: ListTime,
+  noun: readonly [string, string],
+  sourceOf: SourceOf | undefined,
+): DataColumn<Group>[] {
   return [
-    { id: "call", label: "Call", required: true, cell: (group) => <GroupName group={group} /> },
+    {
+      id: "call",
+      label: "Call",
+      required: true,
+      min: 18,
+      cell: (group) => <GroupName group={group} sourceOf={sourceOf} />,
+    },
     ...timeColumns<Group>((group) => group.time, groups, scope, noun),
   ];
 }
@@ -207,7 +238,17 @@ function nounOf(span: Span | undefined): [string, string] {
 }
 
 /** An open group: what it is, as the call tree's details say it, then each of its calls. */
-function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<string> | undefined }) {
+function GroupDetails({
+  group,
+  focus,
+  issues,
+  links,
+}: {
+  group: Group;
+  focus: ReadonlySet<string> | undefined;
+  issues: readonly Issue[] | undefined;
+  links: TraceLinks | undefined;
+}) {
   const [first] = group.spans;
   const count = group.spans.length;
   const title = groupTitle(group.time, nounOf(first), groupNoun(first));
@@ -218,6 +259,7 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
   return (
     <>
       {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
+      <RowIssues spans={group.spans} issues={issues} links={links} />
       <CallLines heading={bare ? null : <SectionHeading>{calledFrom(count, oneOrigin)}</SectionHeading>}>
         {group.spans.map((span, index) => (
           <Call
@@ -235,21 +277,32 @@ function GroupDetails({ group, focus }: { group: Group; focus: ReadonlySet<strin
 }
 
 /** One system's calls, grouped by what they repeat (an endpoint, a key pattern) like queries by statement. */
-export function CallsList({ spans, issueBySpan, focus, table = "trace-calls", clock }: CallsListProps) {
+export function CallsList({
+  spans,
+  issueBySpan,
+  focus,
+  table = "trace-calls",
+  clock,
+  issues,
+  links,
+  sourceOf,
+  category,
+}: CallsListProps) {
   const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   if (spans.length === 0) return <p className="tp-note">No calls of this kind in this request.</p>;
   return (
     <CallTable
       table={table}
-      columns={columns(groups, scope, nounOf(spans[0]))}
+      category={category}
+      columns={columns(groups, scope, nounOf(spans[0]), sourceOf)}
       items={groups}
       focus={focus}
       row={{
         key: (group) => group.template,
         tone: (group) => group.answer.tone,
         focused: (group) => (focus ? group.spans.some((span) => focus.has(span.id)) : false),
-        details: (group) => <GroupDetails group={group} focus={focus} />,
+        details: (group) => <GroupDetails group={group} focus={focus} issues={issues} links={links} />,
       }}
     />
   );

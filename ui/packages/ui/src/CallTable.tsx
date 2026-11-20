@@ -2,17 +2,30 @@
 // console's head and hairline rows (DataTable), a row's details opened under it as a log record's are, and those
 // details laid out as the call tree's.
 
-import { Fragment, type KeyboardEvent, type MouseEvent, type ReactNode, useState } from "react";
+import {
+  createContext,
+  Fragment,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useContext,
+  useState,
+} from "react";
 import { TableCell, TableRow } from "./components/ui/table";
 import { type DataColumn, DataTable } from "./DataTable";
 import { StatementPlan } from "./ExplainView";
 import { duration } from "./format";
 import { focusMark, useScrollToFocus } from "./hooks/useScrollToFocus";
+import { IssueList } from "./IssueList";
+import { ChevronRightIcon } from "./icons";
+import { ISSUE_LABELS } from "./labels";
 import { onTheClock } from "./lib/calls";
-import { percents } from "./lib/percent";
+import { percents, widthOf } from "./lib/percent";
 import { plural } from "./lib/plural";
 import { cn } from "./lib/utils";
-import type { ExplainPlan, IssueKind, Span, Trace } from "./types";
+import type { TraceLinks } from "./links";
+import { AppChip, HopName, IssueChip } from "./primitives";
+import type { ExplainPlan, Issue, IssueKind, Span, Trace } from "./types";
 
 // A failed call marks its row's edge red, one answered 4xx amber, as the console's lists mark theirs; one an issue
 // points at is highlighted.
@@ -43,9 +56,13 @@ export interface CallRowOf<T> {
   details: (item: T) => ReactNode;
 }
 
+/** The row a cell is in: whether it is open, and what opens it (its issue's chip, at its hint). */
+const OpenRow = createContext<{ opened: boolean; open: () => void }>({ opened: false, open: () => undefined });
+
 /**
  * The calls, a row each, in the reader's columns (kept under `table`); a click, Enter or Space opens a row's details
- * under it. Rows an issue points at are highlighted, scrolled to, and open when `openFocused`.
+ * under it. Rows an issue points at are highlighted, scrolled to, and open when `openFocused`. `category` colours the
+ * rows' bars as the call tree's (`sql`, `cache`, `http`).
  */
 export function CallTable<T>({
   table,
@@ -54,6 +71,7 @@ export function CallTable<T>({
   row,
   focus,
   openFocused = true,
+  category,
 }: {
   table: string;
   columns: readonly DataColumn<T>[];
@@ -61,6 +79,7 @@ export function CallTable<T>({
   row: CallRowOf<T>;
   focus: ReadonlySet<string> | undefined;
   openFocused?: boolean | undefined;
+  category?: string | undefined;
 }) {
   const [open, setOpen] = useState<ReadonlySet<string>>(
     () => new Set(openFocused ? items.filter(row.focused).map(row.key) : []),
@@ -72,7 +91,7 @@ export function CallTable<T>({
   };
   const body = useScrollToFocus<HTMLDivElement>(focus);
   return (
-    <div ref={body}>
+    <div ref={body} data-category={category}>
       <DataTable table={table} columns={columns} boxed={false} stickyHeader={false}>
         {({ cells, span }) =>
           items.map((item) => {
@@ -89,12 +108,12 @@ export function CallTable<T>({
                   onClick={(event) => opens(event) && toggle(key)}
                   onKeyDown={(event) => onRowKey(event, () => toggle(key))}
                 >
-                  {cells(item)}
+                  <OpenRow value={{ opened, open: () => opened || toggle(key) }}>{cells(item)}</OpenRow>
                 </TableRow>
                 {opened ? (
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={span} className="bg-muted/40 p-0 whitespace-normal">
-                      <div className="grid gap-4 px-6 py-4">{row.details(item)}</div>
+                      <div className="tp-call-details grid gap-4 px-6 py-4">{row.details(item)}</div>
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -153,9 +172,11 @@ function shareTitle(sum: number, scope: ListTime, noun: readonly [string, string
 
 /**
  * The columns every such table ends with. Time: the row's time on the clock, as the header says the scope's (calls
- * side by side once), what they add up to on hover. Share: the row's part of what the calls add up to, each its own
- * time, as whole percents that add up to 100% (largest remainder, as the strip's); where calls ran side by side, so
- * named: a share of their sum, not of the time on the clock.
+ * side by side once), what they add up to on hover. Each: a group's time per call (~0.9 ms), where some row is a
+ * group: many fast calls read apart from one slow one. Share: the row's part of what the calls add up to, each its
+ * own time, as a bar in the calls' colour (the rows that are most of the time stand out) and whole percents that add
+ * up to 100% (largest remainder, as the strip's); where calls ran side by side, so named: a share of their sum, not
+ * of the time on the clock. A narrow table leaves out Each first, then Share: the name keeps its room.
  */
 export function timeColumns<T>(
   time: (item: T) => RowTime,
@@ -171,6 +192,7 @@ export function timeColumns<T>(
   // A row of all the calls says their time as the header does: one time, one text.
   const count = items.reduce((all, item) => all + time(item).count, 0);
   const clock = (row: RowTime) => (row.count === count ? scope.clock : duration(row.clock));
+  const groups = items.some((item) => time(item).count > 1);
   return [
     {
       id: "time",
@@ -184,16 +206,147 @@ export function timeColumns<T>(
         </span>
       ),
     },
+    ...(groups ? [eachColumn(time, noun)] : []),
     {
       id: "share",
       label: scope.parallel ? "Share of sum" : "Share",
-      width: scope.parallel ? 7.5 : 5.5,
+      width: scope.parallel ? 10 : 8.5,
       num: true,
       drop: 1,
       className: "text-muted-foreground",
-      cell: (item) => <span title={title}>{shares.get(item) ?? "0%"}</span>,
+      cell: (item) => (
+        <span className="tp-row-share" title={title}>
+          <span className="tp-call-share tp-row-share-bar" aria-hidden="true">
+            {/* A sliver for the least: every row's bar is there to compare. */}
+            <span style={{ width: widthOf(Math.max(time(item).total, sum / 50), sum) }} />
+          </span>
+          <span className="tp-row-share-text">{shares.get(item) ?? "0%"}</span>
+        </span>
+      ),
     },
   ];
+}
+
+/** A group's time per call, "~0.9 ms": the first column to go in a narrow table, the row's time says the rest. */
+function eachColumn<T>(time: (item: T) => RowTime, noun: readonly [string, string]): DataColumn<T> {
+  return {
+    id: "each",
+    label: "Each",
+    width: 7,
+    num: true,
+    drop: 2,
+    className: "text-muted-foreground",
+    cell: (item) => {
+      const { total, count } = time(item);
+      if (count < 2) return null;
+      return (
+        <span title={`${duration(total)} added up over ${plural(count, ...noun)}, ~${duration(total / count)} each`}>
+          ~{duration(total / count)}
+        </span>
+      );
+    },
+  };
+}
+
+/** A row's fold, as the call tree's: a chevron that turns as the row opens (styles.css, `tr[aria-expanded]`). */
+export function RowCaret() {
+  const { opened } = useContext(OpenRow);
+  return (
+    <span className="tp-map-caret tp-row-caret" data-open={opened ? "" : undefined} aria-hidden="true">
+      <ChevronRightIcon />
+    </span>
+  );
+}
+
+/** A row's issue: its chip, pressed, opens the row at what the issue is and how to fix it. */
+export function RowIssue({ kind }: { kind: IssueKind }) {
+  const { open } = useContext(OpenRow);
+  return (
+    <button
+      type="button"
+      className="tp-row-issue"
+      title={`${ISSUE_LABELS[kind]}: what it is and how to fix it`}
+      onClick={open}
+    >
+      <IssueChip kind={kind} />
+    </button>
+  );
+}
+
+/**
+ * The issues of an open row's calls, first in its details: each as the Issues tab has it (what it is, where, the
+ * hint that fixes it). `own` leaves out a repeat (an N+1, a duplicate): one run of a group says only its own.
+ */
+export function RowIssues({
+  spans,
+  issues,
+  links,
+  own = false,
+}: {
+  spans: readonly Span[];
+  issues: readonly Issue[] | undefined;
+  links: TraceLinks | undefined;
+  own?: boolean | undefined;
+}) {
+  const ids = new Set(spans.map((span) => span.id));
+  const found = (issues ?? []).filter((issue) => rowHas(issue, ids, own));
+  if (found.length === 0) return null;
+  return <IssueList issues={found} links={links} />;
+}
+
+/** Whether an issue is a row's: a finding (not an error) on its calls; with `own`, not a repeat. */
+function rowHas(issue: Issue, ids: ReadonlySet<string>, own: boolean): boolean {
+  if (issue.kind === "error") return false;
+  if (own && (issue.kind === "n+1" || issue.kind === "duplicates")) return false;
+  return issue.span_ids.some((id) => ids.has(id));
+}
+
+/**
+ * Where a row's calls were made, when a table's come from more than one: the call that reached the app that made
+ * them, and that app, as the call tree's row says it (`GET /api/products → shop`); the trace's own, its name and app.
+ */
+export interface CallSource {
+  call: string;
+  app: string;
+  runtime: string | undefined;
+  /** Made in a trace another app served for a call: the arrow to its app. */
+  served: boolean;
+}
+
+/** Each call's source, where a table's calls come from more than one; none where all come from one. */
+export type SourceOf = (span: Span) => CallSource | undefined;
+
+/** The sources of some calls, each once (by its call and app), in their order. */
+function sourcesOf(spans: readonly Span[], sourceOf: SourceOf): CallSource[] {
+  const sources = new Map<string, CallSource>();
+  for (const source of spans.map(sourceOf)) {
+    if (source) sources.set(`${source.call} ${source.app}`, source);
+  }
+  return [...sources.values()];
+}
+
+/** A source as its call's row says it: a call another app served, the arrow to its app; the trace's own, its app. */
+function SourceName({ source }: { source: CallSource }) {
+  if (source.served) return <HopName call={source.call} app={source.app} runtime={source.runtime} />;
+  return (
+    <>
+      <span className="truncate">{source.call}</span>
+      <AppChip name={source.app} runtime={source.runtime} compact />
+    </>
+  );
+}
+
+/** A row's line under its name: its calls' source, "+2" where they come from more (all of them on hover). */
+export function SourceLine({ spans, sourceOf }: { spans: readonly Span[]; sourceOf: SourceOf | undefined }) {
+  const [first, ...more] = sourceOf ? sourcesOf(spans, sourceOf) : [];
+  if (!first) return null;
+  const all = [first, ...more].map((each) => `${each.call} · ${each.app}`).join("\n");
+  return (
+    <span className="tp-call-source" title={more.length > 0 ? all : undefined}>
+      <SourceName source={first} />
+      {more.length > 0 ? <span className="tp-call-source-more">+{more.length}</span> : null}
+    </span>
+  );
 }
 
 /** An open group's first line, as the call tree's: "36 similar calls · 490 ms on the clock · 12.7 s total". */

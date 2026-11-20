@@ -65,7 +65,7 @@ import { useViewMemory, VIEW_KEYS, type ViewMemory, type ViewMemoryHeld, ViewMem
 import { linkProps, opensTraces, openTraceAt, type TraceLinks } from "./links";
 import { ProfileTab } from "./ProfileView";
 import {
-  AppChip,
+  HopName,
   KindBadge,
   KindWords,
   RoutePath,
@@ -509,8 +509,9 @@ function RecordIssues({ issues }: { issues: readonly { kind: IssueKind }[] }) {
 }
 
 /** The rows here, among the tab's; the details and their tabs beside them, Explore among the panel's buttons. */
-// Beside the tree: no share bars, no start (the tree's bars say when): a call's time has the room.
-const DETAILS_HIDES: ReadonlySet<string> = new Set(["share", "start", "logger"]);
+// Beside the tree: no start (the tree's bars say when). A calls tab's Share stays: its bars say which rows are most of
+// the time, and go first when the panel is narrow.
+const DETAILS_HIDES: ReadonlySet<string> = new Set(["start", "logger"]);
 
 /** What is selected and how long it took: the row itself may be scrolled away, or have come from a link. */
 function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
@@ -524,12 +525,7 @@ function RowTitle({ chain, scope }: { chain: TraceScope; scope: SpanScope }) {
       {kind && !scope.hop ? <KindBadge kind={kind} muted={true} className="tp-map-kind" /> : null}
       {scope.hop ? (
         <span className="tp-details-name tp-details-hop">
-          <span className="truncate">{scope.hop.call}</span>
-          <span className="tp-map-hop" aria-hidden="true">
-            →
-          </span>
-          <span className="sr-only">served by</span>
-          <AppChip name={scope.hop.app} runtime={scope.hop.runtime} compact />
+          <HopName call={scope.hop.call} app={scope.hop.app} runtime={scope.hop.runtime} />
         </span>
       ) : (
         <span className="tp-details-name">{scope.label}</span>

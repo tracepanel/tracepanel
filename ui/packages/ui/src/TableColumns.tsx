@@ -270,8 +270,13 @@ function floorOf(spec: ColumnSpec, type: HeadType | undefined): number {
 
 /** A column's width in px: as dragged, or by default; the column that takes the rest at its minimum. */
 function wantedWidth(columns: Columns, spec: ColumnSpec, rem: number, type: HeadType | undefined): number {
-  const width = spec.width === undefined ? MIN_REST : (columns.widthOf(spec.id) ?? spec.width * rem);
+  const width = spec.width === undefined ? restMin(spec, rem) : (columns.widthOf(spec.id) ?? spec.width * rem);
   return Math.max(width, floorOf(spec, type));
+}
+
+/** What the column that takes the rest keeps at least, in px. */
+function restMin(spec: ColumnSpec | undefined, rem: number): number {
+  return Math.max(MIN_REST, (spec?.min ?? 0) * rem);
 }
 
 /**
@@ -323,7 +328,13 @@ function fitWidths(
   const sum = (fixed: boolean) =>
     wanted.reduce((total, [spec, width]) => (keepsWidth(spec) === fixed ? total + width : total), 0);
   const total = sum(false);
-  const left = room - sum(true) - MIN_REST;
+  const left =
+    room -
+    sum(true) -
+    restMin(
+      shown.find((spec) => spec.width === undefined),
+      rem,
+    );
   const scale = room > 0 && total > left ? Math.max(left, 0) / total : 1;
   const fit = (spec: ColumnSpec, width: number) =>
     keepsWidth(spec) ? width : Math.max(width * scale, floorOf(spec, type));
