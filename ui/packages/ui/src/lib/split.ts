@@ -336,9 +336,13 @@ function shareOfCalls(trace: Shared, spans: readonly Pick<Span, "id">[]): Share 
  * chain's calls, some of them picked), as the console's duration writes it.
  */
 export function callsTime(trace: Shared, spans: readonly Pick<Span, "id" | "start" | "duration">[]): string {
+  return callsShare(trace, spans)?.time ?? duration(onTheClock(spans));
+}
+
+/** The strip's share of a trace's time that `spans` are all of (its queries, its Database), where they are one. */
+export function callsShare(trace: Shared, spans: readonly Pick<Span, "id">[]): SaidShare | undefined {
   const share = shareOfCalls(trace, spans);
-  const said = share ? shareIn(splitOf(trace), share) : undefined;
-  return said?.time ?? duration(onTheClock(spans));
+  return share ? shareIn(splitOf(trace), share) : undefined;
 }
 
 /**

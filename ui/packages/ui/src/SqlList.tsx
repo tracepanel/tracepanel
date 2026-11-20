@@ -1,5 +1,5 @@
 import { cn } from "@tracepanel/ui/lib/utils";
-import { useContext, useMemo } from "react";
+import { type ReactNode, useContext, useMemo } from "react";
 import {
   CallLine,
   CallLines,
@@ -12,8 +12,13 @@ import {
   type ListTime,
   listTime,
   QueryPlan,
+  RowCaret,
+  RowIssue,
+  RowIssues,
   type RowTime,
   rowTime,
+  SourceLine,
+  type SourceOf,
   sameOrigin,
   timeColumns,
 } from "./CallTable";
@@ -24,11 +29,11 @@ import { callFields, templatePlace } from "./lib/callFields";
 import { queryFingerprint } from "./lib/fingerprint";
 import { linkProps, type TraceLinks } from "./links";
 import { type NameValue, NameValues, RowsLookContext } from "./NameValues";
-import { AliasChip, IssueChip, SectionHeading, TemplateChip, Times } from "./primitives";
+import { AliasChip, SectionHeading, TemplateChip, Times } from "./primitives";
 import type { Segment } from "./Segmented";
 import { SqlCode } from "./SqlCode";
 import { sqlLiteral } from "./sql";
-import type { IssueKind, Span } from "./types";
+import type { Issue, IssueKind, Span } from "./types";
 
 export interface SqlListProps {
   spans: readonly Span[];
@@ -42,6 +47,10 @@ export interface SqlListProps {
   mode: SqlMode;
   /** The queries' time on the clock, as the header and the tab write it. */
   clock: string;
+  /** The issues of the queries' traces: an open row starts with its own, their hints. */
+  issues?: readonly Issue[] | undefined;
+  /** Where each query was made, where the queries come from more than one call: a line under each row's name. */
+  sourceOf?: SourceOf | undefined;
 }
 
 /** "All requests with this query", where the host can list them. */
@@ -241,12 +250,17 @@ function QueryDetails({
   focus,
   onExplain,
   links,
+  issues,
+  own = false,
 }: {
   title: string;
   spans: readonly Span[];
   focus: ReadonlySet<string> | undefined;
   onExplain: Explain | undefined;
   links: TraceLinks | undefined;
+  issues: readonly Issue[] | undefined;
+  /** One run of a group: its own issues, not its group's repeat. */
+  own?: boolean | undefined;
 }) {
   // Beside the tree the open row has just said how many and how long.
   const beside = useContext(HiddenColumns) !== null;
@@ -255,6 +269,7 @@ function QueryDetails({
   return (
     <>
       {beside ? null : <DetailsTitle>{title}</DetailsTitle>}
+      <RowIssues spans={spans} issues={issues} links={links} own={own} />
       <SqlCode
         sql={String(first.attrs["db.statement"] ?? first.name)}
         vendor={vendorOf(first)}
@@ -270,27 +285,43 @@ function QueryDetails({
   );
 }
 
-/** A query's name in its row: the statement in short, how many times, its alias, the template that made it, its issue. */
+/**
+ * A query's name in its row, after its fold: the statement in short, how many times, its alias, the template that
+ * made it, its issue (pressed, the row opens at its hint); under it, where its queries were made when the table's
+ * come from more than one call.
+ */
 function QueryName({
   name,
   count,
   alias,
   from,
   issue,
+  spans,
+  sourceOf,
+  after,
 }: {
   name: string;
   count: number;
   alias: unknown;
   from: Span["attrs"] | undefined;
   issue: IssueKind | undefined;
+  spans: readonly Span[];
+  sourceOf: SourceOf | undefined;
+  /** At the end of its line: what one run ran with. */
+  after?: ReactNode;
 }) {
   return (
-    <span className="flex min-w-0 items-center gap-2 font-mono">
-      <span className="shrink-[1000] truncate">{name}</span>
-      <Times count={count} />
-      <AliasChip value={alias} />
-      {from ? <TemplateChip attrs={from} /> : null}
-      {issue ? <IssueChip kind={issue} /> : null}
+    <span className="tp-call-cell">
+      <span className="flex min-w-0 items-center gap-2 font-mono">
+        <RowCaret />
+        <span className="shrink-[1000] truncate">{name}</span>
+        <Times count={count} />
+        <AliasChip value={alias} />
+        {from ? <TemplateChip attrs={from} /> : null}
+        {issue ? <RowIssue kind={issue} /> : null}
+        {after}
+      </span>
+      <SourceLine spans={spans} sourceOf={sourceOf} />
     </span>
   );
 }
@@ -302,7 +333,7 @@ export const SQL_MODES: readonly Segment<SqlMode>[] = [
   { id: "timeline", label: "In order" },
 ];
 
-function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Group>[] {
+function groupColumns(groups: readonly Group[], scope: ListTime, sourceOf: SourceOf | undefined): DataColumn<Group>[] {
   return [
     {
       id: "query",
@@ -315,6 +346,8 @@ function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Gro
           alias={group.spans[0]?.attrs["db.alias"]}
           from={group.spans.find((span) => templatePlace(span.attrs))?.attrs}
           issue={group.issue}
+          spans={group.spans}
+          sourceOf={sourceOf}
         />
       ),
     },
@@ -332,6 +365,7 @@ function orderColumns(
   start: number,
   scope: ListTime,
   issueBySpan: ReadonlyMap<string, IssueKind>,
+  sourceOf: SourceOf | undefined,
 ): DataColumn<Placed>[] {
   return [
     {
@@ -351,17 +385,17 @@ function orderColumns(
         // What it ran with: one query run again and again tells its runs apart by their values.
         const params = paramsOf(span);
         return (
-          <span className="flex min-w-0 items-center gap-2">
-            <QueryName
-              name={span.name}
-              count={1}
-              alias={span.attrs["db.alias"]}
-              from={span.attrs}
-              // A repeat is its group's (the Grouped view, the tree's row): each run says only its own.
-              issue={ownIssue(issueBySpan.get(span.id))}
-            />
-            {params ? <span className="tp-map-sub truncate font-mono">{params}</span> : null}
-          </span>
+          <QueryName
+            name={span.name}
+            count={1}
+            alias={span.attrs["db.alias"]}
+            from={span.attrs}
+            // A repeat is its group's (the Grouped view, the tree's row): each run says only its own.
+            issue={ownIssue(issueBySpan.get(span.id))}
+            spans={[span]}
+            sourceOf={sourceOf}
+            after={params ? <span className="tp-map-sub truncate font-mono">{params}</span> : null}
+          />
         );
       },
     },
@@ -384,7 +418,7 @@ interface Placed {
   index: number;
 }
 
-export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clock }: SqlListProps) {
+export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clock, issues, sourceOf }: SqlListProps) {
   const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
   const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
@@ -397,7 +431,8 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
       {mode === "grouped" ? (
         <CallTable
           table="trace-sql"
-          columns={groupColumns(groups, scope)}
+          category="sql"
+          columns={groupColumns(groups, scope, sourceOf)}
           items={groups}
           focus={focus}
           row={{
@@ -410,6 +445,7 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
                 focus={focus}
                 onExplain={onExplain}
                 links={links}
+                issues={issues}
               />
             ),
           }}
@@ -417,7 +453,8 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
       ) : (
         <CallTable
           table="trace-sql-order"
-          columns={orderColumns(placed, start, scope, issueBySpan)}
+          category="sql"
+          columns={orderColumns(placed, start, scope, issueBySpan, sourceOf)}
           items={placed}
           focus={focus}
           openFocused={false}
@@ -431,6 +468,8 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
                 focus={focus}
                 onExplain={onExplain}
                 links={links}
+                issues={issues}
+                own={true}
               />
             ),
           }}

@@ -22,7 +22,8 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
   const authors = rows.filter({ hasText: "/authors/{id}" });
   const books = rows.filter({ hasText: "/books" });
   const time = (row: Locator) => row.locator("td").nth(1).locator("span");
-  const share = (row: Locator) => row.locator("td").nth(2).locator("span");
+  const each = (row: Locator) => row.locator("td").nth(2);
+  const share = (row: Locator) => row.locator(".tp-row-share");
 
   // Side by side, what they add up to is said apart from their time on the clock, as a sum.
   await expect(page.locator(".tp-scope-summary-text")).toHaveText(
@@ -31,6 +32,8 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
 
   await expect(time(authors)).toHaveText("1 ms");
   await expect(time(authors)).toHaveAttribute("title", "3 ms total, 3 HTTP calls");
+  // A group's time per call: fast calls, many of them.
+  await expect(each(authors)).toHaveText("~0.9 ms");
   // A share of the sum (2.7 of 3.6 ms), said so: the percents add up to 100%.
   await expect(page.getByRole("columnheader", { name: "Share of sum" })).toBeVisible();
   await expect(share(authors)).toHaveText("75%");
@@ -38,7 +41,13 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
 
   await expect(time(books)).toHaveText("0.9 ms");
   await expect(time(books)).not.toHaveAttribute("title");
+  await expect(each(books)).toHaveText("");
   await expect(share(books)).toHaveText("25%");
+  // Each share its bar too: three times the books' for the authors.
+  const widths = await page
+    .locator(".tp-row-share .tp-call-share > span")
+    .evaluateAll((bars) => bars.map((bar) => Math.round(bar.getBoundingClientRect().width)));
+  expect(widths[0]).toBeGreaterThan((widths[1] ?? 0) * 2);
 
   // The longest on the clock first, as the column shows it: the group (3 ms added up), then /books.
   await expect(rows.locator("td:first-child")).toHaveText([/\/authors\/\{id\}/, /\/books/]);
