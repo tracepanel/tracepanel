@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The N+1 hint for Hibernate names `@EntityGraph` on a Micronaut Data
+  repository too, not only on Spring Data's.
+
+## 0.16.0 (2026-11-10)
+
+### Changed
+
+- A call no trace answered has no "not traced" label on its row: its
+  tooltip and its details say why.
+
+### Fixed
+
+- A flame graph keeps its zoom, and Show all its whole graph, while the
+  trace's chain reloads.
+- The panel's details are never narrower than 24rem, so the top's actions,
+  the time strip's scale and a field's value fit.
+
 ## 0.15.0 (2026-11-06)
 
 ### Added

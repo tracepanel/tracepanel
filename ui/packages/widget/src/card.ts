@@ -90,7 +90,6 @@ export const CARD_STYLE = `
   .card-ms[data-speed="very-slow"] { color: var(--tp-error); font-weight: 600; }
   .card-tag { margin-left: 8px; padding: 0 6px; border-radius: 999px; background: var(--tint-violet); color: var(--tp-accent); font: 600 11px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
   /* A call no trace answered, as the panel's list says it: muted, beside its name. */
-  .card-not-traced { margin-left: 8px; color: var(--tp-text-3); font: italic 11.5px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; }
   .card-more {
     margin: 4px 0 0; padding: 2px 0; border: 0; background: none; color: var(--tp-accent);
     font: 500 12px "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif; cursor: pointer;
@@ -584,8 +583,7 @@ export function mountCard(
   }
 
   /**
-   * A call no trace answered, as the panel's list has it: its status, its name, "not traced" muted beside it (its
-   * reason in the tooltip), its time; one that got no answer says "failed" in red where its status would be. A click
+   * A call no trace answered, as the panel's list has it: its status, its name (why, in the tooltip), its time; one that got no answer says "failed" in red where its status would be. A click
    * opens the call tree of the view that made it, which has the call.
    */
   function callRow(call: UntracedCall): HTMLElement {
@@ -594,7 +592,6 @@ export function mountCard(
     row.dataset["call"] = call.failed ? "failed" : "untraced";
     const { method, path } = requestName(call.info);
     const name = element("span", "card-path", `${method} ${path}`);
-    if (!call.failed) name.append(element("span", "card-not-traced", "not traced"));
     row.append(callStatus(call), name, timeCell(call.info));
     row.title = callTitle(call, `${method} ${path}`);
     row.addEventListener("click", () => {

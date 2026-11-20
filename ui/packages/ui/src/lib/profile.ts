@@ -260,6 +260,13 @@ export function tree(profile: Profile): Node {
   return root;
 }
 
+/** The node at `key` in this tree, or the root where the tree has no such path. */
+export function nodeAt(root: Node, key: string): Node {
+  let at: Node | undefined = root;
+  for (const index of key.split("/").slice(1)) at = at?.children.get(Number(index));
+  return at ?? root;
+}
+
 /** Each function's samples: its own (it was running) and in all (it or what it called was), each stack counted once. */
 export function functions(profile: Profile): { frame: Frame; self: number; total: number }[] {
   const self = new Map<number, number>();

@@ -70,7 +70,7 @@ import { RunChips } from "./RunChips";
 import { SignalNotes } from "./SignalNotes";
 import { CompactChips } from "./TraceList";
 import type { IssueKind, Span, Trace, TraceSummary } from "./types";
-import { GroupNotTraced, NotTraced, useUntraced } from "./Untraced";
+import { untracedNote, useGroupUntraced, useUntraced } from "./Untraced";
 
 /** The selected row's details, under it: where the click was, not past the end of a long tree. */
 function RowDetails({ id, ctx }: { id: string; ctx: RowContext }) {
@@ -419,6 +419,7 @@ function GroupName({
 }) {
   const issue = groupIssue(node, ctx.issueBySpan);
   const first = node.spans[0];
+  const untraced = useGroupUntraced(node.spans);
   return (
     <>
       {/* HTTP calls' kind goes, as a call's does: their method says it (GET in its colour). */}
@@ -430,13 +431,19 @@ function GroupName({
           {...kindBadgeColour(first?.kind)}
         />
       )}
-      <OpText text={callTemplate(first)} kind={first?.kind} />
-      {/* How many, right after what: never pushed away from its name. */}
-      <Times count={node.spans.length} />
+      {/* A trace answered none of its calls: why, in the tooltip of what they repeat. */}
+      <span
+        className="contents"
+        data-untraced={untraced === undefined ? undefined : ""}
+        title={untraced === undefined ? undefined : untracedNote(untraced)}
+      >
+        <OpText text={callTemplate(first)} kind={first?.kind} />
+        {/* How many, right after what: never pushed away from its name. */}
+        <Times count={node.spans.length} />
+      </span>
       <AliasChip value={aliasOf(first)} />
       <FromTemplate span={first} parent={parent} />
       <GroupStatus answer={answer} />
-      <GroupNotTraced spans={node.spans} />
       <RowChips>
         {ctx.issuesIn ? (
           <IssuesMark ctx={ctx} rowKey={node.key} targets={node.spans.map((span) => span.id)} kind={issue} />
@@ -619,7 +626,6 @@ function OwnRow({ node, place: { ctx, indent, depth, mark, parent } }: RowProps<
           <Slot of="status">
             <CallStatus node={node} />
           </Slot>
-          <NotTraced spanId={span.id} />
           <AliasChip value={aliasBeside(span)} />
           <FromTemplate span={span} parent={parent} />
           <SignalNotes span={span} parent={parent} under={childSpans(node)} />
@@ -791,14 +797,15 @@ function HopIssue({ span, served, ctx }: { span: Span; served: ServedRun; ctx: R
  * to keep (`call` false: a query, a function) is as it was, its text cut first.
  */
 function CallLead({ call = true, span, children }: { call?: boolean; span: Span; children: ReactNode }) {
-  // Said "not traced" after its status: what is before both gives way to all that is left.
-  const untraced = useUntraced(span.id) !== undefined;
+  // No trace answered it: why, in its tooltip.
+  const untraced = useUntraced(span.id);
   if (!call) return children;
   return (
     <span
       className="tp-map-lead"
       data-http={span.kind === "http.client" ? "" : undefined}
-      data-untraced={untraced ? "" : undefined}
+      data-untraced={untraced === undefined ? undefined : ""}
+      title={untraced === undefined ? undefined : untracedNote(untraced)}
     >
       {children}
     </span>

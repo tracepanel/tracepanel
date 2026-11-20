@@ -72,3 +72,29 @@ test("Inside this span: a step's profile is the BFF's stretch of its time and th
   await expect(section(page, "shop-bff")).toContainText("2 ms");
   await expect(section(page, "shop")).toContainText("Profile of the whole trace");
 });
+
+test("an app's flame keeps its zoom, and Show all leaves it, while the chain reloads with each refresh", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem("tracepanel:refresh", "2000"));
+  const view = await bffApart(page);
+  await page.goto(`/#/t/${view}?tab=profile`);
+  const flame = section(page, "shop").getByRole("region", { name: "Flame graph" });
+  const showAll = flame.getByRole("button", { name: "Show all" });
+
+  await expect(showAll).toBeHidden();
+  // Two refreshes: the chain loads anew.
+  await page.waitForTimeout(4_500);
+
+  await expect(showAll).toBeHidden();
+
+  await flame.getByRole("button").first().click();
+  await page.waitForTimeout(4_500);
+
+  await expect(showAll).toBeVisible();
+
+  await showAll.click();
+  await page.waitForTimeout(4_500);
+
+  await expect(showAll).toBeHidden();
+});

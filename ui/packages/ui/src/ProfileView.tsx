@@ -27,6 +27,7 @@ import {
   layout,
   mostlyYours,
   type Node,
+  nodeAt,
   ownCode,
   type Profile,
   packageOf,
@@ -848,7 +849,9 @@ function Flame({
   time: Measure;
 }) {
   const root = useMemo(() => tree(profile), [profile]);
-  const [focus, setFocus] = useState<Node>(root);
+  // The zoom is a call path, not a node: a refresh builds the tree anew, and the path finds its node in it.
+  const [focusKey, setFocusKey] = useState(root.key);
+  const focus = nodeAt(root, focusKey);
   const boxes = useMemo(() => layout(focus), [focus]);
   const depth = Math.max(0, ...boxes.map((box) => box.depth)) + 1;
   const [hover, setHover] = useState<Hovered | null>(null);
@@ -858,7 +861,7 @@ function Flame({
       <div className="flex h-5 items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>Calls, outermost on top. Click one to zoom in.</span>
         {focus !== root ? (
-          <button type="button" className="text-brand hover:underline" onClick={() => setFocus(root)}>
+          <button type="button" className="text-brand hover:underline" onClick={() => setFocusKey(root.key)}>
             Show all
           </button>
         ) : null}
@@ -872,7 +875,7 @@ function Flame({
               tone={toneOf(palette, box.node.frame ? packageOf(box.node.frame) : "")}
               faded={box.node.frame !== null && faded(lit, colored(palette, packageOf(box.node.frame)))}
               onZoom={() => {
-                setFocus(box.node);
+                setFocusKey(box.node.key);
                 setHover(null);
               }}
               onHover={(event) => track(event, box.node)}
