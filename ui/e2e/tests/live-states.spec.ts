@@ -104,7 +104,9 @@ test("an SPA's route change is a new page: the pill shows its view running, not 
 }) => {
   await openApp(page, { posts: await posts() }, { recording: true });
   await page.getByRole("button", { name: "Load posts" }).click();
-  await expect(pill(page)).toContainText("/app/api/posts");
+  // Its view heads the pill, the request one of its calls.
+  await expect(pill(page)).toContainText("VIEW /app/");
+  await expect(pill(page)).not.toContainText("/app/api/posts");
 
   await announce(page, "01M4E2ELIVE000000000000001", "/app/next", true);
 

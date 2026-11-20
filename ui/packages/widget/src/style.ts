@@ -57,9 +57,6 @@ export const STYLE = `
   .logo-3 { fill: var(--tp-lime); }
   .runtime { align-self: center; display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 4px 7px; border-radius: 999px; background: var(--tp-float-chip); color: var(--tp-text-2); font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; }
   .brand .runtime svg { width: 12px; height: 12px; }
-  .monogram { display: inline-grid; place-items: center; width: 12px; height: 12px; container-type: size; border-radius: 25%; background: color-mix(in srgb, currentColor 16%, transparent); font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
-  .monogram::before { content: attr(data-letters); font-size: 56cqh; }
-  .monogram[data-letters="J"]::before { font-size: 72cqh; }
   .runtime:empty { display: none; }
   .stats { display: inline-flex; align-items: center; min-width: 0; height: 100%; }
   .seg { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 8.5px; white-space: nowrap; }

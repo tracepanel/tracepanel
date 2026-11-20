@@ -2,6 +2,7 @@
 // for after it loaded) before opening the panel.
 import { duration } from "@tracepanel/ui/format";
 import { clockOf, cutNote, NO_ANSWER, PENDING, runningLabel, runningTime } from "@tracepanel/ui/lib/live";
+import { pageParts } from "@tracepanel/ui/lib/page";
 import { plural } from "@tracepanel/ui/lib/plural";
 import { type SaidShare, splitOf } from "@tracepanel/ui/lib/split";
 import type { Issue, Trace } from "@tracepanel/ui/types";
@@ -130,12 +131,14 @@ export const CARD_STYLE = `
   @media (prefers-reduced-motion: reduce) { .card { transition: none; } .card-skeleton { animation: none; } }
 `;
 
-/** The page's view in the browser (an SPA's route), and what its chain says once counted. */
-export interface CardView {
-  view: { name: string; start: number; duration: number; open: boolean; status: "ok" | "error" };
+/** The view or action the pill heads with (an SPA's route, a click on it), and what its chain says once counted. */
+export interface CardRecord {
+  record: { name: string; start: number; duration: number; open: boolean; status: "ok" | "error" };
   facts: ChainFacts | null;
   /** Open, its calls all answered: where its time stops until it ends (epoch µs). */
   until?: number | undefined;
+  /** It failed, or a call of it did. */
+  failed: boolean;
 }
 
 /**
@@ -157,8 +160,8 @@ export interface CardSource {
   untraced(): readonly UntracedCall[];
   /** Its requests still in flight, oldest first: the newest is the pill's while there is one (lib/live). */
   flights(): readonly Flight[];
-  /** Its view, when the browser recording has one: the card's head before any request. */
-  view(): CardView | null;
+  /** The view or action the pill heads with, on a page the browser recording records: the card's head then. */
+  record(): CardRecord | null;
   /** A request's numbers as the pill says them: its chain's, pending until counted. */
   counted(info: TraceInfo): Counted;
   /** The page's own request among them (null once cleared): tagged "page" in the list. */
@@ -181,6 +184,19 @@ function element<K extends keyof HTMLElementTagNameMap>(
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+/** A view or an action as the pill and its card name it, as the panel's records do: VIEW /books, CLICK "Save". */
+export function recordTitle(name: string): string {
+  const { badge, label } = pageParts(name);
+  return `${badge} ${label}`;
+}
+
+/** "failed" in red where a status would be, as the pill says it of a view or an action. */
+function failedChip(): HTMLElement {
+  const chip = element("span", "status", "failed");
+  chip.dataset["tone"] = "server";
+  return chip;
 }
 
 function statusChip(status: number | null | undefined): HTMLElement | null {
@@ -262,8 +278,8 @@ function requestLabel(info: TraceInfo, isPage: boolean, issues: number): HTMLEle
   return name;
 }
 
-/** A view's time in its card's head: running while it is open, stopped at `until`. */
-function viewTime(view: CardView["view"], until: number | undefined): HTMLElement {
+/** A view's or an action's time in its card's head: running while it is open, stopped at `until`. */
+function recordTime(view: CardRecord["record"], until: number | undefined): HTMLElement {
   return view.open
     ? runningCell(view.start / 1000, "card-time", until)
     : element("span", "card-time", duration(view.duration));
@@ -352,9 +368,7 @@ function worstFirst(others: readonly Other[]): Other[] {
 /** Where a call no trace answered has its status: "failed" in red for one that got no answer. */
 function callStatus(call: UntracedCall): HTMLElement {
   if (!call.failed) return statusChip(call.info.status) ?? element("span");
-  const chip = element("span", "status", "failed");
-  chip.dataset["tone"] = "server";
-  return chip;
+  return failedChip();
 }
 
 /** A call no trace answered, in its tooltip: what it is, and that a click opens the call tree that has it. */
@@ -516,7 +530,11 @@ export function mountCard(
    * caption is the rows below it (and "+N more" the rest). Each row says why it matters: its status, its time in
    * amber or red when slow.
    */
-  function otherRequests(later: readonly TraceInfo[], flying: readonly Flight[]): HTMLElement | null {
+  function otherRequests(
+    later: readonly TraceInfo[],
+    flying: readonly Flight[],
+    caption = "Other requests on this page",
+  ): HTMLElement | null {
     const page = source.page();
     const others: Other[] = [
       ...later.map((info) => ({ info, failed: failed(info), issues: source.counted(info).issues })),
@@ -528,7 +546,7 @@ export function mountCard(
     if (count === 0) return null;
     const sorted = worstFirst(others);
     const section = element("section", "card-section");
-    section.append(element("p", "card-caption", `Other requests on this page · ${count}`));
+    section.append(element("p", "card-caption", `${caption} · ${count}`));
     const flights = [...flying].reverse().slice(0, OTHERS);
     for (const flight of flights) section.append(flightRow(flight));
     for (const { info, call } of sorted.slice(0, OTHERS - flights.length)) {
@@ -640,14 +658,21 @@ export function mountCard(
     if (after) card.append(after);
   }
 
-  /** The page's view, before any request: running while open, its time, "no answer yet" when cut, its chain's numbers. */
-  function renderView({ view, facts, until }: CardView): void {
+  /**
+   * The view or action the pill shows, as the pill names it: running while open, its time, "failed", "no answer yet"
+   * when cut, its chain's numbers; then the page's requests, its calls among them.
+   */
+  function renderRecord({ record, facts, until, failed }: CardRecord): void {
     card.textContent = "";
     const row = element("div", "card-head");
-    const name = element("span", "card-name");
-    name.append(...nameWithMethod(`VIEW ${view.name}`));
-    row.append(name, viewTime(view, until));
-    card.append(row, ...cutLine(facts?.cut ?? null), factsLine(view.open, facts));
+    const name = element("span", "card-name", recordTitle(record.name));
+    name.title = name.textContent ?? "";
+    row.append(name);
+    if (failed) row.append(failedChip());
+    row.append(recordTime(record, until));
+    card.append(row, ...cutLine(facts?.cut ?? null), factsLine(record.open, facts));
+    const requests = otherRequests(source.requests(), source.flights(), "Requests on this page");
+    if (requests) card.append(requests);
   }
 
   /** The request the pill shows (the newest in flight, else the latest), and the page's others. */
@@ -656,18 +681,14 @@ export function mountCard(
     return { info: all.at(-1), rest: all.slice(0, -1) };
   }
 
-  /** Draws what the pill shows now: a request in flight, else the latest done, else the page's view. */
+  /** Draws what the pill shows now: its view or action, else a request in flight, else the latest done. */
   function draw(): void {
+    const record = source.record();
     const flying = source.flights();
     const flight = flying.at(-1);
-    if (flight) renderFlight(flight, source.requests(), flying.slice(0, -1));
-    else if (current().info) drawRequest();
-    else drawView();
-  }
-
-  function drawView(): void {
-    const view = source.view();
-    if (view) renderView(view);
+    if (record) renderRecord(record);
+    else if (flight) renderFlight(flight, source.requests(), flying.slice(0, -1));
+    else drawRequest();
   }
 
   /** The latest request done; with its stored trace once loaded, drawn again then if it is still the card's. */
@@ -728,13 +749,14 @@ export function mountCard(
 
   /** Whether the card is still open on the request `id`, none in flight in front of it. */
   function stillOn(id: string): boolean {
-    return card.hasAttribute("data-open") && current().info?.trace === id && source.flights().length === 0;
+    const onRequest = source.record() === null && source.flights().length === 0;
+    return card.hasAttribute("data-open") && onRequest && current().info?.trace === id;
   }
 
   function show(): void {
     window.clearTimeout(hideTimer);
     if (source.panelOpen()) return;
-    if (!source.requests().length && !source.flights().length && !source.view()) return;
+    if (!source.requests().length && !source.flights().length && !source.record()) return;
     // A trace given up on while the card was open is asked for again on this hover.
     const id = current().info?.trace;
     if (id && resolved.get(id) === null) resolved.delete(id);

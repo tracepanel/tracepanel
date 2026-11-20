@@ -90,7 +90,8 @@ export const OTHER_API = "http://api.example.test/app/";
  * or after it with "after widget" (an app that starts it from its own code, once the widget loaded). `server`: the
  * page's own load was traced (a server-rendered page). `charset`: the page's encoding, UTF-8 unless given. `view`:
  * the id the recording gives the page's view, a trace the test stored. `ids`: the first 7 characters of the ids the
- * recording gives (the view's 1, the first action's 2): a test that stores them has its own.
+ * recording gives (the view's 1, the first action's 2): a test that stores them has its own. `runtime`: what the
+ * page's own label says served it, with no traced load (an SPA whose SDK names its framework).
  */
 export async function openApp(
   page: Page,
@@ -102,6 +103,7 @@ export async function openApp(
     charset?: string;
     view?: string;
     ids?: string;
+    runtime?: string;
   } = {},
 ): Promise<void> {
   const api = options.api ?? "/app/";
@@ -123,7 +125,9 @@ export async function openApp(
     ? `data-tracepanel-id="${server.trace}" data-tracepanel-method="GET" data-tracepanel-status="${server.status}"
        data-tracepanel-total="${server.totalMs}" data-tracepanel-queries="${server.queries}"
        data-tracepanel-issues="${server.issues ?? 0}" data-tracepanel-runtime="${server.runtime}"`
-    : "";
+    : options.runtime
+      ? `data-tracepanel-runtime="${options.runtime}"`
+      : "";
   const buttons = Object.keys(calls)
     .map((key) => `<button onclick="fetch('${api}api/${key}')">Load ${key}</button>`)
     .concat(

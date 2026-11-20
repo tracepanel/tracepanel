@@ -29,10 +29,17 @@ const RUNTIMES = {
   bun: { name: "Bun", letters: "Bn" },
   deno: { name: "Deno", letters: "Dn" },
   browser: { name: "Browser", letters: "Br" },
+  angular: { name: "Angular", letters: "Ng" },
+  react: { name: "React", letters: "Re" },
+  vue: { name: "Vue", letters: "Vu" },
+  svelte: { name: "Svelte", letters: "Sv" },
+  solid: { name: "Solid", letters: "So" },
+  preact: { name: "Preact", letters: "Pr" },
   spring: { name: "Spring", letters: "Sp" },
   springboot: { name: "Spring Boot", letters: "SB" },
   ktor: { name: "Ktor", letters: "Kt" },
   quarkus: { name: "Quarkus", letters: "Qk" },
+  micronaut: { name: "Micronaut", letters: "Mn" },
   java: { name: "Java", letters: "J" },
   kotlin: { name: "Kotlin", letters: "Kl" },
   aspnet: { name: "ASP.NET Core", letters: "AS" },
@@ -123,6 +130,7 @@ const FRAMEWORKS = new Map<string, RuntimeKind>([
   ["Spring", "spring"],
   ["Ktor", "ktor"],
   ["Quarkus", "quarkus"],
+  ["Micronaut", "micronaut"],
   ["ASP.NET", "aspnet"],
   ["Rails", "rails"],
   ["Laravel", "laravel"],
@@ -139,6 +147,13 @@ const FRAMEWORKS = new Map<string, RuntimeKind>([
   ["gRPC", "grpc"],
   ["aiohttp", "aiohttp"],
   ["Falcon", "falcon"],
+  // A page's framework in the browser, as @tracepanel/js labels it: "Browser · Angular 22.0.1".
+  ["Angular", "angular"],
+  ["React", "react"],
+  ["Vue", "vue"],
+  ["Svelte", "svelte"],
+  ["Solid", "solid"],
+  ["Preact", "preact"],
 ]);
 const LANGUAGES = new Map<string, RuntimeKind>([
   ["Python", "python"],
@@ -161,17 +176,22 @@ const LANGUAGES = new Map<string, RuntimeKind>([
 const FRAMEWORKS_BY_CASE = new Map([...FRAMEWORKS].map(([name, kind]) => [name.toLowerCase(), kind]));
 
 /**
- * Reads the label the SDKs send, "Python 3.12 · Django 6.0", "Node 26 · Next.js 16.4" or "Go 1.27 · net/http".
- * A plain ASGI or WSGI app, or Go's net/http, is no framework named here: it is its language; Bun.serve is Bun.
+ * Reads the label the SDKs send, "Python 3.12 · Django 6.0", "Node 26 · Next.js 16.4", "Go 1.27 · net/http" or a
+ * page's "Browser · Angular 22.0.1". A plain ASGI or WSGI app, or Go's net/http, is no framework named here: it is its
+ * language; Bun.serve is Bun. A framework said alone ("Angular 22.0.1") is that framework.
  */
 export function runtimeKind(label: string): RuntimeKind | null {
   const [language = "", framework = ""] = label.split(" · ");
-  const words = framework.split(" ");
+  const [languageName = ""] = language.split(" ");
+  return frameworkOf(framework) ?? LANGUAGES.get(languageName) ?? frameworkOf(language) ?? null;
+}
+
+/** The framework a label's part names, its version after it. */
+function frameworkOf(part: string): RuntimeKind | undefined {
+  const words = part.split(" ");
   // A name of two words first: "Spring Boot 4.1" is Spring Boot, a plain Spring MVC app (from OpenTelemetry) Spring.
   const named = (name: string) => FRAMEWORKS_BY_CASE.get(name.toLowerCase());
-  const frameworkKind = named(words.slice(0, 2).join(" ")) ?? named(words[0] ?? "");
-  const [languageName = ""] = language.split(" ");
-  return frameworkKind ?? LANGUAGES.get(languageName) ?? null;
+  return named(words.slice(0, 2).join(" ")) ?? named(words[0] ?? "");
 }
 
 const FRAMEWORK_KINDS: ReadonlySet<RuntimeKind> = new Set(FRAMEWORKS.values());

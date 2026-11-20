@@ -91,10 +91,54 @@ test("a server page's own load heads the pill, with the framework its server nam
 
   await expect(pill(page)).toContainText("GET /app/");
   await expect(pill(page)).toContainText("154");
-  await expect(pill(page)).toContainText("Django");
-  // Its mark as the console draws it: Django's monogram, its letters drawn by CSS, not text of the pill.
-  await expect(pill(page).locator('[data-mark="monogram"]')).toHaveAttribute("data-letters", "Dj");
-  await expect(pill(page).locator('[data-mark="monogram"]')).toHaveText("");
+  // Its name alone: Django's monogram would only say it again.
+  await expect(pill(page).locator(".runtime")).toHaveText("Django");
+  await expect(pill(page).locator(".runtime [data-mark]")).toHaveCount(0);
+});
+
+test("on an SPA the pill heads with its view, then the click, by its whole chain; served by its framework, not its API's", async ({
+  page,
+}) => {
+  await openApp(
+    page,
+    { posts: await posts(), boom: await broken() },
+    { recording: true, runtime: "Browser · Angular 22.2.6" },
+  );
+
+  await expect(pill(page)).toContainText("VIEW /app/");
+  await expect(pill(page).locator(".runtime")).toHaveText("Angular");
+  await expect(pill(page).locator(".runtime [data-mark]")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Do posts" }).click();
+
+  // The click, not the request it made (a FastAPI app's): the request is its call, in its numbers.
+  await expect(pill(page).locator(".name")).toHaveText('CLICK "posts"');
+  await expect(pill(page)).not.toContainText("/api/posts");
+  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: click "posts" on \/app\/[,:]/);
+  await expect(pill(page)).toHaveAccessibleName(/\. Served by Browser · Angular 22\.2\.6$/);
+  await expect(pill(page).locator(".runtime")).toHaveText("Angular");
+
+  await pill(page).hover();
+  const card = page.getByRole("dialog", { name: "This request at a glance" });
+
+  // The card leads with the same record, the page's requests under it.
+  await expect(card.locator(".card-head .card-name")).toHaveText('CLICK "posts"');
+  await expect(card.locator(".card-caption")).toHaveText("Requests on this page · 1");
+
+  await page.mouse.move(0, 0);
+  await page.getByRole("button", { name: "Do boom" }).click();
+
+  await expect(pill(page).locator(".name")).toHaveText('CLICK "boom"');
+  await expect(pill(page).locator(".status")).toHaveText("failed");
+  await expect(pill(page)).toHaveAttribute("data-verdict", "error");
+  await expect(pill(page)).toHaveAccessibleName(/^tracepanel: click "boom" on \/app\/, failed/);
+});
+
+test("a page that runs in the browser says so by the globe and its name", async ({ page }) => {
+  await openApp(page, {}, { recording: true, runtime: "Browser" });
+
+  await expect(pill(page).locator(".runtime")).toHaveText("Browser");
+  await expect(pill(page).locator('.runtime [data-mark="browser"]')).toHaveCount(1);
 });
 
 test("a failed call turns the pill red; once another follows, it is counted", async ({ page }) => {
