@@ -4,9 +4,9 @@
 
 ### Changed
 
-- A trace's DB, Cache and HTTP tabs: share bars, a group's time per call, a
-  total line, each row's call and app across a chain, and an N+1's chip that
-  opens at its fix. Rows fold open with a caret, as the call tree's.
+- A trace's DB, Cache and HTTP tabs: share bars of the time on the clock, a
+  group's time per call, a total line, a section per call across a chain, and
+  an N+1's chip that opens at its fix. Rows fold open as the call tree's.
 
 ### Fixed
 

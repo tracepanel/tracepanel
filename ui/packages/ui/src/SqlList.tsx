@@ -5,6 +5,7 @@ import {
   CallLines,
   CallTable,
   calledFrom,
+  callSections,
   DetailsTitle,
   type Explain,
   groupTitle,
@@ -17,9 +18,9 @@ import {
   RowIssues,
   type RowTime,
   rowTime,
-  SourceLine,
   type SourceOf,
   sameOrigin,
+  sectionRows,
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
@@ -49,7 +50,7 @@ export interface SqlListProps {
   clock: string;
   /** The issues of the queries' traces: an open row starts with its own, their hints. */
   issues?: readonly Issue[] | undefined;
-  /** Where each query was made, where the queries come from more than one call: a line under each row's name. */
+  /** Where each query was made, where the queries come from more than one call: a section of rows each. */
   sourceOf?: SourceOf | undefined;
 }
 
@@ -287,8 +288,7 @@ function QueryDetails({
 
 /**
  * A query's name in its row, after its fold: the statement in short, how many times, its alias, the template that
- * made it, its issue (pressed, the row opens at its hint); under it, where its queries were made when the table's
- * come from more than one call.
+ * made it, its issue (pressed, the row opens at its hint).
  */
 function QueryName({
   name,
@@ -296,8 +296,6 @@ function QueryName({
   alias,
   from,
   issue,
-  spans,
-  sourceOf,
   after,
 }: {
   name: string;
@@ -305,23 +303,18 @@ function QueryName({
   alias: unknown;
   from: Span["attrs"] | undefined;
   issue: IssueKind | undefined;
-  spans: readonly Span[];
-  sourceOf: SourceOf | undefined;
   /** At the end of its line: what one run ran with. */
   after?: ReactNode;
 }) {
   return (
-    <span className="tp-call-cell">
-      <span className="flex min-w-0 items-center gap-2 font-mono">
-        <RowCaret />
-        <span className="shrink-[1000] truncate">{name}</span>
-        <Times count={count} />
-        <AliasChip value={alias} />
-        {from ? <TemplateChip attrs={from} /> : null}
-        {issue ? <RowIssue kind={issue} /> : null}
-        {after}
-      </span>
-      <SourceLine spans={spans} sourceOf={sourceOf} />
+    <span className="flex min-w-0 items-center gap-2 font-mono">
+      <RowCaret />
+      <span className="shrink-[1000] truncate">{name}</span>
+      <Times count={count} />
+      <AliasChip value={alias} />
+      {from ? <TemplateChip attrs={from} /> : null}
+      {issue ? <RowIssue kind={issue} /> : null}
+      {after}
     </span>
   );
 }
@@ -333,7 +326,7 @@ export const SQL_MODES: readonly Segment<SqlMode>[] = [
   { id: "timeline", label: "In order" },
 ];
 
-function groupColumns(groups: readonly Group[], scope: ListTime, sourceOf: SourceOf | undefined): DataColumn<Group>[] {
+function groupColumns(groups: readonly Group[], scope: ListTime): DataColumn<Group>[] {
   return [
     {
       id: "query",
@@ -347,8 +340,6 @@ function groupColumns(groups: readonly Group[], scope: ListTime, sourceOf: Sourc
           alias={group.spans[0]?.attrs["db.alias"]}
           from={group.spans.find((span) => templatePlace(span.attrs))?.attrs}
           issue={group.issue}
-          spans={group.spans}
-          sourceOf={sourceOf}
         />
       ),
     },
@@ -366,7 +357,6 @@ function orderColumns(
   start: number,
   scope: ListTime,
   issueBySpan: ReadonlyMap<string, IssueKind>,
-  sourceOf: SourceOf | undefined,
 ): DataColumn<Placed>[] {
   return [
     {
@@ -394,8 +384,6 @@ function orderColumns(
             from={span.attrs}
             // A repeat is its group's (the Grouped view, the tree's row): each run says only its own.
             issue={ownIssue(issueBySpan.get(span.id))}
-            spans={[span]}
-            sourceOf={sourceOf}
             after={params ? <span className="tp-map-sub truncate font-mono">{params}</span> : null}
           />
         );
@@ -414,15 +402,22 @@ function orderColumns(
   ];
 }
 
-/** A query in the order it ran: its place among them. */
+/** A query in the order it ran: its place among all of the table's, in its section too (the order across them). */
 interface Placed {
   span: Span;
   index: number;
 }
 
 export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clock, issues, sourceOf }: SqlListProps) {
-  const groups = useMemo(() => groupSpans(spans, issueBySpan), [spans, issueBySpan]);
-  const placed = useMemo(() => spans.map((span, index) => ({ span, index })), [spans]);
+  // Grouped: a row per statement in each call's section; in order: each call's queries as they ran.
+  const groups = useMemo(
+    () => callSections(spans, sourceOf, (part) => groupSpans(part, issueBySpan)),
+    [spans, sourceOf, issueBySpan],
+  );
+  const placed = useMemo(() => {
+    const index = new Map(spans.map((span, at) => [span.id, at]));
+    return callSections(spans, sourceOf, (part) => part.map((span) => ({ span, index: index.get(span.id) ?? 0 })));
+  }, [spans, sourceOf]);
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   const start = Math.min(...spans.map((span) => span.start));
 
@@ -434,8 +429,9 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
         <CallTable
           table="trace-sql"
           category="sql"
-          columns={groupColumns(groups, scope, sourceOf)}
-          items={groups}
+          noun={QUERY}
+          columns={groupColumns(sectionRows(groups), scope)}
+          sections={groups}
           focus={focus}
           row={{
             key: (group) => group.key,
@@ -456,8 +452,9 @@ export function SqlList({ spans, issueBySpan, focus, onExplain, links, mode, clo
         <CallTable
           table="trace-sql-order"
           category="sql"
-          columns={orderColumns(placed, start, scope, issueBySpan, sourceOf)}
-          items={placed}
+          noun={QUERY}
+          columns={orderColumns(sectionRows(placed), start, scope, issueBySpan)}
+          sections={placed}
           focus={focus}
           openFocused={false}
           row={{

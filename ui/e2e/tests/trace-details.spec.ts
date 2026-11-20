@@ -74,8 +74,8 @@ test("the DB tab's rows fold open as the tree's, a repeat's chip opens at its fi
   const panel = page.getByRole("tabpanel");
   const authors = panel.locator("tr[aria-expanded]").first();
 
-  // The queries of one trace: no line under their names says where they came from.
-  await expect(panel.locator(".tp-call-source")).toHaveCount(0);
+  // The queries of one trace: no section says where they came from.
+  await expect(panel.locator("tr[data-section]")).toHaveCount(0);
   await expect(panel.locator(".tp-calls-total")).toHaveText(
     /^14 queries · \d+(\.\d+)? ms in the database( · \d+% of the request)?$/,
   );

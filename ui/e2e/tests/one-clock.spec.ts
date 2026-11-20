@@ -6,7 +6,7 @@ import { traceId } from "../app.ts";
 import { chain, fanout } from "../chain.ts";
 import { expect, test } from "../fixtures.ts";
 
-test("a group of calls that ran side by side: its time on the clock, the sum on hover, its share of their sum", async ({
+test("a group of calls that ran side by side: its time on the clock, the sum on hover, its share of the clock", async ({
   page,
 }) => {
   // /books alone (0–0.9 ms), then three authors overlapping (1.0–1.9, 1.1–2.0, 1.2–2.1 ms): 1.1 ms on the clock,
@@ -34,27 +34,46 @@ test("a group of calls that ran side by side: its time on the clock, the sum on 
   await expect(time(authors)).toHaveAttribute("title", "3 ms total, 3 HTTP calls");
   // A group's time per call: fast calls, many of them.
   await expect(each(authors)).toHaveText("~0.9 ms");
-  // A share of the sum (2.7 of 3.6 ms), said so: the percents add up to 100%.
-  await expect(page.getByRole("columnheader", { name: "Share of sum" })).toBeVisible();
-  await expect(share(authors)).toHaveText("75%");
-  await expect(share(authors)).toHaveAttribute("title", /^Of the 4 ms the HTTP calls add up to, each its own time/);
+  // A share of the time on the clock, as Time says it (1.1 of 2.0 ms): the rows apart, the percents add up to 100%.
+  await expect(page.getByRole("columnheader", { name: "Share" })).toBeVisible();
+  await expect(share(authors)).toHaveText("55%");
+  await expect(share(authors)).toHaveAttribute("title", "The row's time on the clock, of the 2 ms the HTTP calls took");
 
   await expect(time(books)).toHaveText("0.9 ms");
   await expect(time(books)).not.toHaveAttribute("title");
   await expect(each(books)).toHaveText("");
-  await expect(share(books)).toHaveText("25%");
-  // Each share its bar too: three times the books' for the authors.
+  await expect(share(books)).toHaveText("45%");
+  // Each share its bar too, of the same whole: the authors' the longer.
   const widths = await page
     .locator(".tp-row-share .tp-call-share > span")
-    .evaluateAll((bars) => bars.map((bar) => Math.round(bar.getBoundingClientRect().width)));
-  expect(widths[0]).toBeGreaterThan((widths[1] ?? 0) * 2);
+    .evaluateAll((bars) => bars.map((bar) => bar.getBoundingClientRect().width));
+  expect(widths[0]).toBeGreaterThan(widths[1] ?? 0);
 
-  // The longest on the clock first, as the column shows it: the group (3 ms added up), then /books.
+  // The longest on the clock first, as the column shows it: the group (1.1 ms), then /books.
   await expect(rows.locator("td:first-child")).toHaveText([/\/authors\/\{id\}/, /\/books/]);
 
   await authors.click();
 
   await expect(page.getByText("3 similar HTTP calls · 1 ms on the clock · 3 ms total")).toBeVisible();
+});
+
+test("rows that ran side by side: each its share of the clock, rounded on its own, more than 100% in all", async ({
+  page,
+}) => {
+  // /books 0–0.9 ms, /authors 0.3–1.2 ms: 1.2 ms on the clock, each row 0.9 ms of it.
+  const { bff } = await fanout(13, [
+    { route: "/books", path: "/books", at: 0 },
+    { route: "/authors/{author_id}", path: "/authors/1", at: 300 },
+  ]);
+  await page.goto(`/#/t/${bff}?tab=http`);
+  const shares = page.getByRole("tabpanel").locator("tbody .tp-row-share");
+
+  await expect(page.getByRole("columnheader", { name: "Share" })).toBeVisible();
+  await expect(shares).toHaveText(["75%", "75%"]);
+  await expect(shares.first()).toHaveAttribute(
+    "title",
+    "The row's time on the clock, of the 1 ms the HTTP calls took; rows that ran side by side each count their own, so the shares add up to more than 100%",
+  );
 });
 
 /** Every app chip on the page: its class, shape and font. */
