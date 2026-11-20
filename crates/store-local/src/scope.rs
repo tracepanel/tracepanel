@@ -160,6 +160,42 @@ pub(crate) fn shifted(mut doc: Value, by: i64) -> Value {
     doc
 }
 
+/// The traces of a chain, for its counts: `?1`'s and those down its calls, `?2` levels deep, `?3` in all.
+macro_rules! chain_members {
+    () => {
+        "WITH RECURSIVE down(id, level) AS (
+             SELECT ?1, 0
+             UNION
+             SELECT l.trace_id, down.level + 1 FROM links l JOIN down ON l.linked_trace = down.id
+             WHERE l.kind = 'called_by' AND down.level < ?2
+         ),
+         members AS (SELECT id, min(level) AS level FROM down GROUP BY id ORDER BY level LIMIT ?3) "
+    };
+}
+
+// The chain's few traces lead every join below (CROSS JOIN keeps that order): left to choose, SQLite reads a whole
+// table through another index instead (all of `calls` by `calls_system`, for the ORDER BY), a list row then takes
+// milliseconds.
+const CHAIN_TOTALS: &str = concat!(
+    chain_members!(),
+    "SELECT count(*), coalesce(sum(t.queries), 0), coalesce(sum(t.db_time), 0), coalesce(sum(t.errors), 0)
+     FROM members m CROSS JOIN traces t ON t.id = m.id"
+);
+// A finding is one however many traces it is in: its fingerprint, as the Issues tab groups them.
+const CHAIN_ISSUES: &str = concat!(
+    chain_members!(),
+    "SELECT DISTINCT i.fingerprint, i.kind FROM members m
+     CROSS JOIN issue_traces t ON t.trace_id = m.id JOIN issues i ON i.fingerprint = t.fingerprint"
+);
+// What ran down the chain: its spans' kinds (functions, GraphQL, transactions), its calls' systems (sql, http,
+// redis), and "log" for a warning or worse: what a list can be narrowed to, and which rows have it.
+const CHAIN_KINDS: &str = concat!(
+    chain_members!(),
+    "SELECT s.kind FROM members m CROSS JOIN spans s ON s.trace_id = m.id
+     UNION SELECT c.system FROM members m CROSS JOIN calls c ON c.trace_id = m.id
+     UNION SELECT 'log' FROM members m CROSS JOIN logs l ON l.trace_id = m.id WHERE l.level_no >= 30 ORDER BY 1"
+);
+
 /// What keeps the memo of a chain's finds from growing without end: past this many chains it starts again.
 const ACROSS_APPS_KEPT: usize = 2_000;
 
@@ -171,30 +207,10 @@ impl Reader {
     /// The chain's own findings (an N+1 across apps) need its documents, read only for a chain with enough calls to
     /// have one and once as it stands. A trace not stored has none.
     pub fn chain_counts(&self, ids: &[String]) -> Result<Value, ReadError> {
-        const MEMBERS: &str = "WITH RECURSIVE down(id, level) AS (
-                 SELECT ?1, 0
-                 UNION
-                 SELECT l.trace_id, down.level + 1 FROM links l JOIN down ON l.linked_trace = down.id
-                 WHERE l.kind = 'called_by' AND down.level < ?2
-             ),
-             members AS (SELECT id, min(level) AS level FROM down GROUP BY id ORDER BY level LIMIT ?3)";
         let db = self.connect()?;
-        let mut totals = db.prepare_cached(&format!(
-            "{MEMBERS} SELECT count(*), coalesce(sum(t.queries), 0), coalesce(sum(t.db_time), 0), coalesce(sum(t.errors), 0)
-             FROM members m JOIN traces t ON t.id = m.id"
-        ))?;
-        // A finding is one however many traces it is in: its fingerprint, as the Issues tab groups them.
-        let mut issues = db.prepare_cached(&format!(
-            "{MEMBERS} SELECT DISTINCT i.fingerprint, i.kind FROM members m
-             JOIN issue_traces t ON t.trace_id = m.id JOIN issues i ON i.fingerprint = t.fingerprint"
-        ))?;
-        // What ran down the chain: its spans' kinds (functions, GraphQL, transactions), its calls' systems (sql,
-        // http, redis), and "log" for a warning or worse: what a list can be narrowed to, and which rows have it.
-        let mut kinds_of = db.prepare_cached(&format!(
-            "{MEMBERS} SELECT s.kind FROM members m JOIN spans s ON s.trace_id = m.id
-             UNION SELECT c.system FROM members m JOIN calls c ON c.trace_id = m.id
-             UNION SELECT 'log' FROM members m JOIN logs l ON l.trace_id = m.id WHERE l.level_no >= 30 ORDER BY 1"
-        ))?;
+        let mut totals = db.prepare_cached(CHAIN_TOTALS)?;
+        let mut issues = db.prepare_cached(CHAIN_ISSUES)?;
+        let mut kinds_of = db.prepare_cached(CHAIN_KINDS)?;
         let mut counts = serde_json::Map::new();
         for id in ids {
             let args = rusqlite::params![id, CHAIN_LEVELS as i64, CHAIN_TRACES as i64];
@@ -1243,6 +1259,36 @@ mod tests {
         );
         assert_eq!(counts["API1"]["traces"], 1);
         assert_eq!(counts.get("NONE"), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_chains_counts_read_only_its_own_rows() {
+        let (dir, reader) = library("counts-plan");
+        let db = reader.connect().unwrap();
+
+        // Each list row asks these: a scan of a whole table in one of them makes a long list take seconds.
+        let scans: HashSet<String> = [CHAIN_TOTALS, CHAIN_ISSUES, CHAIN_KINDS]
+            .iter()
+            .flat_map(|sql| {
+                db.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+                    .unwrap()
+                    .query_map(
+                        rusqlite::params!["VIEW", CHAIN_LEVELS as i64, CHAIN_TRACES as i64],
+                        |row| row.get::<_, String>(3),
+                    )
+                    .unwrap()
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .unwrap()
+            })
+            .filter(|detail| detail.starts_with("SCAN "))
+            .collect();
+
+        // Only the chain's own: no table read whole.
+        assert_eq!(
+            scans,
+            HashSet::from(["SCAN CONSTANT ROW", "SCAN down", "SCAN m"].map(String::from))
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

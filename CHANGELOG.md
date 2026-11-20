@@ -19,6 +19,8 @@
   repository too, not only on Spring Data's.
 - In the panel, a view's calls look as they will once its trace loads: no
   REQ badge or empty caret, a blank app chip and their bars breathing.
+- The console's request list loads in milliseconds on a big store, not a
+  second: a chain's numbers read only its own calls, not the whole table.
 - On an SPA a click on the pill opens the panel on the view or click it
   heads with, not on the page's first view.
 - In a narrow panel a query's row keeps its statement (its template goes)
