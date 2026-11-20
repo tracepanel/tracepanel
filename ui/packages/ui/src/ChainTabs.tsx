@@ -123,9 +123,17 @@ function clockText(spans: readonly ScopedSpan[], members: readonly Member[]): st
 function sourceOf(member: Member, members: readonly Member[], runtime: string | undefined): CallSource {
   const parent = members.find((each) => each.id === member.parent);
   const via = parent?.trace.spans.find((span) => span.id === member.via);
-  if (via) return { call: hopText({ ...via, name: callTemplate(via) }), app: member.app, runtime, served: true };
+  if (via) {
+    return {
+      call: hopText({ ...via, name: callTemplate(via) }),
+      app: member.app,
+      runtime,
+      served: true,
+      start: via.start,
+    };
+  }
   const root = member.trace.spans.find((span) => span.parent_id === null);
-  return { call: root?.name ?? "", app: member.app, runtime, served: false };
+  return { call: root?.name ?? "", app: member.app, runtime, served: false, start: root?.start ?? 0 };
 }
 
 /** Each call's source, where the shown calls come from more than one trace of the chain; none from one. */
@@ -373,8 +381,8 @@ export function ScopedCalls({
 }
 
 /**
- * A calls tab's list and, under it, what it adds up to: each open row starts with its issues' hints, each row says
- * where its calls came from when they come from more than one call.
+ * A calls tab's list and, under it, what it adds up to: each open row starts with its issues' hints; where the calls
+ * come from more than one call, a section of rows each, under the call and its app.
  */
 function CallsBody({
   tab,

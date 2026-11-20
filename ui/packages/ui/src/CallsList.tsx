@@ -4,6 +4,7 @@ import {
   CallLines,
   CallTable,
   calledFrom,
+  callSections,
   DetailsTitle,
   groupTitle,
   issueOfRepeats,
@@ -14,9 +15,9 @@ import {
   RowIssues,
   type RowTime,
   rowTime,
-  SourceLine,
   type SourceOf,
   sameOrigin,
+  sectionRows,
   timeColumns,
 } from "./CallTable";
 import type { DataColumn } from "./DataTable";
@@ -43,7 +44,7 @@ export interface CallsListProps {
   /** The issues of the calls' traces: an open row starts with its own, their hints. */
   issues?: readonly Issue[] | undefined;
   links?: TraceLinks | undefined;
-  /** Where each call was made, where the calls come from more than one call: a line under each row's name. */
+  /** Where each call was made, where the calls come from more than one call: a section of rows each. */
   sourceOf?: SourceOf | undefined;
   /** The calls' colour on their bars, as the call tree's: `cache`, `http`. */
   category?: string | undefined;
@@ -190,43 +191,35 @@ function UntracedUrl({ spanId, url }: { spanId: string; url: string }) {
 
 /**
  * A group's name in its row, after its fold: what its calls repeat, how many, how they went, its issue (pressed, the
- * row opens at its hint); under it, where its calls were made when the table's come from more than one call.
+ * row opens at its hint).
  */
-function GroupName({ group, sourceOf }: { group: Group; sourceOf: SourceOf | undefined }) {
+function GroupName({ group }: { group: Group }) {
   // How many right after what, as the tree says it: ×36.
   const issue = group.issue;
   const untraced = useGroupUntraced(group.spans);
   return (
-    <span className="tp-call-cell">
-      <span
-        className="flex min-w-0 items-center gap-2"
-        data-untraced={untraced === undefined ? undefined : ""}
-        title={untraced === undefined ? undefined : untracedNote(untraced)}
-      >
-        <RowCaret />
-        <Template template={group.template} />
-        <Times count={group.spans.length} />
-        {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
-        {issue ? <RowIssue kind={issue} /> : null}
-      </span>
-      <SourceLine spans={group.spans} sourceOf={sourceOf} />
+    <span
+      className="flex min-w-0 items-center gap-2"
+      data-untraced={untraced === undefined ? undefined : ""}
+      title={untraced === undefined ? undefined : untracedNote(untraced)}
+    >
+      <RowCaret />
+      <Template template={group.template} />
+      <Times count={group.spans.length} />
+      {group.spans.length > 1 ? <GroupStatus answer={group.answer} /> : null}
+      {issue ? <RowIssue kind={issue} /> : null}
     </span>
   );
 }
 
-function columns(
-  groups: readonly Group[],
-  scope: ListTime,
-  noun: readonly [string, string],
-  sourceOf: SourceOf | undefined,
-): DataColumn<Group>[] {
+function columns(groups: readonly Group[], scope: ListTime, noun: readonly [string, string]): DataColumn<Group>[] {
   return [
     {
       id: "call",
       label: "Call",
       required: true,
       min: 18,
-      cell: (group) => <GroupName group={group} sourceOf={sourceOf} />,
+      cell: (group) => <GroupName group={group} />,
     },
     ...timeColumns<Group>((group) => group.time, groups, scope, noun),
   ];
@@ -288,15 +281,21 @@ export function CallsList({
   sourceOf,
   category,
 }: CallsListProps) {
-  const groups = useMemo(() => groupCalls(spans, issueBySpan), [spans, issueBySpan]);
+  // A row per repeat in each call's section, where the calls come from more than one.
+  const sections = useMemo(
+    () => callSections(spans, sourceOf, (part) => groupCalls(part, issueBySpan)),
+    [spans, sourceOf, issueBySpan],
+  );
   const scope = useMemo(() => listTime(spans, clock), [spans, clock]);
   if (spans.length === 0) return <p className="tp-note">No calls of this kind in this request.</p>;
+  const noun = nounOf(spans[0]);
   return (
     <CallTable
       table={table}
       category={category}
-      columns={columns(groups, scope, nounOf(spans[0]), sourceOf)}
-      items={groups}
+      noun={noun}
+      columns={columns(sectionRows(sections), scope, noun)}
+      sections={sections}
       focus={focus}
       row={{
         key: (group) => group.template,
