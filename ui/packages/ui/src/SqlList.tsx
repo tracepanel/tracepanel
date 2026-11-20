@@ -307,7 +307,7 @@ function QueryName({
   after?: ReactNode;
 }) {
   return (
-    <span className="flex min-w-0 items-center gap-2 font-mono">
+    <span className="tp-query-name flex min-w-0 items-center gap-2 font-mono">
       <RowCaret />
       <span className="shrink-[1000] truncate">{name}</span>
       <Times count={count} />

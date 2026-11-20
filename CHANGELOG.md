@@ -19,6 +19,10 @@
   repository too, not only on Spring Data's.
 - In the panel, a view's calls look as they will once its trace loads: no
   REQ badge or empty caret, a blank app chip and their bars breathing.
+- On an SPA a click on the pill opens the panel on the view or click it
+  heads with, not on the page's first view.
+- In a narrow panel a query's row keeps its statement (its template goes)
+  and a call's section its path (its app's chip down to its mark).
 
 ## 0.16.0 (2026-11-10)
 

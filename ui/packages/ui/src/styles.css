@@ -2963,6 +2963,16 @@ div.tp-map-row[data-kind="code"] {
 .tp-from-template:first-child {
   margin-left: 0;
 }
+/* A query's row in a table names its statement first: short of room (a narrow panel) its template goes, as in the
+   tree's rows beside the details; the row's details name it. Never the statement cut to nothing beside it. */
+.tp-query-name {
+  container: tp-query-name / inline-size;
+}
+@container tp-query-name (max-width: 30rem) {
+  .tp-from-template {
+    display: none;
+  }
+}
 .tp-from-template-label {
   color: var(--tp-k-template);
   font-weight: 600;
@@ -3760,7 +3770,7 @@ div.tp-map-row[data-kind="code"] {
 }
 
 /* A section's header, where a table's calls come from more than one call: the call and its app as the tree's row
-   says them (HopName), how many calls after. Short of room the app's name gives way first (down to a few letters, its
+   says them (HopName), how many calls after. Short of room the app's name gives way first (down to its mark, its
    chip's title says it whole), then the path: the path is what tells a table's sections apart. The count stays. */
 .tp-call-section-name {
   display: flex;
@@ -3778,7 +3788,8 @@ div.tp-map-row[data-kind="code"] {
 .tp-call-section-name > .tp-map-hop + .sr-only + .tp-app-chip,
 .tp-call-section-name > .tp-app-chip {
   flex: 0 1000 auto;
-  min-width: 4rem;
+  /* Down to its mark: two sections of one app differ by their paths' ends ("/api/catalog/categories", "…/products"). */
+  min-width: 1.625rem;
   overflow: hidden;
 }
 .tp-call-section-count {

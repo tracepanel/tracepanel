@@ -1038,11 +1038,12 @@ export function mount(options: WidgetOptions = {}): Widget {
   };
   for (const type of ["pointerup", "pointercancel", "blur"]) window.addEventListener(type, released, true);
 
-  // The panel opens on the request the pill shows; on its view or action, at the tab's list, which follows them.
+  // The panel opens on what the pill shows: its view or latest action (stored yet or not: on its way, it says so),
+  // else the request; the tab's list follows the new ones from there.
   badge.addEventListener("click", () => {
-    const shown = shownRecord() ? undefined : requests().at(-1);
+    const shown = shownRecord()?.id ?? requests().at(-1)?.trace;
     if (panel.hasAttribute("data-open")) close();
-    else open(shown?.trace ? `#/t/${shown.trace}` : "#/");
+    else open(shown ? `#/t/${shown}` : "#/");
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") close();
