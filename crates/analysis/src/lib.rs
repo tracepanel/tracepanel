@@ -81,8 +81,8 @@ const KNEX_JOIN: &str = "Load the related rows with the parent rows: `join()` th
     these rows, or read them in one query with `whereIn()` on the collected keys.";
 // The JVM's ORMs the Java SDK names in `db.client`, from the frames that made the query.
 const HIBERNATE_JOIN_FETCH: &str = "Load the related entity in the same query: `join fetch` this association in the \
-    query that produced these rows, or name it in `@EntityGraph(attributePaths = ...)` on the Spring Data repository \
-    method.";
+    query that produced these rows, or name it in `@EntityGraph(attributePaths = ...)` on the repository method \
+    (Spring Data, Micronaut Data).";
 const HIBERNATE_BATCH_SIZE: &str = "Load the related collections in a few batched queries: put `@BatchSize` on this \
     association or set `hibernate.default_batch_fetch_size` (or `join fetch` it in the query that produced these rows).";
 const EXPOSED_WITH: &str = "Load the referenced entities with the parent rows: add `.with()` for this reference to the \
