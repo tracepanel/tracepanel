@@ -1,14 +1,17 @@
 import {
   CloseIcon,
+  callClock,
   Empty,
   ExternalIcon,
   FILTERS,
   Hint,
   isGone,
+  isTreeCall,
   type ListChains,
   LogoMark,
   memoryFromParams,
   OpenRecordMarks,
+  PendingCallRow,
   parseSlice,
   RecordRow,
   RowFilter,
@@ -730,8 +733,18 @@ function recordMarksOf(record: TraceRow | undefined, chains: ListChains): ReactN
   );
 }
 
-/** Before its trace loads: the record's own row and its calls', its details loading beside them. */
+/**
+ * Before its trace loads: the record's own row and its calls', its details loading beside them. Its calls' rows are
+ * those its tree will have (PendingCallRow), its own bar the whole track as its tree's root's, all breathing until
+ * the tree comes.
+ */
 function Waiting({ opened, rows, host }: { opened: TraceRow; rows: readonly TraceRow[]; host: HTMLElement | null }) {
+  const calls = callsUnder(rows, opened);
+  // Its calls' bars on its timeline; while it still runs, up to the last of their ends so far.
+  const { start } = opened.trace;
+  const ends = calls.filter((call) => !call.open).map((call) => callClock(call).end - start);
+  const timeline = { start, duration: opened.open ? Math.max(1, ...ends) : opened.trace.duration };
+  const onSelect = (id: string) => go({ name: "trace", id });
   return (
     <>
       <RecordRow
@@ -739,20 +752,26 @@ function Waiting({ opened, rows, host }: { opened: TraceRow; rows: readonly Trac
         fresh={false}
         onSelect={() => undefined}
         live={Boolean(opened.open)}
+        share={opened.open ? undefined : 1}
         current={true}
         pending={true}
+        expanded={calls.length > 0 ? true : undefined}
       />
-      {callsUnder(rows, opened).map((call) => (
-        <RecordRow
-          key={call.key ?? call.trace.id}
-          row={call}
-          fresh={false}
-          depth={1}
-          live={Boolean(call.open)}
-          pending={true}
-          onSelect={(id) => go({ name: "trace", id })}
-        />
-      ))}
+      {calls.map((call) =>
+        isTreeCall(call) ? (
+          <PendingCallRow key={call.key ?? call.trace.id} row={call} timeline={timeline} onSelect={onSelect} />
+        ) : (
+          <RecordRow
+            key={call.key ?? call.trace.id}
+            row={call}
+            fresh={false}
+            depth={1}
+            live={Boolean(call.open)}
+            pending={true}
+            onSelect={onSelect}
+          />
+        ),
+      )}
       {host ? createPortal(<TraceLoading variant="waterfall" />, host) : null}
     </>
   );

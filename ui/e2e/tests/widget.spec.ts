@@ -223,7 +223,7 @@ test("with the browser recording, the pill shows the page's view, and the panel 
   await expect(panelRows(page)).toHaveText([
     /^click\s*"boom"/i,
     /^click\s*"posts"/i,
-    /^req\s*GET\s*\/api\/posts/i,
+    /^GET\s*\/api\/posts/i,
     /^view\s*\/app\//i,
   ]);
 });
@@ -271,7 +271,7 @@ test("calls to an API on another origin sit under the action that made them, wit
   await expect(panelRows(page)).toHaveText([
     /^click\s*"boom"/i,
     /^click\s*"posts"/i,
-    /^req\s*GET\s*\/api\/posts/i,
+    /^GET\s*\/api\/posts/i,
     /^view\s*\/app\//i,
   ]);
 });

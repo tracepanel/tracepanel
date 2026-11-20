@@ -372,7 +372,44 @@ test("every call its view made is a row of it, through a gateway too, in flight,
 
   // Its trace stored: its calls are its call tree's rows now, as many.
   await storeView(page, tag);
-  await expect(calls.and(panel(page).locator('[data-kind="http.client"]'))).toHaveCount(3);
+  await expect(calls.and(panel(page).locator('.tp-map-rows [data-kind="http.client"]'))).toHaveCount(3);
+});
+
+test("before its view's trace loads, a call's row is its call tree's row to be: no badge nor caret, its bar breathing", async ({
+  page,
+}) => {
+  const tag = 21;
+  // An app with an SDK answers: its trace's id came with the answer, the app that served it not named yet.
+  const { release, view, calls } = await opened(page, {
+    headers: () => ({
+      "Tracepanel-Id": id(tag, 20),
+      "Tracepanel-Name": "GraphQL%20query%20Shelf",
+      "Server-Timing": 'db;dur=1;desc="1 query", total;dur=20',
+    }),
+  });
+  await open(page, id(tag, 1), ["Shelf"]);
+  release(0);
+  await viewEnded(page);
+  const call = calls.first();
+  await expect(call).toHaveAttribute("data-awaiting", "");
+
+  // As the tree's row will be: its method and path, no kind badge, no caret with nothing under it; a blank chip in
+  // its app's place and its bar where the call was, breathing; its tooltip says what it waits for.
+  await expect(call).toHaveAttribute("data-kind", "http.client");
+  await expect(call.locator(".tp-map-kind")).toHaveCount(0);
+  await expect(call.locator("[data-toggle]")).toHaveCount(0);
+  await expect(call.locator(".tp-app-chip[data-awaiting]")).toHaveCount(1);
+  await expect(call.locator(".tp-map-bar[data-call][data-awaiting]")).toHaveCount(1);
+  await expect(call).toHaveAttribute("title", /waiting for its trace/);
+  // The view's row open over it, its bar drawn, breathing with its "…".
+  await expect(view).toHaveAttribute("aria-expanded", "true");
+  await expect(view).toHaveAttribute("data-awaiting", "");
+  await expect(view.locator(".tp-record-share")).toHaveCount(1);
+
+  // Its trace stored: the tree's rows, nothing left waiting.
+  await storeView(page, tag);
+  await expect(calls.and(panel(page).locator('.tp-map-rows [data-kind="http.client"]'))).toHaveCount(1);
+  await expect(panel(page).locator("[data-awaiting]")).toHaveCount(0);
 });
 
 test("calls alike in name and start keep their own times from in flight to their view's trace", async ({ page }) => {
@@ -454,7 +491,7 @@ test("a call's time is the time the page waited for it, while it runs, once answ
   }
   await viewEnded(page);
   await storeView(page, tag);
-  await expect(row.and(panel(page).locator('[data-kind="http.client"]'))).toHaveCount(1);
+  await expect(row.and(panel(page).locator('.tp-map-rows [data-kind="http.client"]'))).toHaveCount(1);
   await sample();
 
   for (const key of ["call", "view"] as const) {

@@ -2,7 +2,7 @@ import { CircleXIcon, TriangleAlertIcon } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
 import { Beside } from "./beside";
 import { indentOf } from "./CallCode";
-import { OpText } from "./CallRowParts";
+import { barPlace, OpText } from "./CallRowParts";
 import { Badge } from "./components/ui/badge";
 import { ago, dayTime, duration, isSlow } from "./format";
 import { ChevronRightIcon, DatabaseIcon } from "./icons";
@@ -357,9 +357,12 @@ export function RecordRow({
   gone = false,
   pending = false,
   current = false,
+  expanded,
 }: {
   /** The record open: its row the list's current one, live or not. */
   current?: boolean | undefined;
+  /** Its calls' rows shown under it (the open record before its tree loads): its caret open, as its tree's root's. */
+  expanded?: boolean | undefined;
   /** Its traces are no longer in the local store: said, the row quiet. */
   gone?: boolean | undefined;
   /** Its calls' traces still on their way: no numbers yet, never a part of them. */
@@ -381,6 +384,9 @@ export function RecordRow({
         className="tp-map-row tp-record"
         data-record={trace.id}
         {...recordState({ gone, live, current, fresh })}
+        aria-expanded={expanded}
+        // The open record waiting for its tree: its bar and its "…" breathe, as its calls' rows do.
+        data-awaiting={current && pending ? "" : undefined}
         data-kind={trace.kind}
         // Its badge in its open tree's root colour: a view's is its code's, as the tree's first row has it.
         data-category={page ? "code" : undefined}
@@ -461,6 +467,106 @@ function RecordLead({
       ) : null}
     </span>
   );
+}
+
+/** A call of the open record that its tree draws as its own row (HopRow): an HTTP call, not a group of them. */
+export function isTreeCall(row: TraceRow): boolean {
+  return row.trace.kind === "http" && row.group === undefined && row.loadHost === undefined;
+}
+
+/**
+ * One of the open record's calls before its tree loads, as that tree's row of it will be (HopRow): its method and
+ * path, the app that served it, its status, its bar where the call was, its time. No kind badge and no caret: the
+ * tree's row has neither until there are rows under it. Its bar is the call's, pale, breathing until the tree
+ * comes; a call whose answer named a trace has a blank chip in its app's place, breathing too, until it is named.
+ */
+export function PendingCallRow({
+  row,
+  timeline,
+  onSelect,
+}: {
+  row: TraceRow;
+  /** The timeline its bar is on: its record's, or, while that one still runs, up to the last call's end so far. */
+  timeline: { start: number; duration: number };
+  onSelect: (id: string) => void;
+}) {
+  const { trace } = row;
+  // An app to name: its answer named a trace, or its chain waits for one; none for a call that flew under "~…" (no
+  // trace answered it), nor for one none will.
+  const served = row.call === "waiting" || (!trace.id.startsWith("~") && row.call !== "untraced" && !row.failed);
+  const awaiting = served && !trace.service;
+  const name = rowName(trace);
+  return (
+    <button
+      type="button"
+      className="tp-map-row"
+      data-kind="http.client"
+      data-status={trace.status === "error" ? "error" : undefined}
+      data-hop={served ? "" : undefined}
+      data-live={row.open ? "" : undefined}
+      data-awaiting={awaiting ? "" : undefined}
+      title={awaiting ? waitingTitle(name, row.cut ?? null) : undefined}
+      onClick={() => onSelect(row.opens ?? trace.id)}
+    >
+      <span className="tp-map-name" style={indentOf(1)}>
+        <span className="tp-map-lead" data-http="">
+          <span className="tp-map-caret" />
+          <OpText text={trace.name} kind="http.client" className="tp-map-hop-path" />
+          {served ? <ServedBy trace={trace} runtime={row.runtime} /> : null}
+        </span>
+        <span className="tp-map-slot" data-slot="status">
+          <CallAnswer row={row} />
+        </span>
+        <span className="tp-map-slot" data-slot="logs" />
+        <span className="tp-map-chips" />
+      </span>
+      <CallTrack row={row} timeline={timeline} />
+      <span className="tp-map-time">
+        <RowTime trace={trace} open={row.open} until={row.until} />
+      </span>
+    </button>
+  );
+}
+
+/** The app that served a call, as the tree's row says it; a blank chip in its place while its trace is on its way. */
+function ServedBy({ trace, runtime }: { trace: TraceSummary; runtime: string | undefined }) {
+  return (
+    <>
+      <span className="tp-map-hop" aria-hidden="true">
+        →
+      </span>
+      <span className="sr-only">{trace.service ? "served by" : "its trace on its way"}</span>
+      {trace.service ? (
+        <AppChip name={trace.service} runtime={runtime} compact />
+      ) : (
+        <span className="tp-app-chip" data-size="compact" data-awaiting="" aria-hidden="true" />
+      )}
+    </>
+  );
+}
+
+/** A call's answer as the tree's row says it: its status, "failed", or the hourglass of one cut short. */
+function CallAnswer({ row }: { row: TraceRow }) {
+  if (row.failed !== undefined) return <FailedStatus failure={row.failed} />;
+  if (row.cut !== undefined && row.cut !== null) return <NoAnswer at={row.cut} />;
+  return <StatusSlot status={row.trace.http_status} />;
+}
+
+/** A call's bar on its record's timeline, the call's whole time pale as the tree's has it, breathing until it comes. */
+function CallTrack({ row, timeline }: { row: TraceRow; timeline: { start: number; duration: number } }) {
+  if (row.open) return <RecordTrack live={true} share={undefined} />;
+  const clock = callClock(row);
+  const place = barPlace(timeline, clock.start, clock.end - clock.start);
+  return (
+    <span className="tp-map-track" aria-hidden="true">
+      <span className="tp-map-bar" data-call="" data-past={place.past} data-awaiting="" style={place.style} />
+    </span>
+  );
+}
+
+/** When a call started and ended, as the browser timed it. */
+export function callClock(row: TraceRow): { start: number; end: number } {
+  return row.clock ?? { start: row.trace.start, end: row.trace.start + row.trace.duration };
 }
 
 /** A record's bar: running while it runs, its time on the list's scale once closed. */

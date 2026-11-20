@@ -3613,6 +3613,28 @@ div.tp-map-row[data-kind="code"] {
 .tp-pending {
   color: var(--tp-text-3);
 }
+/* The open record before its tree loads: a blank chip where its call's app goes, and its bars and its "…" breathe
+   until the tree comes (still with reduced motion). */
+.tp-app-chip[data-awaiting] {
+  width: 3.5rem;
+  border-color: var(--tp-border);
+  background: color-mix(in srgb, var(--tp-text-3) 14%, transparent);
+}
+:is(.tp-app-chip, .tp-map-bar)[data-awaiting],
+.tp-record[data-awaiting] :is(.tp-record-share, .tp-pending) {
+  animation: tp-awaiting 1.4s ease-in-out infinite;
+}
+@keyframes tp-awaiting {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.tp-app-chip, .tp-map-bar)[data-awaiting],
+  .tp-record[data-awaiting] :is(.tp-record-share, .tp-pending) {
+    animation: none;
+  }
+}
 /* A code or wait row's details beside the tree: what it is, its facts, its profile or how to get one. */
 .tp-code-details {
   display: grid;

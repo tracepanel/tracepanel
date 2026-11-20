@@ -6,6 +6,8 @@
 
 - The N+1 hint for Hibernate names `@EntityGraph` on a Micronaut Data
   repository too, not only on Spring Data's.
+- In the panel, a view's calls look as they will once its trace loads: no
+  REQ badge or empty caret, a blank app chip and their bars breathing.
 
 ## 0.16.0 (2026-11-10)
 
