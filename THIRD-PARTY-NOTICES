@@ -6778,7 +6778,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-lucide-react 1.70.0 (ISC)
+lucide-react 1.77.0 (ISC)
 
 ISC License
 
@@ -7077,7 +7077,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-rolldown 1.2.16 (MIT)
+rolldown 1.2.19 (MIT)
 
 MIT License
 
@@ -7131,7 +7131,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-sql-formatter 15.9.0 (MIT)
+sql-formatter 15.10.0 (MIT)
 
 The MIT License (MIT)
 
@@ -7158,7 +7158,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-tailwind-merge 3.7.0 (MIT)
+tailwind-merge 3.7.1 (MIT)
 
 MIT License
 
@@ -7299,7 +7299,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-vite 8.3.6 (MIT)
+vite 8.3.8 (MIT)
 
 # Vite core license
 Vite is released under the MIT license:
